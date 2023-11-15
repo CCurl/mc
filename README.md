@@ -14,7 +14,6 @@ mc - a minimalistic compiler
  * The grammar of the language in EBNF is:
  *
  *  <program> ::= <statement>
- *  <var_def> ::= "int" <id> ";"
  *  <statement> ::= "if" <paren_expr> <statement> |
  *                  "if" <paren_expr> <statement> "else" <statement> |
  *                  "while" <paren_expr> <statement> |
