@@ -3,10 +3,6 @@
 /* Copyright (C) 2001 by Marc Feeley, All Rights Reserved. */
 /* Heavily modified and enhanced by Chris Curl */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 /*
  * This is a compiler for a considerably stripped down version of C.
  * It is meant as a starting point for a minimalistic compiler.
@@ -44,7 +40,11 @@
  * highlight the structure of the compiler.
  */
 
-/*---------------------------------------------------------------------------*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+ /*---------------------------------------------------------------------------*/
 /* Lexer. */
 
 #define BTWI(n,l,h) ((l<=n)&&(n<=h))
@@ -63,8 +63,6 @@ char *words[] = { "do", "else", "if", "while", "void", "int", NULL };
 int ch = ' ', sym, int_val, id_hash;
 char id_name[64];
 FILE *input_fp = NULL;
-long vars[HASH_MASK+1];
-char *funcs[HASH_MASK+1];
 
 void message(char *msg) { fprintf(stdout, "%s\n", msg); }
 void error(char *err) { message(err); exit(1); }
@@ -261,7 +259,7 @@ node *statement() {
   } else if (sym == FUNC_SYM) { /* <id> "();" */
       x=new_node(FUNC_CALL);
       x->val = id_hash;
-      printf("-call %s(%d)-", id_name, x->val);
+      // printf("-call %s(%d)-", id_name, x->val);
       next_sym();
       expect_sym(SEMI);
   } else if (sym == DO_SYM) { /* "do" <statement> "while" <paren_expr> ";" */
@@ -284,7 +282,7 @@ node *statement() {
       next_sym();
   } else if (sym==VOID_SYM) {
         next_sym(); expect_sym(FUNC_SYM);
-        printf("-def %s()-", id_name);
+        // printf("-def %s()-", id_name);
         x=new_node(FUNC_DEF);
         x->val=id_hash;
         if (sym != LBRA) { expect_sym(LBRA); }
@@ -294,35 +292,6 @@ node *statement() {
       expect_sym(SEMI);
   }
   return x;
-}
-
-/* <program> ::= <statement> */
-node *defs(node *st) {
-    node *s=st, *t;
-    next_sym();
-    while (1) {
-        if (sym==EOI) { break; }
-        if (sym==LBRA) { break; }
-        if (sym==VOID_SYM) {
-            next_sym(); expect_sym(FUNC_SYM);
-            printf("-def %s()-", id_name);
-            t=new_node(FUNC_DEF);
-            t->val=id_hash;
-            if (sym != LBRA) { expect_sym(LBRA); }
-            t->o1=statement();
-            st = t;
-            continue;
-        }
-        if (sym==INT_SYM) {
-            next_sym(); expect_sym(ID);
-            printf("-VAR %s-", id_name);
-            vars[id_hash] = -1;
-            expect_sym(SEMI);
-            continue;
-        }
-        message("-def?-"); syntax_error();
-    }
-    return st;
 }
 
 /* <program> ::= <statement> */
@@ -336,11 +305,12 @@ node *program() {
 /*---------------------------------------------------------------------------*/
 /* Code generator. */
 
-enum { HALT, IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
+enum { HALT, FETCH, STORE, LIT1, LIT2, LIT, IDROP, IADD, ISUB, IMUL, IDIV,
         ILT, IGT, JZ, JNZ, JMP, ICALL, IRET };
 
 typedef char code;
 code vm[1000], *here = vm;
+char *funcs[HASH_MASK+1];
 
 void g(code c) { *here++ = c; } /* missing overflow check */
 void g4(int n) {
@@ -359,10 +329,10 @@ void fix(code *src, code *dst) { *src = dst-src; } /* missing overflow check */
 void c(node *x) {
     code *p1, *p2;
     switch (x->kind) {
-        case VAR  : g(IFETCH); g2(x->val); break;
-        case CST  : if (BTWI(x->val,0,127)) { g(IP1); g(x->val); }
-                    else if (BTWI(x->val,128,32767)) { g(IP2); g2(x->val);  }
-                    else { g(IP4); g4(x->val);  }
+        case VAR  : g(FETCH); g2(x->val); break;
+        case CST  : if (BTWI(x->val,0,127)) { g(LIT1); g(x->val); }
+                    else if (BTWI(x->val,128,32767)) { g(LIT2); g2(x->val);  }
+                    else { g(LIT); g4(x->val);  }
                     break;
         case ADD  : c(x->o1);  c(x->o2); g(IADD); break;
         case MUL  : c(x->o1);  c(x->o2); g(IMUL); break;
@@ -370,7 +340,7 @@ void c(node *x) {
         case DIV  : c(x->o1);  c(x->o2); g(IDIV); break;
         case LT   : c(x->o1);  c(x->o2); g(ILT); break;
         case GT   : c(x->o1);  c(x->o2); g(IGT); break;
-        case SET  : c(x->o2);  g(ISTORE); g2(x->o1->val); break;
+        case SET  : c(x->o2);  g(STORE); g2(x->o1->val); break;
         case IF1  : c(x->o1);  g(JZ); p1=hole(); c(x->o2); fix(p1,here); break;
         case IF2  : c(x->o1);  g(JZ); p1=hole(); c(x->o2); g(JMP); p2=hole();
                     fix(p1,here); c(x->o3); fix(p2,here); break;
@@ -381,8 +351,7 @@ void c(node *x) {
         case SEQ  : c(x->o1); c(x->o2); break;
         case EXPR : c(x->o1); g(IDROP); break;
         case PROG : c(x->o1); g(HALT);  break;
-        case FUNC_DEF:  printf("-func[%d]=%ld-", x->val,(long)here);
-            funcs[x->val]=here; c(x->o1); g(IRET); break;
+        case FUNC_DEF: funcs[x->val]=here; c(x->o1); g(IRET); break;
         case FUNC_CALL: g(ICALL); g2(x->val); break;
     }
 }
@@ -390,7 +359,8 @@ void c(node *x) {
 /*---------------------------------------------------------------------------*/
 /* Virtual machine. */
 
-int globals[HASH_MASK+1], sp, rsp;
+int sp, rsp;
+long vars[HASH_MASK+1];
 
 #define ACASE    goto again; case
 #define TOS      st[sp]
@@ -415,11 +385,11 @@ void run(code *pc) {
     code *rst[1000];
     again:
     switch (*pc++) {
-        case  IFETCH: st[++sp] = globals[f2((byte*)pc)]; pc +=2;
-        ACASE ISTORE: globals[f2((byte*)pc)] = st[sp]; pc += 2;
-        ACASE IP1   : st[++sp] = *(pc++);
-        ACASE IP2   : st[++sp] = f2((byte*)pc); pc += 2;
-        ACASE IP4   : st[++sp] = f4((byte*)pc); pc += 4;
+        case  FETCH: st[++sp] = vars[f2((byte*)pc)]; pc +=2;
+        ACASE STORE: vars[f2((byte*)pc)] = st[sp]; pc += 2;
+        ACASE LIT1  : st[++sp] = *(pc++);
+        ACASE LIT2  : st[++sp] = f2((byte*)pc); pc += 2;
+        ACASE LIT   : st[++sp] = f4((byte*)pc); pc += 4;
         ACASE IDROP : --sp;
         ACASE IADD  : NOS += TOS; --sp;
         ACASE ISUB  : NOS -= TOS; --sp;
@@ -444,16 +414,18 @@ void dis() {
     code *pc = &vm[0];
     int t;
     FILE *fp = fopen("list.txt", "wt");
-  again:
+    if (vm[0]==JMP) { fprintf(fp,"; main() is at %d", (int)(vm[1]+2)); }
+    else {  fprintf(fp,"; there is no main() function");  }
+    again:
     if (here <= pc) { return; }
     int p = (int)(pc-&vm[0]) + 1;
     fprintf(fp,"\n%04d: %02d ; ", p, *pc);
     switch (*pc++) {
-        case  IFETCH: t=f2((byte*)pc); fprintf(fp,"fetch [%d]",t); pc +=2;
-        ACASE ISTORE: t=f2((byte*)pc); fprintf(fp,"store [%d]",t); pc +=2;
-        ACASE IP1   : fprintf(fp,"lit1 %d", *(pc++));
-        ACASE IP2   : fprintf(fp,"lit2 %d", f2((byte*)pc)); pc +=2;
-        ACASE IP4   : fprintf(fp,"lit4 %d", f4((byte*)pc)); pc +=4;
+        case  FETCH : t=f2((byte*)pc); fprintf(fp,"fetch [%d]",t); pc +=2;
+        ACASE STORE : t=f2((byte*)pc); fprintf(fp,"store [%d]",t); pc +=2;
+        ACASE LIT1  : fprintf(fp,"lit1 %d", *(pc++));
+        ACASE LIT2  : fprintf(fp,"lit2 %d", f2((byte*)pc)); pc +=2;
+        ACASE LIT   : fprintf(fp,"lit4 %d", f4((byte*)pc)); pc +=4;
         ACASE IDROP : fprintf(fp,"drop");
         ACASE IADD  : fprintf(fp,"add");
         ACASE ISUB  : fprintf(fp,"sub");
@@ -464,9 +436,9 @@ void dis() {
         ACASE JMP   : fprintf(fp,"jmp %d", p+1+(*pc++));
         ACASE JZ    : fprintf(fp,"jz %d",  p+1+(*pc++));
         ACASE JNZ   : fprintf(fp,"jnz %d", p+1+(*pc++));
-        ACASE ICALL : t=f2((byte*)pc); fprintf(fp,"call %p [hash:%d]", funcs[t], t); pc += 2;
+        ACASE ICALL : t=f2((byte*)pc); fprintf(fp,"call %d [hash:%d]", (int)(funcs[t]-vm), t); pc += 2;
         ACASE IRET  : fprintf(fp,"ret");
-        ACASE HALT  : fprintf(fp,"halt");
+        ACASE HALT  : fprintf(fp,"halt"); goto again;
     }
     fprintf(fp, "\n");
     fclose(fp);
@@ -475,26 +447,32 @@ void dis() {
 /*---------------------------------------------------------------------------*/
 /* Main program. */
 
-int main(int argc, char *argv[]) {
-    if (argc>1) { input_fp = fopen(argv[1], "rt"); }
+void compile() {
+    g(JMP);
+    g(0);
     c(program());
+    char *st =funcs[hash("main")];
+    if (st) { vm[1] = (char)(st-vm)-1; }
+    else { vm[0] = HALT; }
+}
+
+int main(int argc, char *argv[]) {
+    for (int i=0; i<=HASH_MASK; i++) { vars[i] = 0; }
+    for (int i=0; i<=HASH_MASK; i++) { funcs[i] = 0; }
+    if (argc>1) { input_fp = fopen(argv[1], "rt"); }
+    compile();
+    dis();
     if (input_fp) { fclose(input_fp); }
 
-    printf("\n(nodes: %d, ", num_nodes);
+    printf("(nodes: %d, ", num_nodes);
     printf("code: %d bytes)\n", (int)(here-&vm[0]));
-    dis();
     sp=rsp=0;
     int st = hash("main");
-    if (funcs[st]) {
-        for (int i=0; i<=HASH_MASK; i++) { globals[i] = 0; }
-        run(funcs[st]);
-        for (int i=0; i<=HASH_MASK; i++) {
-            if (globals[i] != 0) printf("[%d] = %d\n", i, globals[i]);
-        }
-        if (sp) { error("-stack not empty-"); }
-    } else {
-        printf("\nno main().\n");
+    run(vm);
+    for (int i=0; i<=HASH_MASK; i++) {
+        if (vars[i] != 0) printf("[%d] = %d\n", i, vars[i]);
     }
+    if (sp) { error("-stack not empty-"); }
 
     return 0;
 }
