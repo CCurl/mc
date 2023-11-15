@@ -50,7 +50,12 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
-mc
+
+# Visual Studio files
 /Release
 /Debug
 /mc.vcxproj.user
+/x64
+
+# Personal
+mc

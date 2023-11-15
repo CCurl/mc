@@ -20,7 +20,7 @@
  *                  "{" { <statement> } "}" |
  *                  <expr> ";" |
  *                  <func_def> |
- *                  <func> |
+ *                  <func_call> |
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
  *  <expr> ::= <test> | <id> "=" <expr>
@@ -32,7 +32,7 @@
  *  <id> ::= [A-Z|a-z][A-Z|a-z|0-9|_]*
  *  <int> ::= <an_unsigned_decimal_integer>
  *  <func_def> ::= "void" <id> "(" ")" "{" <statement> "}" |
- *  <func> ::= <id> "(" ")" ";"
+ *  <func_call> ::= <id> "(" ")" ";"
  *
  * The compiler does a minimal amount of error checking to help
  * highlight the structure of the compiler.
@@ -51,12 +51,12 @@
 typedef unsigned int uint;
 typedef unsigned char byte;
 
-enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM, //  0->5
-       LBRA, RBRA, LPAR, RPAR, LCOM,                           //  6->10
-       PLUS, MINUS, STAR, SLASH, LESS, GRT, SEMI, EQUAL,       // 11->18
-       INT, ID, EOI, FUNC_SYM };                               // 19->22
+enum {
+    DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM,LBRA, RBRA, LPAR, RPAR, PLUS,
+    MINUS, STAR, SLASH, LESS, GRT, SEMI, EQUAL, INT, ID, FUNC, EOI
+};
 
-char *words[] = { "do", "else", "if", "while", "void", "int", NULL };
+char *words[] = { "do", "else", "if", "while", "void", NULL };
 
 int ch = ' ', sym, int_val, id_hash;
 char id_name[64];
@@ -128,7 +128,7 @@ void next_sym() {
               id_hash = hash(id_name);
               if (ch=='(') {
                   next_ch();
-                  if (ch==')') { sym = FUNC_SYM; next_ch(); }
+                  if (ch==')') { sym = FUNC; next_ch(); }
                   else { syntax_error(); }
               }
             }
@@ -254,7 +254,7 @@ node *statement() {
      next_sym();
      x->o1=paren_expr();
      x->o2=statement();
-  } else if (sym == FUNC_SYM) { /* <id> "();" */
+  } else if (sym == FUNC) { /* <id> "();" */
       x=new_node(FUNC_CALL);
       x->val = id_hash;
       // printf("-call %s(%d)-", id_name, x->val);
@@ -279,7 +279,7 @@ node *statement() {
       }
       next_sym();
   } else if (sym==VOID_SYM) {
-        next_sym(); expect_sym(FUNC_SYM);
+        next_sym(); expect_sym(FUNC);
         // printf("-def %s()-", id_name);
         x=new_node(FUNC_DEF);
         x->val=id_hash;
@@ -349,7 +349,7 @@ void c(node *x) {
         case SEQ  : c(x->o1); c(x->o2); break;
         case EXPR : c(x->o1); g(IDROP); break;
         case PROG : c(x->o1); g(HALT);  break;
-        case FUNC_DEF: funcs[x->val]=here; c(x->o1); g(IRET); break;
+        case FUNC_DEF : funcs[x->val]=here; c(x->o1); g(IRET); break;
         case FUNC_CALL: g(ICALL); g2(x->val); break;
     }
 }

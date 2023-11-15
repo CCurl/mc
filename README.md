@@ -22,7 +22,7 @@ mc - a minimalistic compiler
  *                  "{" { <statement> } "}" |
  *                  <expr> ";" |
  *                  <func_def> |
- *                  <func> |
+ *                  <func_call> |
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
  *  <expr> ::= <test> | <id> "=" <expr>
@@ -34,7 +34,7 @@ mc - a minimalistic compiler
  *  <id> ::= [A-Z|a-z][A-Z|a-z|0-9|_]*
  *  <int> ::= <an_unsigned_decimal_integer>
  *  <func_def> ::= "void" <id> "(" ")" "{" <statement> "}" |
- *  <func> ::= <id> "(" ")" ";"
+ *  <func_call> ::= <id> "(" ")" ";"
  *
  * The compiler does a minimal amount of error checking to help
  * highlight the structure of the compiler.
