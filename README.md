@@ -11,13 +11,9 @@ mc - a minimalistic compiler
  * It compiles to a byte-coded VM that is stack-based.
  * The compiler reads the program from standard input or a file
  * and executes the "main()" function upon successful compilation.
- * The program should be able to be compiled by a C compiler.
  * The grammar of the language in EBNF is:
  *
- *  <program> ::= <defs>
- *  <defs> ::= <def> | <def> <def>
- *  <def> ::= <func_def> | <var_def>
- *  <func_def> ::= "void" <id> "(" ")" "{" <statement> "}" |
+ *  <program> ::= <statement>
  *  <var_def> ::= "int" <id> ";"
  *  <statement> ::= "if" <paren_expr> <statement> |
  *                  "if" <paren_expr> <statement> "else" <statement> |
@@ -25,6 +21,7 @@ mc - a minimalistic compiler
  *                  "do" <statement> "while" <paren_expr> ";" |
  *                  "{" { <statement> } "}" |
  *                  <expr> ";" |
+ *                  <func_def> |
  *                  <func> |
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
@@ -36,6 +33,7 @@ mc - a minimalistic compiler
  *  <id> ::= "a" | "b" | "c" | "d" | ... | "z" -- FOR NOW
  *  <id> ::= [A-Z|a-z][A-Z|a-z|0-9|_]*
  *  <int> ::= <an_unsigned_decimal_integer>
+ *  <func_def> ::= "void" <id> "(" ")" "{" <statement> "}" |
  *  <func> ::= <id> "(" ")" ";"
  *
  * The compiler does a minimal amount of error checking to help
