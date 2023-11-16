@@ -1,6 +1,5 @@
-/* file: "tiny-c.c" */
-/* originally from http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c */
-/* Copyright (C) 2001 by Marc Feeley, All Rights Reserved. */
+/* Contains code from Marc Feeley's tinyc.c, with permission. */
+/* http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c */
 /* Heavily modified and enhanced by Chris Curl */
 
 /*
@@ -17,10 +16,11 @@
  *                  "if" <paren_expr> <statement> "else" <statement> |
  *                  "while" <paren_expr> <statement> |
  *                  "do" <statement> "while" <paren_expr> ";" |
- *                  "{" { <statement> } "}" |
+ *                  "{" <statement> "}" |
  *                  <expr> ";" |
  *                  <func_def> |
  *                  <func_call> |
+ *                  "return" ";" |
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
  *  <expr> ::= <test> | <id> "=" <expr>
@@ -45,25 +45,25 @@
  /*---------------------------------------------------------------------------*/
 /* Lexer. */
 
+#define MAX_NODES   1000
+#define DICT_SZ      999
+#define VM_SZ       4096
+
 #define BTWI(n,l,h) ((l<=n)&&(n<=h))
 
 typedef unsigned int uint;
 typedef unsigned char byte;
 
 enum {
-    DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM,LBRA, RBRA, LPAR, RPAR, PLUS,
-    MINUS, STAR, SLASH, LESS, GRT, SEMI, EQUAL, INT, ID, FUNC, EOI
+    DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, RET_SYM, LBRA, RBRA, LPAR, RPAR,
+    PLUS, MINUS, STAR, SLASH, LESS, GRT, SEMI, EQUAL, INT, ID, FUNC, EOI
 };
 
-char *words[] = { "do", "else", "if", "while", "void", NULL };
+char *words[] = { "do", "else", "if", "while", "void", "return", NULL };
 
 int ch = ' ', sym, int_val;
 char id_name[64];
 FILE *input_fp = NULL;
-
-void message(char *msg) { fprintf(stdout, "%s\n", msg); }
-void error(char *err) { message(err); exit(1); }
-void syntax_error() { error("-syntax error-"); }
 
 void next_ch() {
     if (input_fp) { ch = fgetc(input_fp); }
@@ -71,21 +71,13 @@ void next_ch() {
     // if (BTWI(ch,32,126)) { printf("%c", ch); } else { printf("(%d)", ch); }
 }
 
-int isAlpha(int ch) {
-    return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_');
-}
-
-int isNum(int ch) {
-    return BTWI(ch,'0','9');
-}
-
-int isAlphaNum(int ch) {
-    return isAlpha(ch) || isNum(ch);
-}
-
-void lcomment() {
-    while (ch !=EOF && ch!='\n') { next_ch(); }
-}
+void message(char *msg) { fprintf(stdout, "%s\n", msg); }
+void error(char *err) { message(err); exit(1); }
+void syntax_error() { error("-syntax error-"); }
+int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }
+int isNum(int ch) { return BTWI(ch,'0','9'); }
+int isAlphaNum(int ch) { return isAlpha(ch) || isNum(ch); }
+void lcomment() { while (ch !=EOF && ch!='\n') { next_ch(); } }
 
 void next_sym() {
   again:
@@ -132,13 +124,35 @@ void next_sym() {
 /*---------------------------------------------------------------------------*/
 /* Parser. */
 
-enum { VAR, CST, ADD, SUB, MUL, DIV, LT, GT, SET, FUNC_DEF, FUNC_CALL,
+enum { VAR, CST, ADD, SUB, MUL, DIV, LT, GT, SET, FUNC_DEF, FUNC_CALL, RET,
        IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG };
 
-#define MAX_NODES 1000
 typedef struct node_s { int kind; struct node_s *o1, *o2, *o3; int val; } node_t;
-int num_nodes = 0;
+int num_nodes = 0, last;
 node_t nodes[MAX_NODES];
+
+#define IsVar   0
+#define IsFunc  1
+
+typedef struct dict_s { int kind; long val; char nm[16]; } dict_t;
+dict_t dict[DICT_SZ+1];
+
+int dict_add(const char *name, int kind) {
+    dict_t *p=&dict[++last];
+    p->kind = kind;
+    strcpy(p->nm, name);
+    return last;
+}
+
+int dict_find(const char *name, int kind) {
+    int i=last;
+    while (i) {
+        dict_t *p=&dict[i];
+        if ((strcmp(p->nm, name)==0) && (p->kind==kind)) { return i; }
+        i--;
+    }
+    return 0;
+}
 
 node_t *new_node(int k) {
     if (MAX_NODES <= num_nodes) { error(""); }
@@ -168,8 +182,8 @@ node_t *term() {
   node_t *x;
   if (sym == ID) {
       x=new_node(VAR);
-      // x->val=id_name[0]-'a'; // Update this for longer names
-      x->val=dict_find(id_name,0);
+      x->val=dict_find(id_name,IsVar);
+      if (x->val==0) { x->val=dict_add(id_name,IsVar); }
       next_sym();
   } else if (sym == INT) {
       x=new_node(CST);
@@ -247,10 +261,15 @@ node_t *statement() {
      x->o2=statement();
   } else if (sym == FUNC) { /* <id> "();" */
       x=new_node(FUNC_CALL);
-      x->val = dict_find(id_name, 1);
+      x->val = dict_find(id_name, IsFunc);
+      if (x->val == 0) { printf("-%s() not defined-", id_name); syntax_error(); }
       // printf("-call %s(%d)-", id_name, x->val);
       next_sym();
       expect_sym(SEMI);
+  } else if (sym == RET_SYM) { /* "return" ";" */
+      next_sym();
+      expect_sym(SEMI);
+      x=new_node(RET);
   } else if (sym == DO_SYM) { /* "do" <statement> "while" <paren_expr> ";" */
       x = new_node(DO);
       next_sym();
@@ -273,7 +292,9 @@ node_t *statement() {
         next_sym(); expect_sym(FUNC);
         // printf("-def %s()-", id_name);
         x=new_node(FUNC_DEF);
-        x->val=dict_find(id_name, 1);
+        x->val = dict_find(id_name, IsFunc);
+        if (x->val) { printf("-%s() already defined-", id_name); syntax_error(); }
+        x->val = dict_add(id_name, IsFunc);
         if (sym != LBRA) { expect_sym(LBRA); }
         x->o1=statement();
   } else { /* <expr> ";" */
@@ -297,12 +318,9 @@ node_t *program() {
 enum { HALT, FETCH, STORE, LIT1, LIT2, LIT, IDROP, IADD, ISUB, IMUL, IDIV,
         ILT, IGT, JZ, JNZ, JMP, ICALL, IRET };
 
-#define DICT_SZ 1000
 typedef char code;
-code vm[1000];
-int here, last;
-typedef struct dict_s { struct dict_s *p; int kind; long val; char nm[16]; } dict_t;
-dict_t dict[DICT_SZ];
+code vm[VM_SZ];
+int here;
 
 void g(code c) { vm[here++] = c; } /* missing overflow check */
 void g4(int n) {
@@ -315,6 +333,7 @@ void g2(int n) {
     g(n & 0xff); n=(n >> 8);
     g(n & 0xff);
 }
+
 int hole() { return here++; }
 void fix(int src, int dst) { vm[src] = dst-src; } /* missing overflow check */
 
@@ -343,6 +362,7 @@ void c(node_t *x) {
         case SEQ  : c(x->o1); c(x->o2); break;
         case EXPR : c(x->o1); g(IDROP); break;
         case PROG : c(x->o1); g(HALT);  break;
+        case RET  : g(IRET); break;
         case FUNC_DEF : dict[x->val].val=here; c(x->o1); g(IRET); break;
         case FUNC_CALL: g(ICALL); g2(x->val); break;
     }
@@ -356,21 +376,11 @@ int sp, rsp;
 #define ACASE    goto again; case
 #define TOS      st[sp]
 #define NOS      st[sp-1]
-#define f1(x)    vm[x]
+#define f1(a)    vm[a]
+#define fu(a)    (byte)vm[a]
 
-int f4(int a) {
-    int x = f1(a+3);
-    x = (x<<8)|f1(a+2);
-    x = (x<<8)|f1(a+1);
-    x = (x<<8)|f1(a);
-    return x;
-}
-
-int f2(int a) {
-    int x = f1(a+1);
-    x = (x<<8)|f1(0);
-    return x;
-}
+int  f2(int a) { return (f1(a+1)<<8) | fu(a); }
+long f4(int a) { return (f1(a+3)<<24) | (fu(a+2)<<16)| (fu(a+1)<<8) | fu(a); }
 
 void run(int pc) {
     long st[1000], rst[1000];
@@ -402,20 +412,20 @@ void run(int pc) {
 /* Disassembly. */
 
 void dis() {
-    long pc=0, t;
+    int pc=0, t;
     FILE *fp = fopen("list.txt", "wt");
-    if (vm[0]==JMP) { fprintf(fp,"; main() is at %d", (int)(vm[1]+2)); }
+    if (vm[0]==JMP) { fprintf(fp,"; main() is at %d", (int)(vm[1]+1)); }
     else {  fprintf(fp,"; there is no main() function");  }
     again:
     if (here <= pc) { return; }
     int p = pc;
     fprintf(fp,"\n%04d: %02d ; ", p, f1(pc));
     switch (f1(pc++)) {
-        case  FETCH : t=f2(pc); fprintf(fp,"fetch [%s]",dict[t].nm); pc +=2;
-        ACASE STORE : t=f2(pc); fprintf(fp,"store [%s]",dict[t].nm); pc +=2;
-        ACASE LIT1  : fprintf(fp,"lit1 %d", f1(pc++));
-        ACASE LIT2  : fprintf(fp,"lit2 %d", f2(pc)); pc +=2;
-        ACASE LIT   : fprintf(fp,"lit4 %d", f4(pc)); pc +=4;
+        case  FETCH : t=f2(pc); fprintf(fp,"fetch [%d] (%s)", t, dict[t].nm); pc+=2;
+        ACASE STORE : t=f2(pc); fprintf(fp,"store [%d] (%s)", t, dict[t].nm); pc+=2;
+        ACASE LIT1  : fprintf(fp,"lit1 %d", f1(pc)); pc+=1;
+        ACASE LIT2  : fprintf(fp,"lit2 %d", f2(pc)); pc+=2;
+        ACASE LIT   : fprintf(fp,"lit4 %ld",f4(pc)); pc+=4;
         ACASE IDROP : fprintf(fp,"drop");
         ACASE IADD  : fprintf(fp,"add");
         ACASE ISUB  : fprintf(fp,"sub");
@@ -426,7 +436,7 @@ void dis() {
         ACASE JMP   : fprintf(fp,"jmp %d", pc+f1(pc)); pc++;
         ACASE JZ    : fprintf(fp,"jz %d",  pc+f1(pc)); pc++;
         ACASE JNZ   : fprintf(fp,"jnz %d", pc+f1(pc)); pc++;
-        ACASE ICALL : fprintf(fp,"call %d", f2(pc)); pc += 2;
+        ACASE ICALL : t=f2(pc); fprintf(fp,"call %ld (%s)", dict[t].val, dict[t].nm); pc+=2;
         ACASE IRET  : fprintf(fp,"ret");
         ACASE HALT  : fprintf(fp,"halt"); goto again;
     }
@@ -440,23 +450,25 @@ void dis() {
 void compile() {
     g(JMP); g(0);
     c(program());
-    int st = dict_find("main");
-    if (st) { vm[1] = (char)(st)-1; }
+    int st = dict_find("main", IsFunc);
+    if (st) { vm[1] = (char)(dict[st].val-1); }
     else { vm[0] = HALT; }
 }
 
 int main(int argc, char *argv[]) {
     if (argc>1) { input_fp = fopen(argv[1], "rt"); }
+
+    here=last=sp=rsp=0;
     compile();
     dis();
     if (input_fp) { fclose(input_fp); }
 
     printf("(nodes: %d, ", num_nodes);
     printf("code: %d bytes)\n", here);
-    sp=rsp=0;
     run(0);
-    for (int i=0; i<last; i++) {
-        if (dict[i].kind==0) printf("%s = %ld\n", dict[i].nm, dict[i].val);
+    for (int i=1; i<=last; i++) {
+        dict_t *p=&dict[i];
+        printf("%s %s: %ld\n", (p->kind==IsVar)?"var":"func", p->nm, p->val);
     }
     if (sp) { error("-stack not empty-"); }
 
