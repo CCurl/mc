@@ -1,8 +1,7 @@
-# mc
-mc - a minimalistic compiler
+# mc - a minimalistic compiler
 ```
-/* originally from http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c */
-/* Copyright (C) 2001 by Marc Feeley, All Rights Reserved. */
+/* Contains code from Marc Feeley's tinyc.c, with permission. */
+/* http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c */
 /* Heavily modified and enhanced by Chris Curl */
 
 /*
@@ -18,10 +17,11 @@ mc - a minimalistic compiler
  *                  "if" <paren_expr> <statement> "else" <statement> |
  *                  "while" <paren_expr> <statement> |
  *                  "do" <statement> "while" <paren_expr> ";" |
- *                  "{" { <statement> } "}" |
+ *                  "{" <statement> "}" |
  *                  <expr> ";" |
  *                  <func_def> |
  *                  <func_call> |
+ *                  "return" ";" |
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
  *  <expr> ::= <test> | <id> "=" <expr>
@@ -29,7 +29,6 @@ mc - a minimalistic compiler
  *  <math> ::= <term> | <math> <math_op> <term>
  *  <math_op> ::= "+" | "-" | "*" | "/"
  *  <term> ::= <id> | <int> | <paren_expr>
- *  <id> ::= "a" | "b" | "c" | "d" | ... | "z" -- FOR NOW
  *  <id> ::= [A-Z|a-z][A-Z|a-z|0-9|_]*
  *  <int> ::= <an_unsigned_decimal_integer>
  *  <func_def> ::= "void" <id> "(" ")" "{" <statement> "}" |

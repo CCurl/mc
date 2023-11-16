@@ -1,7 +1,10 @@
 // test
 {
 	void ABC() {
-		ABC=1123; u=ABC*ABC;
+		abc=1123; __u1__=(abc*abc)+abc;
+		no=54321;
+		if (abc > 1122) return;
+		no=12345;
 	}
 
 	void DEF() {
@@ -10,9 +13,9 @@
 
 	void main() { // the entry point
 		ABC();
-		a = 11; b=a+2; z=999999;
+		a=11; b=a+2; zzz=999999;
 		if (a < 1) { c=a+b; }
-		else { d = a*(b+1); }
+		else { c = a*(b+1); }
 		if (a > 1) { g=a*a; }
 		e = b*7;
 		f = e/3;
