@@ -1,4 +1,4 @@
-app := mc
+app := tc
 
 CXX := clang
 CXXFLAGS := -m64 -O3 -D IS_LINUX
@@ -17,10 +17,10 @@ clean:
 	rm -f $(app)
 
 test1: $(app)
-	cat test1.mc | ./$(app)
+	cat test1.tc | ./$(app)
 
 test2: $(app)
-	cat test2.mc | ./$(app)
+	cat test2.tc | ./$(app)
 
 bin: $(app)
 	cp -u -p $(app) ~/.local/bin/

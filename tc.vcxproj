@@ -24,7 +24,7 @@
     <ProjectGuid>{A71BB5CD-5907-498C-B66D-8B079A2D94B6}</ProjectGuid>
     <RootNamespace>stable</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>mc</ProjectName>
+    <ProjectName>tc</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -146,13 +146,10 @@
   <ItemGroup>
     <None Include="makefile" />
     <None Include="README.md" />
-    <None Include="test1.mc" />
+    <None Include="test1.tc" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="tiny-c.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="list.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
