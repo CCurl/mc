@@ -31,7 +31,7 @@
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
  *  <expr> ::= <test> | <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr>
- *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math>
+ *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math>
  *  <math> ::= <term> | <math> <math_op> <term>
  *  <math_op> ::= "+" | "-" | "*" | "/"
  *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <int> | <paren_expr> | "-" <term>

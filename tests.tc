@@ -1,0 +1,164 @@
+int global_int, another_global, _leading2, UpperCase;
+int global_arr[4], nums[5];
+
+void print_zero() {
+}
+
+void set_global() {
+    global_int = 42;
+}
+
+int get_global() {
+    return global_int;
+}
+
+void write_second(int value, int items[]) {
+    items[1] = value;
+}
+
+void statement_forms(int limit) {
+    int i;
+    i = 0;
+    ;
+    while (i < limit) i = i + 1;
+    do i = i - 1; while (i > 0);
+    if (i == 0) global_int = global_int + 1;
+    if (i > 0) ; else global_int = global_int + 1;
+}
+
+int identity(int x) {
+    return x;
+}
+
+int add(int left, int right) {
+    return left + right;
+}
+
+int sub(int left, int right) {
+    return left - right;
+}
+
+int mul(int left, int right) {
+    return left * right;
+}
+
+int divv(int left, int right) {
+    return left / right;
+}
+
+int sum_to(int n) {
+    int total;
+    int i;
+    total = 0;
+    i = 1;
+    while (i < n + 1) {
+        total = total + i;
+        i = i + 1;
+    }
+    return total;
+}
+
+int fact(int n) {
+    int result;
+    if (n > 1) {
+        result = n * fact(n - 1);
+        return result;
+    }
+    return 1;
+}
+
+int array_sum(int values[], int count) {
+    int total;
+    int i;
+    total = 0;
+    i = 0;
+    while (i < count) {
+        total = total + values[i];
+        i = i + 1;
+    }
+    return total;
+}
+
+int set_first(int items[], int value) {
+    items[0] = value;
+    return items[0];
+}
+
+int max2(int a, int b) {
+    if (a > b) { return a; }
+    else { return b; }
+}
+
+int parity(int x) {
+    if (x < 0) { x = -x; }
+    if (x == 0) { return 0; }
+    return x - (x / 2) * 2;
+}
+
+int main() {
+    int local_a;
+    int local_b;
+    int local_c;
+    int local_d;
+    int local_e;
+    int i, j;
+
+    global_int = 7;
+    global_arr[0] = 10;
+    global_arr[1] = 20;
+    global_arr[2] = 30;
+    global_arr[3] = 40;
+    local_a = global_arr[0];
+    write_second(8, global_arr);
+    _leading2 = (2 + 3) * 4;
+    UpperCase = -1;
+    global_int = another_global = 7;
+
+    print_zero();
+    set_global();
+    local_a = get_global();
+    statement_forms(3);
+
+    local_a = identity(123);
+    local_b = add(3, 4);
+    local_c = sub(9, 4);
+    local_d = mul(6, 7);
+    local_e = divv(20, 5);
+
+    another_global = local_a + local_b + local_c + local_d + local_e + global_int;
+
+    local_a = sum_to(10);
+    local_b = fact(5);
+
+    nums[0] = 5;
+    nums[1] = 10;
+    nums[2] = 15;
+    nums[3] = 20;
+    nums[4] = 25;
+    write_second(identity(2 + 1), nums);
+    i = 0;
+    nums[i] = nums[i] + 1;
+
+    local_a = set_first(nums, 99);
+    local_b = array_sum(nums, 5);
+    local_c = max2(11, 7);
+    local_d = parity(13);
+
+    i = 0;
+    j = 0;
+    while (i < 5) {
+        j = j + nums[i];
+        i = i + 1;
+    }
+
+    do {
+        local_e = local_e + 1;
+    } while (local_e < 20);
+
+    if (local_c == 11) { local_a = 1; }
+    else { local_a = 2; }
+
+    if (local_d < 2) { local_b = local_b + 1; }
+
+    return 0;
+}

@@ -1,192 +1,395 @@
 
-0001: 15 ; call 138 0 1
+0001: 16 ; call 378 0 7
 0008: 05 ; drop
-0009: 17 ; halt
-0010: 02 ; lit1 5
-0012: 01 ; store 18
-0015: 05 ; drop
-0016: 00 ; fetch 18
-0019: 00 ; fetch 18
-0022: 08 ; mul
-0023: 01 ; store 20
-0026: 05 ; drop
-0027: 00 ; fetch 20
-0030: 00 ; fetch 20
-0033: 08 ; mul
-0034: 01 ; store 17
-0037: 05 ; drop
-0038: 00 ; fetch 17
-0041: 00 ; fetch 17
-0044: 06 ; add
-0045: 01 ; store 0
-0048: 05 ; drop
-0049: 16 ; ret
-0050: 20 ; parameter-fetch 0
-0053: 20 ; parameter-fetch 0
-0056: 08 ; mul
-0057: 16 ; ret
-0058: 16 ; ret
-0059: 20 ; parameter-fetch 0
-0062: 20 ; parameter-fetch 1
-0065: 06 ; add
-0066: 16 ; ret
-0067: 16 ; ret
-0068: 20 ; parameter-fetch 0
-0071: 02 ; lit1 1
-0073: 11 ; gt
-0074: 12 ; jz 103
-0076: 20 ; parameter-fetch 0
-0079: 02 ; lit1 1
-0081: 07 ; sub
-0082: 25 ; local-store 1
-0085: 05 ; drop
-0086: 20 ; parameter-fetch 0
-0089: 24 ; local-fetch 1
-0092: 15 ; call 67 1 1
-0099: 06 ; add
-0100: 16 ; ret
-0101: 14 ; jmp 107
-0103: 20 ; parameter-fetch 0
-0106: 16 ; ret
-0107: 16 ; ret
-0108: 20 ; parameter-fetch 0
-0111: 02 ; lit1 1
-0113: 06 ; add
-0114: 25 ; local-store 1
-0117: 05 ; drop
-0118: 24 ; local-fetch 1
-0121: 16 ; ret
-0122: 16 ; ret
-0123: 02 ; lit1 0
-0125: 20 ; parameter-fetch 1
-0128: 23 ; parameter-array-store 0
-0131: 05 ; drop
-0132: 02 ; lit1 0
-0134: 22 ; parameter-array-fetch 0
-0137: 16 ; ret
-0138: 16 ; ret
-0139: 15 ; call 9 0 0
-0146: 02 ; lit1 3
-0148: 02 ; lit1 4
-0150: 15 ; call 58 2 0
-0157: 15 ; call 107 1 1
-0164: 25 ; local-store 0
-0167: 05 ; drop
-0168: 24 ; local-fetch 0
-0171: 01 ; store 1
-0174: 05 ; drop
-0175: 02 ; lit1 5
-0177: 15 ; call 67 1 1
-0184: 02 ; lit1 12
-0186: 15 ; call 49 1 0
-0193: 15 ; call 58 2 0
-0200: 01 ; store 2
-0203: 05 ; drop
-0204: 02 ; lit1 0
-0206: 02 ; lit1 1
-0208: 19 ; array-store 3
-0211: 05 ; drop
-0212: 03 ; lit2 3
-0215: 02 ; lit1 0
-0217: 18 ; array-fetch 3
-0220: 02 ; lit1 3
-0222: 06 ; add
-0223: 15 ; call 122 2 0
-0230: 01 ; store 1
-0233: 05 ; drop
-0234: 02 ; lit1 2
-0236: 18 ; array-fetch 3
-0239: 02 ; lit1 0
-0241: 03 ; lit2 1234
-0244: 07 ; sub
-0245: 19 ; array-store 3
-0248: 05 ; drop
-0249: 02 ; lit1 3
-0251: 02 ; lit1 2
-0253: 18 ; array-fetch 3
-0256: 02 ; lit1 5
-0258: 06 ; add
-0259: 19 ; array-store 3
-0262: 05 ; drop
-0263: 02 ; lit1 11
-0265: 01 ; store 8
-0268: 05 ; drop
-0269: 00 ; fetch 8
-0272: 02 ; lit1 2
-0274: 06 ; add
-0275: 01 ; store 9
-0278: 05 ; drop
-0279: 04 ; lit4 999999
-0284: 01 ; store 21
-0287: 05 ; drop
-0288: 00 ; fetch 8
-0291: 02 ; lit1 1
-0293: 10 ; lt
-0294: 12 ; jz 309
-0296: 00 ; fetch 8
-0299: 00 ; fetch 9
-0302: 06 ; add
-0303: 01 ; store 10
-0306: 05 ; drop
-0307: 14 ; jmp 323
-0309: 00 ; fetch 8
-0312: 00 ; fetch 9
-0315: 02 ; lit1 1
-0317: 06 ; add
-0318: 08 ; mul
-0319: 01 ; store 11
-0322: 05 ; drop
-0323: 00 ; fetch 8
-0326: 02 ; lit1 1
-0328: 11 ; gt
-0329: 12 ; jz 342
-0331: 00 ; fetch 8
-0334: 00 ; fetch 8
-0337: 08 ; mul
-0338: 01 ; store 14
-0341: 05 ; drop
-0342: 00 ; fetch 9
-0345: 02 ; lit1 7
-0347: 08 ; mul
-0348: 01 ; store 12
-0351: 05 ; drop
-0352: 00 ; fetch 12
-0355: 02 ; lit1 3
-0357: 09 ; div
-0358: 01 ; store 13
-0361: 05 ; drop
-0362: 02 ; lit1 100
-0364: 04 ; lit4 1000000
-0369: 08 ; mul
-0370: 01 ; store 15
-0373: 05 ; drop
-0374: 02 ; lit1 1
-0376: 01 ; store 19
-0379: 05 ; drop
-0380: 00 ; fetch 15
-0383: 12 ; jz 397
-0385: 00 ; fetch 15
-0388: 02 ; lit1 1
-0390: 07 ; sub
-0391: 01 ; store 15
-0394: 05 ; drop
-0395: 14 ; jmp 380
-0397: 02 ; lit1 0
-0399: 01 ; store 16
-0402: 01 ; store 15
-0405: 05 ; drop
-0406: 00 ; fetch 15
-0409: 00 ; fetch 16
-0412: 02 ; lit1 1
-0414: 06 ; add
-0415: 01 ; store 16
-0418: 06 ; add
-0419: 01 ; store 15
-0422: 05 ; drop
-0423: 00 ; fetch 15
-0426: 03 ; lit2 1000
-0429: 10 ; lt
-0430: 13 ; jnz 406
-0432: 02 ; lit1 0
-0434: 16 ; ret
-0435: 16 ; ret
+0009: 18 ; halt
+0010: 17 ; ret
+0011: 02 ; lit1 42
+0013: 01 ; store 0
+0016: 05 ; drop
+0017: 17 ; ret
+0018: 00 ; fetch 0
+0021: 17 ; ret
+0022: 17 ; ret
+0023: 02 ; lit1 1
+0025: 21 ; parameter-fetch 0
+0028: 24 ; parameter-array-store 1
+0031: 05 ; drop
+0032: 17 ; ret
+0033: 02 ; lit1 0
+0035: 26 ; local-store 1
+0038: 05 ; drop
+0039: 25 ; local-fetch 1
+0042: 21 ; parameter-fetch 0
+0045: 10 ; lt
+0046: 13 ; jz 60
+0048: 25 ; local-fetch 1
+0051: 02 ; lit1 1
+0053: 06 ; add
+0054: 26 ; local-store 1
+0057: 05 ; drop
+0058: 15 ; jmp 39
+0060: 25 ; local-fetch 1
+0063: 02 ; lit1 1
+0065: 07 ; sub
+0066: 26 ; local-store 1
+0069: 05 ; drop
+0070: 25 ; local-fetch 1
+0073: 02 ; lit1 0
+0075: 11 ; gt
+0076: 14 ; jnz 60
+0078: 25 ; local-fetch 1
+0081: 02 ; lit1 0
+0083: 12 ; eq
+0084: 13 ; jz 96
+0086: 00 ; fetch 0
+0089: 02 ; lit1 1
+0091: 06 ; add
+0092: 01 ; store 0
+0095: 05 ; drop
+0096: 25 ; local-fetch 1
+0099: 02 ; lit1 0
+0101: 11 ; gt
+0102: 13 ; jz 106
+0104: 15 ; jmp 116
+0106: 00 ; fetch 0
+0109: 02 ; lit1 1
+0111: 06 ; add
+0112: 01 ; store 0
+0115: 05 ; drop
+0116: 17 ; ret
+0117: 21 ; parameter-fetch 0
+0120: 17 ; ret
+0121: 17 ; ret
+0122: 21 ; parameter-fetch 0
+0125: 21 ; parameter-fetch 1
+0128: 06 ; add
+0129: 17 ; ret
+0130: 17 ; ret
+0131: 21 ; parameter-fetch 0
+0134: 21 ; parameter-fetch 1
+0137: 07 ; sub
+0138: 17 ; ret
+0139: 17 ; ret
+0140: 21 ; parameter-fetch 0
+0143: 21 ; parameter-fetch 1
+0146: 08 ; mul
+0147: 17 ; ret
+0148: 17 ; ret
+0149: 21 ; parameter-fetch 0
+0152: 21 ; parameter-fetch 1
+0155: 09 ; div
+0156: 17 ; ret
+0157: 17 ; ret
+0158: 02 ; lit1 0
+0160: 26 ; local-store 1
+0163: 05 ; drop
+0164: 02 ; lit1 1
+0166: 26 ; local-store 2
+0169: 05 ; drop
+0170: 25 ; local-fetch 2
+0173: 21 ; parameter-fetch 0
+0176: 02 ; lit1 1
+0178: 06 ; add
+0179: 10 ; lt
+0180: 13 ; jz 205
+0182: 25 ; local-fetch 1
+0185: 25 ; local-fetch 2
+0188: 06 ; add
+0189: 26 ; local-store 1
+0192: 05 ; drop
+0193: 25 ; local-fetch 2
+0196: 02 ; lit1 1
+0198: 06 ; add
+0199: 26 ; local-store 2
+0202: 05 ; drop
+0203: 15 ; jmp 170
+0205: 25 ; local-fetch 1
+0208: 17 ; ret
+0209: 17 ; ret
+0210: 21 ; parameter-fetch 0
+0213: 02 ; lit1 1
+0215: 11 ; gt
+0216: 13 ; jz 243
+0218: 21 ; parameter-fetch 0
+0221: 21 ; parameter-fetch 0
+0224: 02 ; lit1 1
+0226: 07 ; sub
+0227: 16 ; call 209 1 1
+0234: 08 ; mul
+0235: 26 ; local-store 1
+0238: 05 ; drop
+0239: 25 ; local-fetch 1
+0242: 17 ; ret
+0243: 02 ; lit1 1
+0245: 17 ; ret
+0246: 17 ; ret
+0247: 02 ; lit1 0
+0249: 26 ; local-store 2
+0252: 05 ; drop
+0253: 02 ; lit1 0
+0255: 26 ; local-store 3
+0258: 05 ; drop
+0259: 25 ; local-fetch 3
+0262: 21 ; parameter-fetch 1
+0265: 10 ; lt
+0266: 13 ; jz 294
+0268: 25 ; local-fetch 2
+0271: 25 ; local-fetch 3
+0274: 23 ; parameter-array-fetch 0
+0277: 06 ; add
+0278: 26 ; local-store 2
+0281: 05 ; drop
+0282: 25 ; local-fetch 3
+0285: 02 ; lit1 1
+0287: 06 ; add
+0288: 26 ; local-store 3
+0291: 05 ; drop
+0292: 15 ; jmp 259
+0294: 25 ; local-fetch 2
+0297: 17 ; ret
+0298: 17 ; ret
+0299: 02 ; lit1 0
+0301: 21 ; parameter-fetch 1
+0304: 24 ; parameter-array-store 0
+0307: 05 ; drop
+0308: 02 ; lit1 0
+0310: 23 ; parameter-array-fetch 0
+0313: 17 ; ret
+0314: 17 ; ret
+0315: 21 ; parameter-fetch 0
+0318: 21 ; parameter-fetch 1
+0321: 11 ; gt
+0322: 13 ; jz 330
+0324: 21 ; parameter-fetch 0
+0327: 17 ; ret
+0328: 15 ; jmp 334
+0330: 21 ; parameter-fetch 1
+0333: 17 ; ret
+0334: 17 ; ret
+0335: 21 ; parameter-fetch 0
+0338: 02 ; lit1 0
+0340: 10 ; lt
+0341: 13 ; jz 353
+0343: 02 ; lit1 0
+0345: 21 ; parameter-fetch 0
+0348: 07 ; sub
+0349: 22 ; parameter-store 0
+0352: 05 ; drop
+0353: 21 ; parameter-fetch 0
+0356: 02 ; lit1 0
+0358: 12 ; eq
+0359: 13 ; jz 364
+0361: 02 ; lit1 0
+0363: 17 ; ret
+0364: 21 ; parameter-fetch 0
+0367: 21 ; parameter-fetch 0
+0370: 02 ; lit1 2
+0372: 09 ; div
+0373: 07 ; sub
+0374: 02 ; lit1 2
+0376: 08 ; mul
+0377: 17 ; ret
+0378: 17 ; ret
+0379: 02 ; lit1 7
+0381: 01 ; store 0
+0384: 05 ; drop
+0385: 02 ; lit1 0
+0387: 02 ; lit1 10
+0389: 20 ; array-store 4
+0392: 05 ; drop
+0393: 02 ; lit1 1
+0395: 02 ; lit1 20
+0397: 20 ; array-store 4
+0400: 05 ; drop
+0401: 02 ; lit1 2
+0403: 02 ; lit1 30
+0405: 20 ; array-store 4
+0408: 05 ; drop
+0409: 02 ; lit1 3
+0411: 02 ; lit1 40
+0413: 20 ; array-store 4
+0416: 05 ; drop
+0417: 02 ; lit1 0
+0419: 19 ; array-fetch 4
+0422: 26 ; local-store 0
+0425: 05 ; drop
+0426: 02 ; lit1 8
+0428: 03 ; lit2 4
+0431: 16 ; call 22 2 0
+0438: 02 ; lit1 2
+0440: 02 ; lit1 3
+0442: 06 ; add
+0443: 02 ; lit1 4
+0445: 08 ; mul
+0446: 01 ; store 2
+0449: 05 ; drop
+0450: 02 ; lit1 0
+0452: 02 ; lit1 1
+0454: 07 ; sub
+0455: 01 ; store 3
+0458: 05 ; drop
+0459: 02 ; lit1 7
+0461: 01 ; store 1
+0464: 01 ; store 0
+0467: 05 ; drop
+0468: 16 ; call 9 0 0
+0475: 16 ; call 10 0 0
+0482: 16 ; call 17 0 0
+0489: 26 ; local-store 0
+0492: 05 ; drop
+0493: 02 ; lit1 3
+0495: 16 ; call 32 1 1
+0502: 02 ; lit1 123
+0504: 16 ; call 116 1 0
+0511: 26 ; local-store 0
+0514: 05 ; drop
+0515: 02 ; lit1 3
+0517: 02 ; lit1 4
+0519: 16 ; call 121 2 0
+0526: 26 ; local-store 1
+0529: 05 ; drop
+0530: 02 ; lit1 9
+0532: 02 ; lit1 4
+0534: 16 ; call 130 2 0
+0541: 26 ; local-store 2
+0544: 05 ; drop
+0545: 02 ; lit1 6
+0547: 02 ; lit1 7
+0549: 16 ; call 139 2 0
+0556: 26 ; local-store 3
+0559: 05 ; drop
+0560: 02 ; lit1 20
+0562: 02 ; lit1 5
+0564: 16 ; call 148 2 0
+0571: 26 ; local-store 4
+0574: 05 ; drop
+0575: 25 ; local-fetch 0
+0578: 25 ; local-fetch 1
+0581: 06 ; add
+0582: 25 ; local-fetch 2
+0585: 06 ; add
+0586: 25 ; local-fetch 3
+0589: 06 ; add
+0590: 25 ; local-fetch 4
+0593: 06 ; add
+0594: 00 ; fetch 0
+0597: 06 ; add
+0598: 01 ; store 1
+0601: 05 ; drop
+0602: 02 ; lit1 10
+0604: 16 ; call 157 1 2
+0611: 26 ; local-store 0
+0614: 05 ; drop
+0615: 02 ; lit1 5
+0617: 16 ; call 209 1 1
+0624: 26 ; local-store 1
+0627: 05 ; drop
+0628: 02 ; lit1 0
+0630: 02 ; lit1 5
+0632: 20 ; array-store 8
+0635: 05 ; drop
+0636: 02 ; lit1 1
+0638: 02 ; lit1 10
+0640: 20 ; array-store 8
+0643: 05 ; drop
+0644: 02 ; lit1 2
+0646: 02 ; lit1 15
+0648: 20 ; array-store 8
+0651: 05 ; drop
+0652: 02 ; lit1 3
+0654: 02 ; lit1 20
+0656: 20 ; array-store 8
+0659: 05 ; drop
+0660: 02 ; lit1 4
+0662: 02 ; lit1 25
+0664: 20 ; array-store 8
+0667: 05 ; drop
+0668: 02 ; lit1 2
+0670: 02 ; lit1 1
+0672: 06 ; add
+0673: 16 ; call 116 1 0
+0680: 03 ; lit2 8
+0683: 16 ; call 22 2 0
+0690: 02 ; lit1 0
+0692: 26 ; local-store 5
+0695: 05 ; drop
+0696: 25 ; local-fetch 5
+0699: 25 ; local-fetch 5
+0702: 19 ; array-fetch 8
+0705: 02 ; lit1 1
+0707: 06 ; add
+0708: 20 ; array-store 8
+0711: 05 ; drop
+0712: 03 ; lit2 8
+0715: 02 ; lit1 99
+0717: 16 ; call 298 2 0
+0724: 26 ; local-store 0
+0727: 05 ; drop
+0728: 03 ; lit2 8
+0731: 02 ; lit1 5
+0733: 16 ; call 246 2 2
+0740: 26 ; local-store 1
+0743: 05 ; drop
+0744: 02 ; lit1 11
+0746: 02 ; lit1 7
+0748: 16 ; call 314 2 0
+0755: 26 ; local-store 2
+0758: 05 ; drop
+0759: 02 ; lit1 13
+0761: 16 ; call 334 1 0
+0768: 26 ; local-store 3
+0771: 05 ; drop
+0772: 02 ; lit1 0
+0774: 26 ; local-store 5
+0777: 05 ; drop
+0778: 02 ; lit1 0
+0780: 26 ; local-store 6
+0783: 05 ; drop
+0784: 25 ; local-fetch 5
+0787: 02 ; lit1 5
+0789: 10 ; lt
+0790: 13 ; jz 818
+0792: 25 ; local-fetch 6
+0795: 25 ; local-fetch 5
+0798: 19 ; array-fetch 8
+0801: 06 ; add
+0802: 26 ; local-store 6
+0805: 05 ; drop
+0806: 25 ; local-fetch 5
+0809: 02 ; lit1 1
+0811: 06 ; add
+0812: 26 ; local-store 5
+0815: 05 ; drop
+0816: 15 ; jmp 784
+0818: 25 ; local-fetch 4
+0821: 02 ; lit1 1
+0823: 06 ; add
+0824: 26 ; local-store 4
+0827: 05 ; drop
+0828: 25 ; local-fetch 4
+0831: 02 ; lit1 20
+0833: 10 ; lt
+0834: 14 ; jnz 818
+0836: 25 ; local-fetch 2
+0839: 02 ; lit1 11
+0841: 12 ; eq
+0842: 13 ; jz 852
+0844: 02 ; lit1 1
+0846: 26 ; local-store 0
+0849: 05 ; drop
+0850: 15 ; jmp 858
+0852: 02 ; lit1 2
+0854: 26 ; local-store 0
+0857: 05 ; drop
+0858: 25 ; local-fetch 3
+0861: 02 ; lit1 2
+0863: 10 ; lt
+0864: 13 ; jz 876
+0866: 25 ; local-fetch 1
+0869: 02 ; lit1 1
+0871: 06 ; add
+0872: 26 ; local-store 1
+0875: 05 ; drop
+0876: 02 ; lit1 0
+0878: 17 ; ret
+0879: 17 ; ret

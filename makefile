@@ -19,8 +19,8 @@ clean:
 test1: $(app)
 	cat test1.tc | ./$(app)
 
-test2: $(app)
-	cat test2.tc | ./$(app)
+tests: $(app)
+	./$(app) tests.tc
 
 bin: $(app)
 	cp -u -p $(app) ~/.local/bin/

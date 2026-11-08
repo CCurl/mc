@@ -13,7 +13,7 @@
 #define BTWI(n,l,h) ((l<=n)&&(n<=h))
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM, //  0->5
        LBRA, RBRA, LPAR, RPAR,                                 //  6->9
-       PLUS, MINUS, STAR, SLASH, LESS, GRT, SEMI, EQUAL,       // 10->17
+       PLUS, MINUS, STAR, SLASH, LESS, GRT, SEMI, EQUAL, EQ_SYM, // 10->18
        INT, ID, EOI, LBRACKET, RBRACKET, COMMA, RETURN_SYM };
 
 char *words[] = { "do", "else", "if", "while", "void", "int", NULL };
@@ -165,7 +165,15 @@ void next_sym() {
       case '<': next_ch(); sym = LESS;  break;
       case '>': next_ch(); sym = GRT;   break;
       case ';': next_ch(); sym = SEMI;  break;
-      case '=': next_ch(); sym = EQUAL; break;
+      case '=':
+        next_ch();
+        if (ch == '=') {
+            next_ch();
+            sym = EQ_SYM;
+        } else {
+            sym = EQUAL;
+        }
+        break;
       case '[': next_ch(); sym = LBRACKET; break;
       case ']': next_ch(); sym = RBRACKET; break;
       case ',': next_ch(); sym = COMMA; break;
@@ -199,7 +207,7 @@ void next_sym() {
 /*---------------------------------------------------------------------------*/
 /* Parser. */
 
-enum { VAR, CST, ADD, SUB, MUL, DIV, LT, GT, SET, FUNC_CALL,
+enum { VAR, CST, ADD, SUB, MUL, DIV, LT, GT, EQ, SET, FUNC_CALL,
        ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, ARG_LIST,
        IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG };
 
@@ -389,11 +397,12 @@ node *sum() {
   return x;
 }
 
-/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> */
+/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math> */
 node *test() {
   node *x = sum();
   if (sym == LESS) { next_sym(); return gen(LT, x, sum()); }
   if (sym == GRT)  { next_sym(); return gen(GT, x, sum()); }
+  if (sym == EQ_SYM)   { next_sym(); return gen(EQ, x, sum()); }
   return x;
 }
 
@@ -708,7 +717,7 @@ node *program() {
 /*---------------------------------------------------------------------------*/
 /* Code generator. */
 enum { IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
-        ILT, IGT, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
+        ILT, IGT, IEQ, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
         PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE };
 
 typedef char code;
@@ -786,6 +795,7 @@ void c(node *x) {
         case DIV  : c(x->o1);  c(x->o2); g(IDIV); break;
         case LT   : c(x->o1);  c(x->o2); g(ILT); break;
         case GT   : c(x->o1);  c(x->o2); g(IGT); break;
+        case EQ   : c(x->o1);  c(x->o2); g(IEQ); break;
         case SET:
             c(x->o2);
             if (x->o1->kind == LOCAL) { g(LSTORE); g2(x->o1->val); }
@@ -886,6 +896,7 @@ void run(code *pc) {
         ACASE IDIV  : NOS /= TOS; --sp;
         ACASE ILT   : NOS =  (NOS<TOS)?1:0; --sp;
         ACASE IGT   : NOS =  (NOS>TOS)?1:0; --sp;
+        ACASE IEQ   : NOS =  (NOS==TOS)?1:0; --sp;
         ACASE JMP   : pc += *pc;
         ACASE JZ    : if (st[sp--] == 0) pc += *pc; else pc++;
         ACASE JNZ   : if (st[sp--] != 0) pc += *pc; else pc++;
@@ -941,6 +952,7 @@ void dis() {
         ACASE IDIV  : fprintf(fp,"div");
         ACASE ILT   : fprintf(fp,"lt");
         ACASE IGT   : fprintf(fp,"gt");
+        ACASE IEQ   : fprintf(fp,"eq");
         ACASE JMP   : fprintf(fp,"jmp %d", p+1+(*pc++));
         ACASE JZ    : fprintf(fp,"jz %d",  p+1+(*pc++));
         ACASE JNZ   : fprintf(fp,"jnz %d", p+1+(*pc++));
@@ -965,7 +977,7 @@ void dis() {
 
 int main(int argc, char *argv[]) {
     if (argc>1) { input_fp = fopen(argv[1], "rt"); }
-    else { input_fp = fopen("test.tc", "rt"); }
+    else { input_fp = fopen("tests.tc", "rt"); }
     c(program());
 
     printf("(nodes: %d, ", num_nodes);
