@@ -1,7 +1,6 @@
 int global_int, another_global, _leading2, UpperCase;
 int char_code, newline_code, escape_code, quote_code, backslash_code, output_code, mod_result;
 int global_arr[10], nums[5];
-int greeting[] = "\ncat";
 int cat[10] = "cat";
 int empty_string[] = "";
 int escaped_string[] = "A\n\"\\\0";
@@ -122,6 +121,7 @@ void passFail(int name[], int res) {
 
 int modTest(int a, int b, int c) { return (a % b) == c; }
 
+int greeting[] = "\ncat";
 int main() {
     int local_a;
     int local_b;

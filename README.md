@@ -6,13 +6,13 @@
 
 /*
  * This is a compiler for Tiny-C, a stripped down version of C.
- * The compiler reads the program from standard input and prints out
- * the value of the variables that are not zero.
+ * The compiler reads the program from the file named on the command line
+ * (default tests.tc), then runs it in the built-in VM. Output comes only from emit().
  * The grammar of Tiny-C in EBNF is:
  *
- *  <program> ::= <global_defs> <function_defs> <main_def>
- *  <main_def> ::= ("void" | "int") "main" "(" ")" "{" <statement> "}"
- *  <defs> ::= <def> | <def> <def>
+ *  <program> ::= { <def> }   (must define main)
+ *  <main_def> ::= ("void" | "int") "main" "(" ")" "{" { <statement> } "}"
+ *  <defs> ::= { <def> }
  *  <def> ::= <func_def> | <var_def>
  *  <func_def> ::= ("void" | "int") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
  *  <parameter> ::= "int" <id> [ "[" "]" ]
@@ -32,7 +32,7 @@
  *  <paren_expr> ::= "(" <expr> ")"
  *  <expr> ::= <test> | <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr>
  *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math> | <math> "!=" <math>
- *  <math> ::= <term> | <math> <math_op> <term>
+ *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)
  *  <math_op> ::= "+" | "-" | "*" | "/" | "%"
  *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <int> | <char> | <string> | <paren_expr> | "-" <term>
  *  <func_call> ::= <int_func_id> "(" [ <expr> { "," <expr> } ] ")"
@@ -50,8 +50,8 @@
  * are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
  * String initializers are global integer arrays laid out as [length, ASCII values..., 0].
  * The length excludes the final zero; an omitted array size is inferred, and an
- * explicit size must fit the length and terminator. Non-ASCII source characters
- * are rejected. String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
+ * explicit size must fit the length and terminator. Non-ASCII characters are
+ * rejected outside comments and character literals. String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
  * String literals used as array arguments get anonymous global storage.
  * String literals are valid only as array arguments or global array initializers.
  * Array parameters pass global-array base slots by reference.

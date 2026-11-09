@@ -23,12 +23,14 @@ int ch = ' ', sym, int_val;
 char id_name[64];
 FILE *input_fp = NULL;
 
-#define MAX_VARIABLES 65536
-char variable_names[MAX_VARIABLES][sizeof(id_name)];
-int variable_bases[MAX_VARIABLES], variable_sizes[MAX_VARIABLES];
-int variable_is_array[MAX_VARIABLES];
-int string_values[MAX_VARIABLES], string_length;
-int global_initial_values[MAX_VARIABLES];
+#define MAX_NAMES 1024
+#define MAX_STRING_LENGTH 1024
+#define MAX_GLOBAL_SLOTS 256000
+char variable_names[MAX_NAMES][sizeof(id_name)];
+int variable_bases[MAX_NAMES], variable_sizes[MAX_NAMES];
+int variable_is_array[MAX_NAMES];
+int string_values[MAX_STRING_LENGTH], string_length;
+int globals[MAX_GLOBAL_SLOTS];
 int num_variables;
 int num_global_slots;
 
@@ -50,7 +52,7 @@ int declare_variable(const char *name, int size, int is_array) {
         exit(1);
     }
     if (size <= 0) { error("-array size must be positive-"); }
-    if (num_variables >= MAX_VARIABLES || size > MAX_VARIABLES - num_global_slots) {
+    if (num_variables >= MAX_NAMES || size > MAX_GLOBAL_SLOTS - num_global_slots) {
         error("-too many variables-");
     }
     strcpy(variable_names[num_variables], name);
@@ -63,14 +65,14 @@ int declare_variable(const char *name, int size, int is_array) {
 
 int allocate_string_literal() {
     int size = string_length + 2;
-    if (size > MAX_VARIABLES - num_global_slots) {
+    if (size > MAX_GLOBAL_SLOTS - num_global_slots) {
         error("-too much global storage-");
     }
     int base = num_global_slots;
     num_global_slots += size;
-    global_initial_values[base] = string_length;
+    globals[base] = string_length;
     for (int i = 0; i < string_length; i++) {
-        global_initial_values[base + i + 1] = string_values[i];
+        globals[base + i + 1] = string_values[i];
     }
     return base;
 }
@@ -247,7 +249,7 @@ void next_sym() {
                 value = ch;
             }
             if (value > 127) { error("-string literals must contain ASCII characters-"); }
-            if (string_length >= MAX_VARIABLES - 2) {
+            if (string_length >= MAX_STRING_LENGTH) {
                 error("-string literal too long-");
             }
             string_values[string_length++] = value;
@@ -674,9 +676,9 @@ void parse_variable_declarator(const char *name) {
     int variable = declare_variable(name, size, is_array);
     if (has_string_initializer) {
         int base = variable_bases[variable];
-        global_initial_values[base] = string_length;
+        globals[base] = string_length;
         for (int i = 0; i < string_length; i++) {
-            global_initial_values[base + i + 1] = string_values[i];
+            globals[base + i + 1] = string_values[i];
         }
         next_sym();
     }
@@ -858,7 +860,7 @@ enum { SYS_EMIT };
 
 typedef char code;
 typedef unsigned char byte;
-#define MAX_CODE 4096
+#define MAX_CODE 65536
 code vm[MAX_CODE], *here = vm;
 
 #define MAX_CALL_FIXUPS MAX_NODES
@@ -880,8 +882,18 @@ void g2(int n) {
     g(n & 0xff); n=(n >> 8);
     g(n & 0xff);
 }
-code *hole() { return here++; }
-void fix(code *src, code *dst) { *src = dst-src; } /* missing overflow check */
+code *hole() {
+    if (here + 2 > vm + MAX_CODE) { error("-program too large-"); }
+    code *p = here;
+    here += 2;
+    return p;
+}
+void fix(code *src, code *dst) {
+    int off = (int)(dst - src);
+    if (off < -32768 || off > 32767) { error("-jump too far-"); }
+    src[0] = (code)(off & 0xff);
+    src[1] = (code)((off >> 8) & 0xff);
+}
 
 void emit_call(int index, int argc) {
     if (num_call_fixups >= MAX_CALL_FIXUPS) { error("-too many function calls-"); }
@@ -953,26 +965,25 @@ void c(node *x) {
         case EMPTY: break;
         case SEQ  : c(x->o1); c(x->o2); break;
         case EXPR:
-            if (x->o1->kind == FUNC_CALL && x->o1->val != BUILTIN_EMIT &&
-                !functions[x->o1->val].returns_value) {
+            if (x->o1->kind == FUNC_CALL && x->o1->val != BUILTIN_EMIT) {
                 c(x->o1->o1);
                 emit_call(x->o1->val, argument_count(x->o1->o1));
             } else {
                 c(x->o1);
-                g(IDROP);
             }
+            g(IDROP);
             break;
         case ARG_LIST: c(x->o1); c(x->o2); break;
         case RETURN_NODE: c(x->o1); g(IRET); break;
-        case VOID_RETURN: g(IRET); break;
+        case VOID_RETURN: g(IP1); g(0); g(IRET); break;
         case PROG :
             emit_call(main_function, 0);
-            if (functions[main_function].returns_value) { g(IDROP); }
+            g(IDROP);
             g(HALT);
             for (int i = 0; i < num_functions; i++) {
                 functions[i].address = (int)(here - vm);
                 c(functions[i].body);
-                g(IRET);
+                g(IP1); g(0); g(IRET);
             }
             patch_calls();
             break;
@@ -997,7 +1008,7 @@ void compile() { c(program());}
 
 /*---------------------------------------------------------------------------*/
 /* Virtual machine. */
-int globals[MAX_VARIABLES], sp;
+int sp;
 
 #define ACASE    goto again; case
 #define TOS      st[sp]
@@ -1017,31 +1028,29 @@ int f2(byte *a) {
     return x;
 }
 
+struct return_s { code *pc; int frame_base; };
+
 void run(code *pc) {
-    /* Parameters share a separate stack whose active range is saved per call. */
-    long st[1000], frame_values[1000];
-    code *return_pc[1000];
-    int return_frame_base[1000], return_frame_sp[1000];
-    int frame_base = -1, frame_sp = 0;
+    /* Each frame's parameters and locals sit on st[] starting at frame_base. */
+    int st[1000];
+    struct return_s return_stack[1000];
+    int frame_base = 1;
     int return_sp = 0;
 
     if (!pc) {
         pc = vm;
         sp = 0;
-        for (int i = 0; i < num_global_slots; i++) {
-            globals[i] = global_initial_values[i];
-        }
     }
     again:
     switch (*pc++) {
         case  IFETCH: st[++sp] = globals[f2((byte*)pc)]; pc +=2;
         ACASE ISTORE: globals[f2((byte*)pc)] = st[sp]; pc += 2;
-        ACASE PLOAD : st[++sp] = frame_values[frame_base + f2((byte*)pc)]; pc += 2;
-        ACASE PSTORE: frame_values[frame_base + f2((byte*)pc)] = st[sp]; pc += 2;
-        ACASE LLOAD : st[++sp] = frame_values[frame_base + f2((byte*)pc)]; pc += 2;
-        ACASE LSTORE: frame_values[frame_base + f2((byte*)pc)] = st[sp]; pc += 2;
-        ACASE PAFETCH: st[sp] = globals[frame_values[frame_base + f2((byte*)pc)] + st[sp]]; pc += 2;
-        ACASE PASTORE: globals[frame_values[frame_base + f2((byte*)pc)] + st[sp-1]] = st[sp];
+        ACASE PLOAD : st[++sp] = st[frame_base + f2((byte*)pc)]; pc += 2;
+        ACASE PSTORE: st[frame_base + f2((byte*)pc)] = st[sp]; pc += 2;
+        ACASE LLOAD : st[++sp] = st[frame_base + f2((byte*)pc)]; pc += 2;
+        ACASE LSTORE: st[frame_base + f2((byte*)pc)] = st[sp]; pc += 2;
+        ACASE PAFETCH: st[sp] = globals[st[frame_base + f2((byte*)pc)] + st[sp]]; pc += 2;
+        ACASE PASTORE: globals[st[frame_base + f2((byte*)pc)] + st[sp-1]] = st[sp];
                         st[sp-1] = st[sp]; --sp; pc += 2;
         ACASE IAFETCH: st[sp] = globals[f2((byte*)pc) + st[sp]]; pc += 2;
         ACASE IASTORE: globals[f2((byte*)pc) + st[sp-1]] = st[sp];
@@ -1073,35 +1082,29 @@ void run(code *pc) {
                         }
                         goto again;
                       }
-        ACASE JMP   : pc += *pc;
-        ACASE JZ    : if (st[sp--] == 0) pc += *pc; else pc++;
-        ACASE JNZ   : if (st[sp--] != 0) pc += *pc; else pc++;
+        ACASE JMP   : pc += (short)f2((byte*)pc);
+        ACASE JZ    : if (st[sp--] == 0) pc += (short)f2((byte*)pc); else pc += 2;
+        ACASE JNZ   : if (st[sp--] != 0) pc += (short)f2((byte*)pc); else pc += 2;
         ACASE ICALL : {
                         int argc = f2((byte*)pc + 2);
                         int locals = f2((byte*)pc + 4);
-                        int base = frame_sp;
                         if (return_sp >= 1000) { error("-call stack overflow-"); }
-                        if (argc + locals > 1000 - frame_sp || sp < argc) {
-                            error("-call frame overflow-");
-                        }
-                        return_pc[return_sp] = pc + 6;
-                        return_frame_base[return_sp] = frame_base;
-                        return_frame_sp[return_sp] = frame_sp;
+                        if (sp < argc || sp + locals >= 1000) { error("-call frame overflow-"); }
+                        return_stack[return_sp].pc = pc + 6;
+                        return_stack[return_sp].frame_base = frame_base;
                         return_sp++;
-                        for (int i = 0; i < argc; i++) {
-                            frame_values[frame_sp++] = st[sp - argc + 1 + i];
-                        }
-                        for (int i = 0; i < locals; i++) { frame_values[frame_sp++] = 0; }
-                        sp -= argc;
-                        frame_base = base;
+                        frame_base = sp - argc + 1;
+                        memset(&st[sp + 1], 0, locals * sizeof st[0]);
+                        sp += locals;
                         pc = vm + f2((byte*)pc);
                       }
         ACASE IRET : if (return_sp) {
+                          st[frame_base] = TOS;
+                          sp = frame_base;
                           return_sp--;
-                          pc=return_pc[return_sp];
-                          frame_base=return_frame_base[return_sp];
-                          frame_sp=return_frame_sp[return_sp];
-                      } else { if (sp) { --sp; } return; }
+                          pc = return_stack[return_sp].pc;
+                          frame_base = return_stack[return_sp].frame_base;
+                      } else { return; }
         ACASE HALT  : return;
     }
 }

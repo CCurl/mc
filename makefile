@@ -22,5 +22,8 @@ test1: $(app)
 tests: $(app)
 	./$(app) tests.tc
 
+unit-tests: $(app)
+	./$(app) unit-tests.tc
+
 bin: $(app)
 	cp -u -p $(app) ~/.local/bin/

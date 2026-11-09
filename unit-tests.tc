@@ -1,0 +1,428 @@
+// Unit tests for the Tiny-C compiler and VM.
+// Each check prints "name: ok" or "name: FAIL"; the last line prints the failure count.
+
+int failures;
+int g_zero, g_a, g_b;
+int g_arr[4];
+int g_str[] = "abc";
+int g_pad[10] = "hi";
+int g_empty[] = "";
+int g_esc[] = "\n\t\\\"";
+int g_counter;
+int g_esc2[] = "\r\e\'";
+int g_esc3[] = "a\0b";
+
+void print(int str[]) {
+    int i; i = 1;
+    while (str[i]) { emit(str[i]); i = i + 1; }
+}
+
+void printNum(int n, int b) {
+    if (n<0) { emit('-'); n = -n; }
+    if (n > (b-1)) { printNum(n / b, b); }
+    n = n % b;
+    if (n > 9) { n = n+7; }
+    emit(n+'0');
+}
+
+void check(int name[], int ok) {
+    print(name);
+    if (ok) { print(": ok\n"); }
+    else { print(": FAIL\n"); failures = failures + 1; }
+}
+
+// Global storage and string initializers.
+void test_globals() {
+    check("global scalar is zero-initialized", g_zero == 0);
+    check("global array is zero-initialized", g_arr[3] == 0);
+    g_a = 4;
+    g_b = g_a + 1;
+    check("multiple declarators are independent", g_b == 5);
+    check("inferred string length", g_str[0] == 3);
+    check("string first character", g_str[1] == 'a');
+    check("string last character", g_str[3] == 'c');
+    check("string terminator", g_str[4] == 0);
+    check("sized string length", g_pad[0] == 2);
+    check("sized string padded with zero", g_pad[9] == 0);
+    check("empty string length", g_empty[0] == 0);
+    check("empty string terminator", g_empty[1] == 0);
+    check("escape string length", g_esc[0] == 4);
+    check("newline escape", g_esc[1] == '\n');
+    check("tab escape", g_esc[2] == '\t');
+    check("backslash escape", g_esc[3] == '\\');
+    check("quote escape", g_esc[4] == '"');
+    check("escape string terminator", g_esc[5] == 0);
+}
+
+// Integer and character literals, unary minus.
+void test_literals() {
+    check("decimal boundary 127 to 128", 127 + 1 == 128);
+    check("decimal boundary 32767 to 32768", 32767 + 1 == 32768);
+    check("large decimal literal", 65536 + 1 == 65537);
+    check("char A", 'A' == 65);
+    check("char newline", '\n' == 10);
+    check("char carriage return", '\r' == 13);
+    check("char tab", '\t' == 9);
+    check("char NUL", '\0' == 0);
+    check("char escape", '\e' == 27);
+    check("char backslash", '\\' == 92);
+    check("char single quote", '\'' == 39);
+    check("char double quote", '"' == 34);
+    check("unary minus", -5 == 0 - 5);
+    check("double unary minus", - -5 == 5);
+    check("unary minus on parenthesized sum", -(3 + 4) == 0 - 7);
+}
+
+void test_arithmetic() {
+    check("addition", 7 + 3 == 10);
+    check("subtraction", 7 - 3 == 4);
+    check("multiplication", 7 * 3 == 21);
+    check("division", 7 / 3 == 2);
+    check("modulo", 7 % 3 == 1);
+    check("division truncates toward zero", -7 / 2 == -3);
+    check("modulo sign follows dividend", -7 % 3 == -1);
+    check("left-to-right subtraction", 10 - 4 - 3 == 3);
+    // sum() has no precedence; operators apply left to right.
+    check("operators evaluate left to right", 2 + 3 * 4 == 20);
+    check("parentheses override order", 2 + (3 * 4) == 14);
+}
+
+void test_comparisons() {
+    check("less than true", 3 < 4);
+    check("less than false", (4 < 3) == 0);
+    check("greater than true", 4 > 3);
+    check("greater than false", (3 > 4) == 0);
+    check("equal true", 5 == 5);
+    check("equal false", (5 == 6) == 0);
+    check("not equal true", 5 != 6);
+    check("not equal false", (5 != 5) == 0);
+    check("comparison results are 0 or 1", (1 < 2) + (2 < 3) == 2);
+    check("comparison of sums", 1 + 1 < 2 + 1);
+}
+
+void test_assignment() {
+    check("assignment yields its value", (g_a = 5) == 5);
+    g_a = g_b = 9;
+    check("chained assignment inner", g_b == 9);
+    check("chained assignment outer", g_a == 9);
+    g_arr[1] = 7;
+    check("array element assignment", g_arr[1] == 7);
+    g_arr[0] = g_arr[2] = 3;
+    check("chained array assignment", g_arr[0] == 3);
+    check("array index expression", g_arr[1 + 1] == g_arr[2]);
+}
+
+void test_control_flow() {
+    int i, n, r, a, b;
+    r = 0;
+    if (1) r = 1;
+    check("if true", r == 1);
+    r = 0;
+    if (0) r = 1;
+    check("if false", r == 0);
+    if (0) r = 1; else r = 2;
+    check("if else takes else", r == 2);
+    a = 1; b = 0; r = 0;
+    if (a) if (b) r = 1; else r = 2;
+    check("else binds to nearest if", r == 2);
+    r = 0;
+    if (1) ; else r = 9;
+    check("empty statement", r == 0);
+    r = 0;
+    { { r = 3; } }
+    check("nested blocks", r == 3);
+    i = 0; n = 0;
+    while (i < 10) { i = i + 1; n = n + i; }
+    check("while loop sums 1 to 10", n == 55);
+    n = 0;
+    while (0) n = 1;
+    check("while with false condition", n == 0);
+    n = 0;
+    do n = n + 1; while (0);
+    check("do while runs once", n == 1);
+    i = 0; n = 0;
+    do { i = i + 1; n = n + i; } while (i < 3);
+    check("do while loop", n == 6);
+}
+
+int add(int a, int b) { return a + b; }
+int sub(int a, int b) { return a - b; }
+
+void maybe_set(int value) {
+    if (value) { return; }
+    g_counter = 1;
+}
+
+int count_and_return() {
+    g_counter = g_counter + 1;
+    return 7;
+}
+
+int bump(int x) {
+    x = x + 1;
+    return x;
+}
+
+int fact(int n) {
+    if (n < 2) { return 1; }
+    return n * fact(n - 1);
+}
+
+int first_over(int limit) {
+    int i;
+    i = 0;
+    while (i < 100) {
+        i = i + 1;
+        if (i > limit) { return i; }
+    }
+    return 0;
+}
+
+// Calls to a function defined later in the file.
+int forward_caller() { return forward_callee(4); }
+int forward_callee(int x) { return x * 10; }
+
+// Global declared after functions.
+int g_late;
+
+void test_functions() {
+    int n;
+    check("argument order", sub(10, 3) == 7);
+    check("nested calls", sub(add(5, 5), 3) == 7);
+    g_counter = 0;
+    maybe_set(1);
+    check("void early return skips rest", g_counter == 0);
+    maybe_set(0);
+    check("void body runs without return", g_counter == 1);
+    g_counter = 0;
+    count_and_return();
+    check("int call as statement", g_counter == 1);
+    check("int call as value", count_and_return() == 7);
+    n = 3;
+    check("parameter passed by value", bump(n) == 4);
+    check("caller variable unchanged", n == 3);
+    check("recursion", fact(5) == 120);
+    check("return from inside loop", first_over(5) == 6);
+    check("forward reference", forward_caller() == 40);
+    g_late = 3;
+    check("global declared after functions", g_late == 3);
+}
+
+void fill(int arr[], int count) {
+    int i;
+    i = 0;
+    while (i < count) { arr[i] = i * 2; i = i + 1; }
+}
+
+int sum(int arr[], int count) {
+    int i, total;
+    total = 0;
+    i = 0;
+    while (i < count) { total = total + arr[i]; i = i + 1; }
+    return total;
+}
+
+int sum_forward(int arr[], int count) { return sum(arr, count); }
+int first_char(int s[]) { return s[1]; }
+int length(int s[]) { return s[0]; }
+void put(int index, int arr[], int value) { arr[index] = value; }
+
+void test_arrays() {
+    fill(g_arr, 4);
+    check("array parameter writes caller array", g_arr[3] == 6);
+    check("array parameter reads caller array", sum(g_arr, 4) == 12);
+    check("array parameter forwarded", sum_forward(g_arr, 4) == 12);
+    put(2, g_arr, 9);
+    check("array parameter after scalar", g_arr[2] == 9);
+    check("string literal as array argument", first_char("xyz") == 'x');
+    check("string literal length", length("hello") == 5);
+}
+
+// emit() prints the newline and returns the byte written.
+void test_emit() {
+    check("emit returns written byte", emit('\n') == 10);
+}
+
+int twice(int x) { return x * 2; }
+int seven() { return 7; }
+int get_at(int arr[], int i) { return arr[i]; }
+int inc_global() {
+    g_counter = g_counter + 1;
+    return g_counter;
+}
+
+int ordered(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return a + (b * 10) + (c * 100) + (d * 1000) + (e * 10000) + (f * 100000) + (g * 1000000) + (h * 10000000);
+}
+
+int locals_mix(int a, int b, int c) {
+    int p, q;
+    p = a + c;
+    q = b * 2;
+    return p * 100 + q;
+}
+
+int late_decl(int x) {
+    x = x + 1;
+    int y;
+    y = x * 2;
+    return y;
+}
+
+int shadow_local(int x) {
+    int g_a;
+    g_a = x;
+    return g_a;
+}
+
+int shadow_param(int g_b) { return g_b + 1; }
+
+int depth(int n) {
+    if (n < 1) { return 0; }
+    return 1 + depth(n - 1);
+}
+
+// Defined after is_even, so is_even uses a forward reference.
+int is_even(int n) {
+    if (n == 0) { return 1; }
+    return is_odd(n - 1);
+}
+
+int is_odd(int n) {
+    if (n == 0) { return 0; }
+    return is_even(n - 1);
+}
+
+int nested_return(int x) {
+    if (x > 0) { while (1 == 1) { return x; } }
+    return 0;
+}
+
+int sign(int x) {
+    if (x < 0) { return -1; }
+    else { if (x > 0) { return 1; } else { return 0; } }
+}
+
+int pass_two(int arr[]) { return sum_forward(arr, 4); }
+int pass_three(int arr[]) { return pass_two(arr); }
+
+void test_calls() {
+    check("call inside binary expression", 1 + twice(2) == 5);
+    check("two calls in one expression", twice(3) * twice(2) - twice(1) == 22);
+    check("call with pending operand below", 100 - add(1, 2) == 97);
+    check("nested calls as arguments", sub(add(1, twice(2)), twice(3)) == -1);
+    g_arr[1] = 5;
+    check("array and scalar args with call", get_at(g_arr, twice(0) + 1) == 5);
+    g_arr[twice(1)] = 9;
+    check("call as array index in store", g_arr[2] == 9);
+    check("call as array index in load", g_arr[twice(1)] == 9);
+    check("call inside expression with loop exit", 1 + first_over(3) == 5);
+    check("eight arguments in order", ordered(1, 2, 3, 4, 5, 6, 7, 8) == 87654321);
+    check("zero-argument call as value", seven() + seven() == 14);
+    seven();
+    check("zero-argument call as statement", seven() == 7);
+    g_counter = 0;
+    while (inc_global() < 3) { }
+    check("call in loop condition", g_counter == 3);
+    check("emit in argument list", twice(emit('\n')) == 20);
+}
+
+void test_locals() {
+    check("locals across statements", locals_mix(1, 2, 3) == 404);
+    check("declaration after statements", late_decl(3) == 8);
+    g_a = 77;
+    check("local shadows global", shadow_local(5) == 5);
+    check("global unchanged by shadowing local", g_a == 77);
+    check("parameter shadows global", shadow_param(4) == 5);
+}
+
+void test_recursion() {
+    check("factorial of 10", fact(10) == 3628800);
+    check("deep recursion of 200 levels", depth(200) == 200);
+    check("mutual recursion even true", is_even(10) == 1);
+    check("mutual recursion odd true", is_odd(7) == 1);
+    check("mutual recursion even false", is_even(7) == 0);
+    check("return from nested while", nested_return(5) == 5);
+    check("return from nested if false path", nested_return(0) == 0);
+    check("sign negative", sign(-5) == -1);
+    check("sign zero", sign(0) == 0);
+    check("sign positive", sign(7) == 1);
+}
+
+void test_literals2() {
+    check("negative multiply", -3 * 4 == -12);
+    check("negative divide", 12 / -4 == -3);
+    check("large product", 200 * 300 == 60000);
+    check("large constant arithmetic", 70000 - 1 == 69999);
+    check("carriage return escape in string", g_esc2[1] == 13);
+    check("escape e in string", g_esc2[2] == 27);
+    check("escaped single quote in string", g_esc2[3] == 39);
+    check("string terminator after escapes", g_esc2[4] == 0);
+    check("NUL escape inside string", g_esc3[2] == 0);
+    check("character after NUL escape", g_esc3[3] == 'b');
+}
+
+void test_arrays2() {
+    fill(g_arr, 4);
+    check("array parameter through three levels", pass_three(g_arr) == 12);
+    g_arr[0] = 1;
+    g_arr[3] = 2;
+    check("first element of global array", g_arr[0] == 1);
+    check("last element of global array", g_arr[3] == 2);
+}
+
+int long_jump_loop() {
+    int i, n;
+    i = 0;
+    n = 0;
+    while (i < 3) {
+        i = i + 1;
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+    }
+    return n;
+}
+
+int long_jump_if(int x) {
+    int n;
+    n = 0;
+    if (x > 0) {
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+        n = n + 1; n = n + 1; n = n + 1; n = n + 1; n = n + 1;
+    }
+    return n;
+}
+
+void test_long_jumps() {
+    check("loop body over 127 bytes", long_jump_loop() == 60);
+    check("if body over 127 bytes taken", long_jump_if(1) == 20);
+    check("if body over 127 bytes skipped", long_jump_if(0) == 0);
+}
+
+int main() {
+    test_globals();
+    test_literals();
+    test_arithmetic();
+    test_comparisons();
+    test_assignment();
+    test_control_flow();
+    test_functions();
+    test_arrays();
+    test_arrays2();
+    test_calls();
+    test_locals();
+    test_recursion();
+    test_literals2();
+    test_long_jumps();
+    test_emit();
+    emit('\n');
+    print("failures: ");
+    printNum(failures, 10);
+    emit('\n');
+    if (failures == 0) { print("all checks passed\n"); }
+    return 0;
+}
