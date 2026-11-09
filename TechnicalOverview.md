@@ -11,7 +11,7 @@ flowchart LR
     D --> F[Validation: validate_node]
     F --> G[Codegen: c]
     G --> H[vm code bytes]
-    C --> K[globals: initial values]
+    C --> K[globals: written during parsing]
     H --> J[VM: run]
     K --> J
 ```
@@ -63,6 +63,7 @@ The output is a flat byte array `vm[MAX_CODE]` (65536 bytes). Opcodes are one by
 Notable generation details:
 
 - Forward jumps are emitted as holes and patched once the target address is known. `WHILE` and `DO` back-jumps are emitted directly.
+- Constant-only arithmetic and comparisons are folded at compile time by `fold()`. Division and modulo by zero are not folded, so they still fail at runtime.
 - Call targets are unknown when the call is emitted, so each call is recorded in `call_fixups[]`. `patch_calls()` fills in the addresses after all functions are generated.
 - Every function leaves exactly one value on the operand stack when it returns. A `void` function returns `0`, so every call used as a statement is followed by `IDROP`.
 - Program layout: `PROG` emits a call to `main`, then `IDROP`, then `HALT`, then each function body in index order, each ending with `IRET`.

@@ -914,9 +914,37 @@ void patch_calls() {
     }
 }
 
+void emit_const(int v) {
+    if (BTWI(v,0,127)) { g(IP1); g(v); }
+    else if (BTWI(v,128,32767)) { g(IP2); g2(v); }
+    else { g(IP4); g4(v); }
+}
+
+/* Returns 1 and sets *out if x is a constant expression that can be folded. */
+int fold(node *x, int *out) {
+    int a, b;
+    if (!x) { return 0; }
+    if (x->kind == CST) { *out = x->val; return 1; }
+    if (!fold(x->o1, &a) || !fold(x->o2, &b)) { return 0; }
+    switch (x->kind) {
+        case ADD: *out = a + b; return 1;
+        case SUB: *out = a - b; return 1;
+        case MUL: *out = a * b; return 1;
+        case DIV: if (b == 0) { return 0; } *out = a / b; return 1;
+        case MOD: if (b == 0) { return 0; } *out = a % b; return 1;
+        case LT:  *out = a < b;  return 1;
+        case GT:  *out = a > b;  return 1;
+        case EQ:  *out = a == b; return 1;
+        case NE:  *out = a != b; return 1;
+        default: return 0;
+    }
+}
+
 void c(node *x) {
     code *p1, *p2;
+    int folded;
     if (!x) { return; }
+    if (x->kind != CST && fold(x, &folded)) { emit_const(folded); return; }
     switch (x->kind) {
         case VAR:
             if (x->val < 0) { g(PLOAD); g2(-x->val - 1); }
@@ -937,10 +965,7 @@ void c(node *x) {
             if (x->val < 0) { g(PASTORE); g2(-x->val - 1); }
             else { g(IASTORE); g2(x->val); }
             break;
-        case CST  : if (BTWI(x->val,0,127)) { g(IP1); g(x->val); }
-                    else if (BTWI(x->val,128,32767)) { g(IP2); g2(x->val);  }
-                    else { g(IP4); g4(x->val);  }
-                    break;
+        case CST  : emit_const(x->val); break;
         case ADD  : c(x->o1);  c(x->o2); g(IADD); break;
         case MUL  : c(x->o1);  c(x->o2); g(IMUL); break;
         case SUB  : c(x->o1);  c(x->o2); g(ISUB); break;
@@ -1008,8 +1033,6 @@ void compile() { c(program());}
 
 /*---------------------------------------------------------------------------*/
 /* Virtual machine. */
-int sp;
-
 #define ACASE    goto again; case
 #define TOS      st[sp]
 #define NOS      st[sp-1]
@@ -1030,17 +1053,12 @@ int f2(byte *a) {
 
 struct return_s { code *pc; int frame_base; };
 
-void run(code *pc) {
+void run() {
     /* Each frame's parameters and locals sit on st[] starting at frame_base. */
-    int st[1000];
+    int st[1000], sp = 0, frame_base = 1, return_sp = 0;
+    code *pc = vm;
     struct return_s return_stack[1000];
-    int frame_base = 1;
-    int return_sp = 0;
 
-    if (!pc) {
-        pc = vm;
-        sp = 0;
-    }
     again:
     switch (*pc++) {
         case  IFETCH: st[++sp] = globals[f2((byte*)pc)]; pc +=2;
