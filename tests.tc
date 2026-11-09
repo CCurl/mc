@@ -1,7 +1,16 @@
 int global_int, another_global, _leading2, UpperCase;
+int char_code, newline_code, escape_code, quote_code, backslash_code, output_code, mod_result;
 int global_arr[4], nums[5];
+int greeting[] = "cat";
+int greeting_sized[5] = "cat";
+int empty_string[] = "";
+int escaped_string[] = "A\n\"\\\0";
 
-void print_zero() {
+void nop() {}
+
+void return_early(int should_return) {
+    if (should_return) { return; }
+    global_int = global_int + 100;
 }
 
 void set_global() {
@@ -30,21 +39,27 @@ int identity(int x) {
     return x;
 }
 
-int add(int left, int right) {
-    return left + right;
+int string_length(int text[]) {
+    return text[0];
 }
 
-int sub(int left, int right) {
-    return left - right;
+void print(int str[]) {
+    int i; i = 1;
+    while (str[i]) { emit(str[i]); i = i + 1; }
 }
 
-int mul(int left, int right) {
-    return left * right;
+void printNum(int n, int b) {
+    if (n<0) { emit('-'); n = -n; }
+    if (n > (b-1)) { printNum(n / b, b); }
+    n = n % b;
+    if (n > 9) { n = n+7; }
+    emit(n+'0');
 }
 
-int divv(int left, int right) {
-    return left / right;
-}
+int add(int left, int right) { return left + right; }
+int sub(int left, int right) { return left - right; }
+int mul(int left, int right) { return left * right; }
+int div(int left, int right) {  return left / right; }
 
 int sum_to(int n) {
     int total;
@@ -92,8 +107,18 @@ int max2(int a, int b) {
 int parity(int x) {
     if (x < 0) { x = -x; }
     if (x == 0) { return 0; }
-    return x - (x / 2) * 2;
+    return x % 2;
 }
+
+
+void passFail(int name[], int res) {
+    print(name);
+    if (res) { print(": pass\n"); }
+    else { print(": fail\n"); }
+}
+
+int modTest(int a, int b, int c) { return (a % b) == c; }
+int isFalse(int value) { return value == 0; }
 
 int main() {
     int local_a;
@@ -102,28 +127,42 @@ int main() {
     int local_d;
     int local_e;
     int i, j;
+    printNum(12345, 16); emit('\n');
+    printNum(-12345, 10);
 
     global_int = 7;
     global_arr[0] = 10;
     global_arr[1] = 20;
-    global_arr[2] = 30;
+        global_arr[2] = 30;
     global_arr[3] = 40;
     local_a = global_arr[0];
     write_second(8, global_arr);
     _leading2 = (2 + 3) * 4;
     UpperCase = -1;
+    char_code = 'A';
+    newline_code = '\n';
+    escape_code = '\e';
+    quote_code = '\'';
+    backslash_code = '\\';
+    local_a = string_length(greeting);
+    local_b = greeting[2];
     global_int = another_global = 7;
 
-    print_zero();
+    nop();
+    return_early(1);
     set_global();
     local_a = get_global();
     statement_forms(3);
+    print(greeting);
+    print("\nthis is a test");
+    output_code = emit('!');
+    print("\nhi there\n");
 
     local_a = identity(123);
     local_b = add(3, 4);
     local_c = sub(9, 4);
     local_d = mul(6, 7);
-    local_e = divv(20, 5);
+    local_e = div(20, 5);
 
     another_global = local_a + local_b + local_c + local_d + local_e + global_int;
 
@@ -159,6 +198,33 @@ int main() {
     else { local_a = 2; }
 
     if (local_d < 2) { local_b = local_b + 1; }
+
+    passFail("addition", add(3, 4) == 7);
+    passFail("subtraction", sub(9, 4) == 5);
+    passFail("multiplication", mul(6, 7) == 42);
+    passFail("division", div(20, 5) == 4);
+    passFail("modulo", modTest(123, 100, 23));
+    passFail("negative modulo", -7 % 3 == -1);
+    passFail("equality", 7 == 7);
+    passFail("equality false", isFalse(7 == 8));
+    passFail("inequality true", 7 != 8);
+    passFail("inequality false", isFalse(7 != 7));
+    passFail("character literal", char_code == 65);
+    passFail("character escape", newline_code == 10);
+    passFail("escape character", escape_code == 27);
+    passFail("string length", string_length(greeting) == 3);
+    passFail("string first character", greeting[1] == 'c');
+    passFail("string terminator", greeting[4] == 0);
+    passFail("empty string length", empty_string[0] == 0);
+    passFail("empty string terminator", empty_string[1] == 0);
+    passFail("global array reference", global_arr[1] == 8);
+    passFail("recursive function", fact(5) == 120);
+    passFail("while loop", j == 162);
+    passFail("do while loop", local_e == 20);
+    passFail("if else", local_c == 11);
+    passFail("emit return", output_code == '!');
+    passFail("void side effects", get_global() == 44);
+    passFail("void early return", get_global() == 44);
 
     return 0;
 }

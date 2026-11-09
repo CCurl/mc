@@ -13,8 +13,9 @@
 #define BTWI(n,l,h) ((l<=n)&&(n<=h))
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM, //  0->5
        LBRA, RBRA, LPAR, RPAR,                                 //  6->9
-       PLUS, MINUS, STAR, SLASH, LESS, GRT, SEMI, EQUAL, EQ_SYM, // 10->18
-       INT, ID, EOI, LBRACKET, RBRACKET, COMMA, RETURN_SYM };
+       PLUS, MINUS, STAR, SLASH, MODULO, LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM, // 10->20
+       INT, ID, EOI, LBRACKET, RBRACKET, COMMA, RETURN_SYM,
+       CHAR_LITERAL, STRING_LITERAL };
 
 char *words[] = { "do", "else", "if", "while", "void", "int", NULL };
 
@@ -26,6 +27,8 @@ FILE *input_fp = NULL;
 char variable_names[MAX_VARIABLES][sizeof(id_name)];
 int variable_bases[MAX_VARIABLES], variable_sizes[MAX_VARIABLES];
 int variable_is_array[MAX_VARIABLES];
+int string_values[MAX_VARIABLES], string_length;
+int global_initial_values[MAX_VARIABLES];
 int num_variables;
 int num_global_slots;
 
@@ -56,6 +59,20 @@ int declare_variable(const char *name, int size, int is_array) {
     variable_is_array[num_variables] = is_array;
     num_global_slots += size;
     return num_variables++;
+}
+
+int allocate_string_literal() {
+    int size = string_length + 2;
+    if (size > MAX_VARIABLES - num_global_slots) {
+        error("-too much global storage-");
+    }
+    int base = num_global_slots;
+    num_global_slots += size;
+    global_initial_values[base] = string_length;
+    for (int i = 0; i < string_length; i++) {
+        global_initial_values[base + i + 1] = string_values[i];
+    }
+    return base;
 }
 
 int parameter_index(const char *name);
@@ -137,6 +154,21 @@ int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); 
 int isNum(int ch) { return BTWI(ch,'0','9'); }
 int isAlphaNum(int ch) { return isAlpha(ch) || isNum(ch); }
 
+int escaped_character(int ch) {
+    switch (ch) {
+      case 'n': return '\n';
+      case 'r': return '\r';
+      case 't': return '\t';
+      case '0': return '\0';
+      case 'e': return 27;
+      case '\\': return '\\';
+      case '\'': return '\'';
+      case '"': return '"';
+      default: error("-invalid character escape-");
+    }
+    return 0;
+}
+
 void next_ch() {
     if (input_fp) { ch = fgetc(input_fp); }
     else { ch = getchar(); }
@@ -162,8 +194,15 @@ void next_sym() {
         }
         sym = SLASH;
         break;
+      case '%': next_ch(); sym = MODULO; break;
       case '<': next_ch(); sym = LESS;  break;
       case '>': next_ch(); sym = GRT;   break;
+      case '!':
+        next_ch();
+        if (ch != '=') { syntax_error(); }
+        next_ch();
+        sym = NE_SYM;
+        break;
       case ';': next_ch(); sym = SEMI;  break;
       case '=':
         next_ch();
@@ -177,6 +216,46 @@ void next_sym() {
       case '[': next_ch(); sym = LBRACKET; break;
       case ']': next_ch(); sym = RBRACKET; break;
       case ',': next_ch(); sym = COMMA; break;
+      case '\'':
+        next_ch();
+        if (ch == EOF || ch == '\n' || ch == '\r' || ch == '\'') {
+            error("-invalid character literal-");
+        }
+        if (ch == '\\') {
+            next_ch();
+            int_val = escaped_character(ch);
+        } else {
+            int_val = ch;
+        }
+        next_ch();
+        if (ch != '\'') { error("-character literal must contain one character-"); }
+        next_ch();
+        sym = CHAR_LITERAL;
+        break;
+      case '"':
+        string_length = 0;
+        next_ch();
+        while (ch != '"') {
+            if (ch == EOF || ch == '\n' || ch == '\r') {
+                error("-unterminated string literal-");
+            }
+            int value;
+            if (ch == '\\') {
+                next_ch();
+                value = escaped_character(ch);
+            } else {
+                value = ch;
+            }
+            if (value > 127) { error("-string literals must contain ASCII characters-"); }
+            if (string_length >= MAX_VARIABLES - 2) {
+                error("-string literal too long-");
+            }
+            string_values[string_length++] = value;
+            next_ch();
+        }
+        next_ch();
+        sym = STRING_LITERAL;
+        break;
       default:
         if (isNum(ch)) {
             int_val = 0; /* missing overflow check */
@@ -207,11 +286,11 @@ void next_sym() {
 /*---------------------------------------------------------------------------*/
 /* Parser. */
 
-enum { VAR, CST, ADD, SUB, MUL, DIV, LT, GT, EQ, SET, FUNC_CALL,
-       ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, ARG_LIST,
+enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
+       ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
        IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG };
 
-#define MAX_NODES 1000
+#define MAX_NODES 2048
 struct node_s { int kind; struct node_s *o1, *o2, *o3; int val; };
 typedef struct node_s node;
 int num_nodes = 0;
@@ -279,6 +358,8 @@ int function_index(const char *name) {
     return num_functions++;
 }
 
+#define BUILTIN_PUTCHAR (-1)
+
 node *new_node(int k) {
     if (MAX_NODES <= num_nodes) { error(""); }
     node *x = &nodes[num_nodes++];
@@ -304,7 +385,7 @@ node *paren_expr(); /* forward declaration */
 node *expr();
 
 node *call_arguments(const char *name) {
-    int index = function_index(name);
+    int index = strcmp(name, "emit") == 0 ? BUILTIN_PUTCHAR : function_index(name);
     node *args = NULL;
     node **tail = &args;
     expect_sym(LPAR);
@@ -326,7 +407,7 @@ node *call_arguments(const char *name) {
     return call;
 }
 
-/* <term> ::= <id> | <id> "[" <expr> "]" | <int> | <paren_expr> | "-" <term> */
+/* <term> ::= <id> | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> */
 node *term() {
   node *x;
   if (sym == MINUS) {
@@ -369,10 +450,15 @@ node *term() {
               x->val=variable_index(name);
           }
       }
-  } else if (sym == INT) {
+  } else if (sym == INT || sym == CHAR_LITERAL) {
       x=new_node(CST);
       x->val=int_val;
       next_sym();
+  } else if (sym == STRING_LITERAL) {
+      int base = allocate_string_literal();
+      next_sym();
+      x = new_node(ARRAY_REF);
+      x->val = base;
   } else x = paren_expr();
   return x;
 }
@@ -382,11 +468,12 @@ int mathop() {
     else if (sym==MINUS) { return SUB; }
     else if (sym==STAR)  { return MUL; }
     else if (sym==SLASH) { return DIV; }
+    else if (sym==MODULO) { return MOD; }
     return 0;
 }
 
 /* <math> ::= <term> | <math> <math_op> <term> */
-/* <math_op> ::= "+" | "-" | "*" | "/" */
+/* <math_op> ::= "+" | "-" | "*" | "/" | "%" */
 node *sum() {
   node *x = term();
   while (mathop()) {
@@ -397,12 +484,13 @@ node *sum() {
   return x;
 }
 
-/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math> */
+/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math> | <math> "!=" <math> */
 node *test() {
   node *x = sum();
   if (sym == LESS) { next_sym(); return gen(LT, x, sum()); }
   if (sym == GRT)  { next_sym(); return gen(GT, x, sum()); }
   if (sym == EQ_SYM)   { next_sym(); return gen(EQ, x, sum()); }
+  if (sym == NE_SYM)   { next_sym(); return gen(NE, x, sum()); }
   return x;
 }
 
@@ -455,11 +543,18 @@ node *statement() {
       expect_sym(SEMI);
       x = new_node(EMPTY);
   } else if (sym == RETURN_SYM) {
-      if (current_function < 0 || !functions[current_function].returns_value) {
-          error("-return value outside int function-");
-      }
       next_sym();
-      x = gen(RETURN_NODE, expr(), NULL);
+      if (sym == SEMI) {
+          if (current_function < 0 || functions[current_function].returns_value) {
+              error("-return without a value requires a void function-");
+          }
+          x = new_node(VOID_RETURN);
+      } else {
+          if (current_function < 0 || !functions[current_function].returns_value) {
+              error("-return value requires an int function-");
+          }
+          x = gen(RETURN_NODE, expr(), NULL);
+      }
       expect_sym(SEMI);
   } else if (sym == IF_SYM) { /* "if" <paren_expr> <statement> */
       x = new_node(IF1);
@@ -548,15 +643,43 @@ void parse_parameters(int function_index_value) {
 void parse_variable_declarator(const char *name) {
     int size = 1;
     int is_array = 0;
+    int inferred_size = 0;
     if (sym == LBRACKET) {
         is_array = 1;
         next_sym();
-        if (sym != INT) { syntax_error(); }
-        size = int_val;
-        next_sym();
+        if (sym == RBRACKET) {
+            inferred_size = 1;
+        } else {
+            if (sym != INT) { syntax_error(); }
+            size = int_val;
+            next_sym();
+        }
         expect_sym(RBRACKET);
     }
-    declare_variable(name, size, is_array);
+    int has_string_initializer = 0;
+    if (sym == EQUAL) {
+        next_sym();
+        if (!is_array || sym != STRING_LITERAL) {
+            error("-string initializer requires an array declaration-");
+        }
+        int required_size = string_length + 2;
+        if (!inferred_size && size < required_size) {
+            error("-array is too small for string initializer-");
+        }
+        if (inferred_size) { size = required_size; }
+        has_string_initializer = 1;
+    } else if (inferred_size) {
+        error("-array size required unless initialized by a string-");
+    }
+    int variable = declare_variable(name, size, is_array);
+    if (has_string_initializer) {
+        int base = variable_bases[variable];
+        global_initial_values[base] = string_length;
+        for (int i = 0; i < string_length; i++) {
+            global_initial_values[base + i + 1] = string_values[i];
+        }
+        next_sym();
+    }
 }
 
 void variable_declarations(const char *first_name) {
@@ -573,6 +696,9 @@ void variable_declarations(const char *first_name) {
 }
 
 void parse_function_definition(const char *name, int returns_value) {
+    if (strcmp(name, "emit") == 0) {
+        error("-emit is a built-in function-");
+    }
     int index = function_index(name);
     if (functions[index].defined) {
         printf("-duplicate function %s-\n", name);
@@ -612,6 +738,13 @@ int argument_count(node *args) {
 void validate_expression(node *x, int allow_array_ref);
 
 void validate_call(node *call) {
+    if (call->val == BUILTIN_PUTCHAR) {
+        if (argument_count(call->o1) != 1) {
+            error("-emit expects 1 argument-");
+        }
+        validate_expression(call->o1->o1, 0);
+        return;
+    }
     struct function_s *function = &functions[call->val];
     node *arg = call->o1;
     for (int i = 0; i < function->num_parameters; i++) {
@@ -701,6 +834,7 @@ node *program() {
   }
   for (int i = 0; i < num_function_calls; i++) {
       node *call = function_calls[i];
+      if (call->val == BUILTIN_PUTCHAR) { continue; }
       int expected = functions[call->val].num_parameters;
       int actual = argument_count(call->o1);
       if (actual != expected) {
@@ -717,19 +851,25 @@ node *program() {
 /*---------------------------------------------------------------------------*/
 /* Code generator. */
 enum { IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
-        ILT, IGT, IEQ, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
-        PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE };
+        IMOD,         ILT, IGT, IEQ, INE, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
+        PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS };
+
+enum { SYS_PUTCHAR };
 
 typedef char code;
 typedef unsigned char byte;
-code vm[1000], *here = vm;
+#define MAX_CODE 4096
+code vm[MAX_CODE], *here = vm;
 
 #define MAX_CALL_FIXUPS MAX_NODES
 struct call_fixup_s { code *operand; int function_index; };
 struct call_fixup_s call_fixups[MAX_CALL_FIXUPS];
 int num_call_fixups;
 
-void g(code c) { *here++ = c; } /* missing overflow check */
+void g(code c) {
+    if (here >= vm + MAX_CODE) { error("-program too large-"); }
+    *here++ = c;
+}
 void g4(int n) {
     g(n & 0xff); n=(n >> 8);
     g(n & 0xff); n=(n >> 8);
@@ -793,9 +933,11 @@ void c(node *x) {
         case MUL  : c(x->o1);  c(x->o2); g(IMUL); break;
         case SUB  : c(x->o1);  c(x->o2); g(ISUB); break;
         case DIV  : c(x->o1);  c(x->o2); g(IDIV); break;
+        case MOD  : c(x->o1);  c(x->o2); g(IMOD); break;
         case LT   : c(x->o1);  c(x->o2); g(ILT); break;
         case GT   : c(x->o1);  c(x->o2); g(IGT); break;
         case EQ   : c(x->o1);  c(x->o2); g(IEQ); break;
+        case NE   : c(x->o1);  c(x->o2); g(INE); break;
         case SET:
             c(x->o2);
             if (x->o1->kind == LOCAL) { g(LSTORE); g2(x->o1->val); }
@@ -811,7 +953,8 @@ void c(node *x) {
         case EMPTY: break;
         case SEQ  : c(x->o1); c(x->o2); break;
         case EXPR:
-            if (x->o1->kind == FUNC_CALL && !functions[x->o1->val].returns_value) {
+            if (x->o1->kind == FUNC_CALL && x->o1->val != BUILTIN_PUTCHAR &&
+                !functions[x->o1->val].returns_value) {
                 c(x->o1->o1);
                 emit_call(x->o1->val, argument_count(x->o1->o1));
             } else {
@@ -821,6 +964,7 @@ void c(node *x) {
             break;
         case ARG_LIST: c(x->o1); c(x->o2); break;
         case RETURN_NODE: c(x->o1); g(IRET); break;
+        case VOID_RETURN: g(IRET); break;
         case PROG :
             emit_call(main_function, 0);
             if (functions[main_function].returns_value) { g(IDROP); }
@@ -833,6 +977,12 @@ void c(node *x) {
             patch_calls();
             break;
         case FUNC_CALL:
+            if (x->val == BUILTIN_PUTCHAR) {
+                c(x->o1->o1);
+                g(SYS);
+                g(SYS_PUTCHAR);
+                break;
+            }
             if (!functions[x->val].returns_value) {
                 printf("-void function %s used as a value-\n", functions[x->val].name);
                 exit(1);
@@ -842,6 +992,8 @@ void c(node *x) {
             break;
     }
 }
+
+void compile() { c(program());}
 
 /*---------------------------------------------------------------------------*/
 /* Virtual machine. */
@@ -872,6 +1024,14 @@ void run(code *pc) {
     int return_frame_base[1000], return_frame_sp[1000];
     int frame_base = -1, frame_sp = 0;
     int return_sp = 0;
+
+    if (!pc) {
+        pc = vm;
+        sp = 0;
+        for (int i = 0; i < num_global_slots; i++) {
+            globals[i] = global_initial_values[i];
+        }
+    }
     again:
     switch (*pc++) {
         case  IFETCH: st[++sp] = globals[f2((byte*)pc)]; pc +=2;
@@ -894,9 +1054,25 @@ void run(code *pc) {
         ACASE ISUB  : NOS -= TOS; --sp;
         ACASE IMUL  : NOS *= TOS; --sp;
         ACASE IDIV  : NOS /= TOS; --sp;
+        ACASE IMOD  :
+                        if (TOS == 0) { error("-modulo by zero-"); }
+                        NOS %= TOS; --sp;
         ACASE ILT   : NOS =  (NOS<TOS)?1:0; --sp;
         ACASE IGT   : NOS =  (NOS>TOS)?1:0; --sp;
         ACASE IEQ   : NOS =  (NOS==TOS)?1:0; --sp;
+        ACASE INE   : NOS =  (NOS!=TOS)?1:0; --sp;
+        ACASE SYS   : {
+                        int operation = *(pc++);
+                        switch (operation) {
+                          case SYS_PUTCHAR:
+                            if (sp < 1) { error("-VM emit stack underflow-"); }
+                            TOS = putchar((unsigned char)TOS);
+                            break;
+                          default:
+                            error("-unknown VM service-");
+                        }
+                        goto again;
+                      }
         ACASE JMP   : pc += *pc;
         ACASE JZ    : if (st[sp--] == 0) pc += *pc; else pc++;
         ACASE JNZ   : if (st[sp--] != 0) pc += *pc; else pc++;
@@ -928,73 +1104,4 @@ void run(code *pc) {
                       } else { if (sp) { --sp; } return; }
         ACASE HALT  : return;
     }
-}
-
-/*---------------------------------------------------------------------------*/
-/* Disassembly. */
-void dis() {
-    code *pc = &vm[0];
-    FILE *fp = fopen("list.txt", "wt");
-  again:
-    if (here <= pc) { fclose(fp); return; }
-    int p = (int)(pc-&vm[0]) + 1;
-    fprintf(fp,"\n%04d: %02d ; ", p, *pc);
-    switch (*pc++) {
-        case  IFETCH: fprintf(fp,"fetch %d", f2((byte*)pc)); pc +=2;
-        ACASE ISTORE: fprintf(fp,"store %d", f2((byte*)pc)); pc +=2;
-        ACASE IP1   : fprintf(fp,"lit1 %d", *(pc++));
-        ACASE IP2   : fprintf(fp,"lit2 %d", f2((byte*)pc)); pc +=2;
-        ACASE IP4   : fprintf(fp,"lit4 %d", f4((byte*)pc)); pc +=4;
-        ACASE IDROP : fprintf(fp,"drop");
-        ACASE IADD  : fprintf(fp,"add");
-        ACASE ISUB  : fprintf(fp,"sub");
-        ACASE IMUL  : fprintf(fp,"mul");
-        ACASE IDIV  : fprintf(fp,"div");
-        ACASE ILT   : fprintf(fp,"lt");
-        ACASE IGT   : fprintf(fp,"gt");
-        ACASE IEQ   : fprintf(fp,"eq");
-        ACASE JMP   : fprintf(fp,"jmp %d", p+1+(*pc++));
-        ACASE JZ    : fprintf(fp,"jz %d",  p+1+(*pc++));
-        ACASE JNZ   : fprintf(fp,"jnz %d", p+1+(*pc++));
-        ACASE ICALL : fprintf(fp,"call %d %d %d", f2((byte*)pc), f2((byte*)pc + 2),
-                              f2((byte*)pc + 4)); pc += 6;
-        ACASE IRET  : fprintf(fp,"ret");
-        ACASE HALT  : fprintf(fp,"halt");
-        ACASE IAFETCH: fprintf(fp,"array-fetch %d", f2((byte*)pc)); pc += 2;
-        ACASE IASTORE: fprintf(fp,"array-store %d", f2((byte*)pc)); pc += 2;
-        ACASE PLOAD : fprintf(fp,"parameter-fetch %d", f2((byte*)pc)); pc += 2;
-        ACASE PSTORE: fprintf(fp,"parameter-store %d", f2((byte*)pc)); pc += 2;
-        ACASE PAFETCH: fprintf(fp,"parameter-array-fetch %d", f2((byte*)pc)); pc += 2;
-        ACASE PASTORE: fprintf(fp,"parameter-array-store %d", f2((byte*)pc)); pc += 2;
-        ACASE LLOAD : fprintf(fp,"local-fetch %d", f2((byte*)pc)); pc += 2;
-        ACASE LSTORE: fprintf(fp,"local-store %d", f2((byte*)pc)); pc += 2;
-    }
-    goto again;
-}
-
-/*---------------------------------------------------------------------------*/
-/* Main program. */
-
-int main(int argc, char *argv[]) {
-    if (argc>1) { input_fp = fopen(argv[1], "rt"); }
-    else { input_fp = fopen("tests.tc", "rt"); }
-    c(program());
-
-    printf("(nodes: %d, ", num_nodes);
-    printf("code: %d bytes)\n", (int)(here-&vm[0]));
-    dis();
-    sp=0;
-    run(vm);
-    for (int i=0; i<num_variables; i++) {
-        if (variable_is_array[i]) {
-            for (int j = 0; j < variable_sizes[i]; j++) {
-                printf("%s[%d] = %d\n", variable_names[i], j,
-                       globals[variable_bases[i] + j]);
-            }
-        } else if (globals[variable_bases[i]] != 0) {
-            printf("%s = %d\n", variable_names[i], globals[variable_bases[i]]);
-        }
-    }
-    if (sp) { error("-stack not empty-"); }
-    return 0;
 }
