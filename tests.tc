@@ -1,8 +1,8 @@
 int global_int, another_global, _leading2, UpperCase;
 int char_code, newline_code, escape_code, quote_code, backslash_code, output_code, mod_result;
-int global_arr[4], nums[5];
-int greeting[] = "cat";
-int greeting_sized[5] = "cat";
+int global_arr[10], nums[5];
+int greeting[] = "\ncat";
+int cat[10] = "cat";
 int empty_string[] = "";
 int escaped_string[] = "A\n\"\\\0";
 
@@ -13,13 +13,8 @@ void return_early(int should_return) {
     global_int = global_int + 100;
 }
 
-void set_global() {
-    global_int = 42;
-}
-
-int get_global() {
-    return global_int;
-}
+void set_global() { global_int = 42; }
+int get_global() { return global_int; }
 
 void write_second(int value, int items[]) {
     items[1] = value;
@@ -35,12 +30,14 @@ void statement_forms(int limit) {
     if (i > 0) ; else global_int = global_int + 1;
 }
 
-int identity(int x) {
-    return x;
-}
+int identity(int x) { return x; }
+void cr() { emit('\n'); }
+int strlen(int text[]) { return text[0]; }
 
-int string_length(int text[]) {
-    return text[0];
+void strcatc(int txt[], int c) {
+    int len; len = txt[0]+1;
+    txt[len] = c; txt[len+1] = 0;
+    txt[0] = len;
 }
 
 void print(int str[]) {
@@ -59,11 +56,10 @@ void printNum(int n, int b) {
 int add(int left, int right) { return left + right; }
 int sub(int left, int right) { return left - right; }
 int mul(int left, int right) { return left * right; }
-int div(int left, int right) {  return left / right; }
+int div(int left, int right) { return left / right; }
 
 int sum_to(int n) {
-    int total;
-    int i;
+    int total, i;
     total = 0;
     i = 1;
     while (i < n + 1) {
@@ -82,9 +78,14 @@ int fact(int n) {
     return 1;
 }
 
+int fib(int n) {
+    n = n-1;
+    if (n < 2) { return 1; }
+    return (fib(n) + fib(n-1));
+}
+
 int array_sum(int values[], int count) {
-    int total;
-    int i;
+    int total, i;
     total = 0;
     i = 0;
     while (i < count) {
@@ -111,6 +112,8 @@ int parity(int x) {
 }
 
 
+int isFalse(int value) { return value == 0; }
+
 void passFail(int name[], int res) {
     print(name);
     if (res) { print(": pass\n"); }
@@ -118,7 +121,6 @@ void passFail(int name[], int res) {
 }
 
 int modTest(int a, int b, int c) { return (a % b) == c; }
-int isFalse(int value) { return value == 0; }
 
 int main() {
     int local_a;
@@ -144,7 +146,7 @@ int main() {
     escape_code = '\e';
     quote_code = '\'';
     backslash_code = '\\';
-    local_a = string_length(greeting);
+    local_a = strlen(greeting);
     local_b = greeting[2];
     global_int = another_global = 7;
 
@@ -166,7 +168,7 @@ int main() {
 
     another_global = local_a + local_b + local_c + local_d + local_e + global_int;
 
-    local_a = sum_to(10);
+    print("sum to 10: "); printNum(sum_to(10), 10); emit('\n');
     local_b = fact(5);
 
     nums[0] = 5;
@@ -199,6 +201,9 @@ int main() {
 
     if (local_d < 2) { local_b = local_b + 1; }
 
+    strcatc(cat, 's');
+    print(cat); cr();
+
     passFail("addition", add(3, 4) == 7);
     passFail("subtraction", sub(9, 4) == 5);
     passFail("multiplication", mul(6, 7) == 42);
@@ -212,13 +217,14 @@ int main() {
     passFail("character literal", char_code == 65);
     passFail("character escape", newline_code == 10);
     passFail("escape character", escape_code == 27);
-    passFail("string length", string_length(greeting) == 3);
-    passFail("string first character", greeting[1] == 'c');
-    passFail("string terminator", greeting[4] == 0);
+    passFail("string length", strlen("ABC") == 3);
+    passFail("string first character", greeting[2] == 'c');
+    passFail("string terminator", greeting[5] == 0);
     passFail("empty string length", empty_string[0] == 0);
     passFail("empty string terminator", empty_string[1] == 0);
     passFail("global array reference", global_arr[1] == 8);
-    passFail("recursive function", fact(5) == 120);
+    passFail("recursive function fib(10)", fib(10) == 55);
+    passFail("recursive function fact(5)", fact(5) == 120);
     passFail("while loop", j == 162);
     passFail("do while loop", local_e == 20);
     passFail("if else", local_c == 11);

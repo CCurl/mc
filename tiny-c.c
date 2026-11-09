@@ -290,7 +290,7 @@ enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
        ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
        IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG };
 
-#define MAX_NODES 2048
+#define MAX_NODES 4096
 struct node_s { int kind; struct node_s *o1, *o2, *o3; int val; };
 typedef struct node_s node;
 int num_nodes = 0;
@@ -358,7 +358,7 @@ int function_index(const char *name) {
     return num_functions++;
 }
 
-#define BUILTIN_PUTCHAR (-1)
+#define BUILTIN_EMIT (-1)
 
 node *new_node(int k) {
     if (MAX_NODES <= num_nodes) { error(""); }
@@ -385,7 +385,7 @@ node *paren_expr(); /* forward declaration */
 node *expr();
 
 node *call_arguments(const char *name) {
-    int index = strcmp(name, "emit") == 0 ? BUILTIN_PUTCHAR : function_index(name);
+    int index = strcmp(name, "emit") == 0 ? BUILTIN_EMIT : function_index(name);
     node *args = NULL;
     node **tail = &args;
     expect_sym(LPAR);
@@ -738,7 +738,7 @@ int argument_count(node *args) {
 void validate_expression(node *x, int allow_array_ref);
 
 void validate_call(node *call) {
-    if (call->val == BUILTIN_PUTCHAR) {
+    if (call->val == BUILTIN_EMIT) {
         if (argument_count(call->o1) != 1) {
             error("-emit expects 1 argument-");
         }
@@ -834,7 +834,7 @@ node *program() {
   }
   for (int i = 0; i < num_function_calls; i++) {
       node *call = function_calls[i];
-      if (call->val == BUILTIN_PUTCHAR) { continue; }
+      if (call->val == BUILTIN_EMIT) { continue; }
       int expected = functions[call->val].num_parameters;
       int actual = argument_count(call->o1);
       if (actual != expected) {
@@ -854,7 +854,7 @@ enum { IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
         IMOD,         ILT, IGT, IEQ, INE, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
         PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS };
 
-enum { SYS_PUTCHAR };
+enum { SYS_EMIT };
 
 typedef char code;
 typedef unsigned char byte;
@@ -953,7 +953,7 @@ void c(node *x) {
         case EMPTY: break;
         case SEQ  : c(x->o1); c(x->o2); break;
         case EXPR:
-            if (x->o1->kind == FUNC_CALL && x->o1->val != BUILTIN_PUTCHAR &&
+            if (x->o1->kind == FUNC_CALL && x->o1->val != BUILTIN_EMIT &&
                 !functions[x->o1->val].returns_value) {
                 c(x->o1->o1);
                 emit_call(x->o1->val, argument_count(x->o1->o1));
@@ -977,10 +977,10 @@ void c(node *x) {
             patch_calls();
             break;
         case FUNC_CALL:
-            if (x->val == BUILTIN_PUTCHAR) {
+            if (x->val == BUILTIN_EMIT) {
                 c(x->o1->o1);
                 g(SYS);
-                g(SYS_PUTCHAR);
+                g(SYS_EMIT);
                 break;
             }
             if (!functions[x->val].returns_value) {
@@ -1064,7 +1064,7 @@ void run(code *pc) {
         ACASE SYS   : {
                         int operation = *(pc++);
                         switch (operation) {
-                          case SYS_PUTCHAR:
+                          case SYS_EMIT:
                             if (sp < 1) { error("-VM emit stack underflow-"); }
                             TOS = putchar((unsigned char)TOS);
                             break;

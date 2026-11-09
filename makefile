@@ -17,7 +17,7 @@ clean:
 	rm -f $(app)
 
 test1: $(app)
-	cat test1.tc | ./$(app)
+	./$(app) test1.tc
 
 tests: $(app)
 	./$(app) tests.tc
