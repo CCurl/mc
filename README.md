@@ -11,6 +11,7 @@
  * The grammar of Tiny-C in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
+ *  <include> ::= "include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
  *  <main_def> ::= ("void" | "int") "main" "(" ")" "{" { <statement> } "}"
  *  <defs> ::= { <def> }
  *  <def> ::= <func_def> | <var_def>

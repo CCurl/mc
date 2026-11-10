@@ -1,0 +1,9 @@
+// Some standard utilities
+
+int strlen(int text[]) { return text[0]; }
+
+void strcatc(int txt[], int c) {
+    int len; len = txt[0]+1;
+    txt[len] = c; txt[len+1] = 0;
+    txt[0] = len;
+}

@@ -1,17 +1,6 @@
 // Some simple benchmarks
 
-void print(int str[]) {
-    int i; i = 1;
-    while (str[i]) { emit(str[i]); i = i + 1; }
-}
-
-void printNum(int n, int b) {
-    if (n<0) { emit('-'); n = -n; }
-    if (n > (b-1)) { printNum(n / b, b); }
-    n = n % b;
-    if (n > 9) { n = n+7; }
-    emit(n+'0');
-}
+include "lib/io.tc";
 
 int mil(int n) { return n*1000*1000; }
 

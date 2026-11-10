@@ -145,15 +145,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <None Include=".gitignore" />
+    <None Include="dis.h" />
     <None Include="LICENSE" />
     <None Include="makefile" />
     <None Include="README.md" />
-    <None Include="test1.tc" />
-    <None Include="tests.tc" />
+    <None Include="TechnicalOverview.md" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="system.c" />
     <ClCompile Include="tiny-c.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="gen.h" />
+    <ClInclude Include="lexer.h" />
+    <ClInclude Include="parser.h" />
+    <ClInclude Include="vm.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

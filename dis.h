@@ -1,25 +1,7 @@
-// system.c - the main program for the tiny C compiler.
-// Copyright(c) 2026 by Chris Curl.All rights reserved.
+//---------------------------------------------------------------------------
+// Disassembler for the tiny C virtual machine bytecode
+// NOTE: this is unused and out of date!
 
-#include <stdio.h>
-
-extern FILE *input_fp;
-extern void run();
-extern void compile();
-
-/*---------------------------------------------------------------------------*/
-/* Main program. */
-
-int main(int argc, char *argv[]) {
-    if (argc>1) { input_fp = fopen(argv[1], "rt"); }
-    else { input_fp = fopen("tests.tc", "rt"); }
-    compile();
-    run();
-    return 0;
-}
-
-/*---------------------------------------------------------------------------*/
-/* Disassembly. */
 /*
 void dis() {
     code *pc = &vm[0];

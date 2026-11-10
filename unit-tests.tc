@@ -1,6 +1,8 @@
 // Unit tests for the Tiny-C compiler and VM.
 // Each check prints "name: ok" or "name: FAIL"; the last line prints the failure count.
 
+include "lib/io.tc";
+
 int failures, passes;
 int g_zero, g_a, g_b;
 int g_arr[4];
@@ -11,19 +13,6 @@ int g_esc[] = "\n\t\\\"";
 int g_counter;
 int g_esc2[] = "\r\e\'";
 int g_esc3[] = "a\0b";
-
-void print(int str[]) {
-    int i; i = 1;
-    while (str[i]) { emit(str[i]); i = i + 1; }
-}
-
-void printNum(int n, int b) {
-    if (n<0) { emit('-'); n = -n; }
-    if (n > (b-1)) { printNum(n / b, b); }
-    n = n % b;
-    if (n > 9) { n = n+7; }
-    emit(n+'0');
-}
 
 void check(int name[], int ok) {
     print(name);

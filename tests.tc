@@ -1,3 +1,6 @@
+include "lib/io.tc";
+include "lib/util.tc";
+
 int global_int, another_global, _leading2, UpperCase;
 int char_code, newline_code, escape_code, quote_code, backslash_code, output_code, mod_result;
 int global_arr[10], nums[5];
@@ -31,26 +34,6 @@ void statement_forms(int limit) {
 
 int identity(int x) { return x; }
 void cr() { emit('\n'); }
-int strlen(int text[]) { return text[0]; }
-
-void strcatc(int txt[], int c) {
-    int len; len = txt[0]+1;
-    txt[len] = c; txt[len+1] = 0;
-    txt[0] = len;
-}
-
-void print(int str[]) {
-    int i; i = 1;
-    while (str[i]) { emit(str[i]); i = i + 1; }
-}
-
-void printNum(int n, int b) {
-    if (n<0) { emit('-'); n = -n; }
-    if (n > (b-1)) { printNum(n / b, b); }
-    n = n % b;
-    if (n > 9) { n = n+7; }
-    emit(n+'0');
-}
 
 int add(int left, int right) { return left + right; }
 int sub(int left, int right) { return left - right; }

@@ -1,0 +1,15 @@
+// io.tc - common I/O functions
+
+void print(int str[]) {
+    int l,i;
+    l = str[0]; i = 1;
+    while (l) { emit(str[i]); i=i+1; l=l-1; }
+}
+
+void printNum(int n, int b) {
+    if (n<0) { emit('-'); n = -n; }
+    if (n > (b-1)) { printNum(n / b, b); }
+    n = n % b;
+    if (n > 9) { n = n+7; }
+    emit(n+'0');
+}

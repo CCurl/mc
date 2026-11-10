@@ -1,26 +1,37 @@
-# Technical overview: compilation and VM execution in `tiny-c.c`
+# Technical overview: compilation and VM execution
 
-The compiler does not write an image file. It builds a bytecode array `vm[]` and fills `globals[]` in memory, then `run()` in `system.c` executes that array directly. The pipeline is:
+The compiler does not write an image file. It builds a bytecode array `vm[]` and fills `globals[]` in memory, then `run()` in `vm.h` executes that array directly. The pipeline is:
 
 ```mermaid
 flowchart LR
-    A[stdin or file] --> B[Lexer: next_sym]
+    A[source file + includes] --> B[Lexer: next_sym]
     B --> C[Parser: defs / statement / expr]
     C --> D[AST pool: nodes]
     C --> E[Symbol tables: functions, variables]
-    D --> F[Validation: validate_node]
-    F --> G[Codegen: c]
-    G --> H[vm code bytes]
     C --> K[globals: written during parsing]
+    D --> F[Validation: validate_node in program]
+    F --> G[Codegen: c]
+    E --> G
+    G --> H[vm code bytes]
     H --> J[VM: run]
     K --> J
 ```
 
+## Source layout
+
+- `tiny-c.c`: includes the four headers in order, and defines `compile()` and `main()`.
+- `lexer.h`: tokens, the include file stack, and error reporting.
+- `parser.h`: AST nodes, function and variable tables, and program checks.
+- `gen.h`: bytecode generation and call patching.
+- `vm.h`: the `run()` interpreter.
+
 ## 1. Lexer
 
-- `next_ch()` reads from `input_fp`, or stdin if it is null.
+- `next_ch()` reads from `input_fp`, or stdin if it is null, and counts newlines in `line_number`.
 - `next_sym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, and `RETURN_SYM`.
 - Keywords are matched against `words[]`. `//` comments are skipped. Character and string literals support a fixed escape set.
+- `include "path";` is handled in the lexer. `include_file()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `close_source()` returns to the includer at EOF.
+- `fail()` prints `path:line:` before every compile error.
 
 ## 2. Parser: builds an AST, not code
 
@@ -75,7 +86,7 @@ Notable generation details:
 - `globals[]`: global values. The C runtime zero-initializes this static array; parsing writes string initializer data into it.
 - `num_global_slots`: the number of global slots in use.
 
-`run()` in `tiny-c.c` starts the interpreter by:
+`run()` in `vm.h` starts the interpreter by:
 
 1. Setting `pc = vm` and `sp = 0`.
 2. Running the dispatch loop until `HALT`, or until `IRET` with an empty return stack.
@@ -84,7 +95,7 @@ Each call frame lives on the operand stack. Arguments are already pushed in orde
 
 ## 6. How the VM runs
 
-The VM is a stack machine implemented by `run()` in `tiny-c.c`. It has no separate loader or relocation step. The code it executes is the `vm[]` array produced by the compiler.
+The VM is a stack machine implemented by `run()` in `vm.h`. It has no separate loader or relocation step. The code it executes is the `vm[]` array produced by the compiler.
 
 ### Machine state
 
@@ -97,7 +108,7 @@ The VM is a stack machine implemented by `run()` in `tiny-c.c`. It has no separa
 
 ### Dispatch loop
 
-When `run()` is called from `system.c`, it sets `pc = vm` and `sp = 0`. The first instruction calls `main`.
+When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0`. The first instruction calls `main`.
 
 - `run()` reads one opcode at `*pc++` and jumps to its case in a `switch`.
 - `ACASE` is `goto again; case`, so each case ends by jumping back to the top of the loop.
@@ -137,3 +148,4 @@ When `run()` is called from `system.c`, it sets `pc = vm` and `sp = 0`. The firs
   - `MAX_PARAMETERS` is 64 per function
   - the VM stack is 1000 entries.
 - **Call addresses.** Call targets are 2-byte addresses, so `MAX_CODE` cannot exceed 65536 bytes.
+- **Include limits.** `MAX_INCLUDE_DEPTH` is 16 and `MAX_INCLUDED_FILES` is 128. Paths are at most 63 characters (`MAX_PATH_LENGTH` is 64).
