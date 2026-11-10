@@ -1,7 +1,7 @@
 // Unit tests for the Tiny-C compiler and VM.
 // Each check prints "name: ok" or "name: FAIL"; the last line prints the failure count.
 
-int failures;
+int failures, passes;
 int g_zero, g_a, g_b;
 int g_arr[4];
 int g_str[] = "abc";
@@ -27,7 +27,7 @@ void printNum(int n, int b) {
 
 void check(int name[], int ok) {
     print(name);
-    if (ok) { print(": ok\n"); }
+    if (ok) { print(": ok\n"); passes = passes + 1; }
     else { print(": FAIL\n"); failures = failures + 1; }
 }
 
@@ -240,7 +240,7 @@ void test_arrays() {
 
 // emit() prints the newline and returns the byte written.
 void test_emit() {
-    check("emit returns written byte", emit('\n') == 10);
+    check("emit returns written byte", emit('*') == '*');
 }
 
 int twice(int x) { return x * 2; }
@@ -419,10 +419,10 @@ int main() {
     test_literals2();
     test_long_jumps();
     test_emit();
-    emit('\n');
-    print("failures: ");
-    printNum(failures, 10);
+    print("\npassed: "); printNum(passes, 10);
+    print(", failed: "); printNum(failures, 10);
     emit('\n');
     if (failures == 0) { print("all checks passed\n"); }
+    else { printNum(failures, 10); print(" check(s) failed!\n"); }
     return 0;
 }

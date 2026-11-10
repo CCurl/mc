@@ -868,22 +868,13 @@ struct call_fixup_s { code *operand; int function_index; };
 struct call_fixup_s call_fixups[MAX_CALL_FIXUPS];
 int num_call_fixups;
 
-void g(code c) {
-    if (here >= vm + MAX_CODE) { error("-program too large-"); }
-    *here++ = c;
-}
-void g4(int n) {
-    g(n & 0xff); n=(n >> 8);
-    g(n & 0xff); n=(n >> 8);
-    g(n & 0xff); n=(n >> 8);
-    g(n & 0xff);
-}
-void g2(int n) {
-    g(n & 0xff); n=(n >> 8);
-    g(n & 0xff);
-}
+void checkSize(int sz) { if (here + sz > vm + MAX_CODE) { error("-program too large-"); } }
+void g(code c)   { checkSize(1); *here++ = c; }
+void g2(short c) { checkSize(2); *(short *)here = c; here += 2; }
+void g4(int c)   { checkSize(4); *(int *)here = c; here += 4; }
+
 code *hole() {
-    if (here + 2 > vm + MAX_CODE) { error("-program too large-"); }
+    checkSize(2);
     code *p = here;
     here += 2;
     return p;
@@ -891,8 +882,7 @@ code *hole() {
 void fix(code *src, code *dst) {
     int off = (int)(dst - src);
     if (off < -32768 || off > 32767) { error("-jump too far-"); }
-    src[0] = (code)(off & 0xff);
-    src[1] = (code)((off >> 8) & 0xff);
+    *(short *)src = (short)off;
 }
 
 void emit_call(int index, int argc) {
@@ -975,8 +965,7 @@ void c(node *x) {
         case GT   : c(x->o1);  c(x->o2); g(IGT); break;
         case EQ   : c(x->o1);  c(x->o2); g(IEQ); break;
         case NE   : c(x->o1);  c(x->o2); g(INE); break;
-        case SET:
-            c(x->o2);
+        case SET  : c(x->o2);
             if (x->o1->kind == LOCAL) { g(LSTORE); g2(x->o1->val); }
             else if (x->o1->val < 0) { g(PSTORE); g2(-x->o1->val - 1); }
             else { g(ISTORE); g2(x->o1->val); }
@@ -1015,8 +1004,7 @@ void c(node *x) {
         case FUNC_CALL:
             if (x->val == BUILTIN_EMIT) {
                 c(x->o1->o1);
-                g(SYS);
-                g(SYS_EMIT);
+                g(SYS); g(SYS_EMIT);
                 break;
             }
             if (!functions[x->val].returns_value) {
@@ -1036,22 +1024,9 @@ void compile() { c(program());}
 #define ACASE    goto again; case
 #define TOS      st[sp]
 #define NOS      st[sp-1]
-
-int f4(byte *a) {
-    int x=*(a+3);
-    x = (x<<8)|*(a+2);
-    x = (x<<8)|*(a+1);
-    x = (x<<8)|*(a+0);
-    return x;
-}
-
-int f2(byte *a) {
-    int x=*(a+1);
-    x = (x<<8)|*(a+0);
-    return x;
-}
-
 struct return_s { code *pc; int frame_base; };
+
+short f2(code *a) { return *(short *)a; }
 
 void run() {
     /* Each frame's parameters and locals sit on st[] starting at frame_base. */
@@ -1061,60 +1036,50 @@ void run() {
 
     again:
     switch (*pc++) {
-        case  IFETCH: st[++sp] = globals[f2((byte*)pc)]; pc +=2;
-        ACASE ISTORE: globals[f2((byte*)pc)] = st[sp]; pc += 2;
-        ACASE PLOAD : st[++sp] = st[frame_base + f2((byte*)pc)]; pc += 2;
-        ACASE PSTORE: st[frame_base + f2((byte*)pc)] = st[sp]; pc += 2;
-        ACASE LLOAD : st[++sp] = st[frame_base + f2((byte*)pc)]; pc += 2;
-        ACASE LSTORE: st[frame_base + f2((byte*)pc)] = st[sp]; pc += 2;
-        ACASE PAFETCH: st[sp] = globals[st[frame_base + f2((byte*)pc)] + st[sp]]; pc += 2;
-        ACASE PASTORE: globals[st[frame_base + f2((byte*)pc)] + st[sp-1]] = st[sp];
+        case  IFETCH: st[++sp] = globals[f2(pc)]; pc +=2;
+        ACASE ISTORE: globals[f2(pc)] = st[sp]; pc += 2;
+        ACASE PLOAD : st[++sp] = st[frame_base + f2(pc)]; pc += 2;
+        ACASE PSTORE: st[frame_base + f2(pc)] = st[sp]; pc += 2;
+        ACASE LLOAD : st[++sp] = st[frame_base + f2(pc)]; pc += 2;
+        ACASE LSTORE: st[frame_base + f2(pc)] = st[sp]; pc += 2;
+        ACASE PAFETCH: st[sp] = globals[st[frame_base + f2(pc)] + st[sp]]; pc += 2;
+        ACASE PASTORE: globals[st[frame_base + f2(pc)] + st[sp-1]] = st[sp];
                         st[sp-1] = st[sp]; --sp; pc += 2;
-        ACASE IAFETCH: st[sp] = globals[f2((byte*)pc) + st[sp]]; pc += 2;
-        ACASE IASTORE: globals[f2((byte*)pc) + st[sp-1]] = st[sp];
+        ACASE IAFETCH: st[sp] = globals[f2(pc) + st[sp]]; pc += 2;
+        ACASE IASTORE: globals[f2(pc) + st[sp-1]] = st[sp];
                         st[sp-1] = st[sp]; --sp; pc += 2;
         ACASE IP1   : st[++sp] = *(pc++);
-        ACASE IP2   : st[++sp] = f2((byte*)pc); pc += 2;
-        ACASE IP4   : st[++sp] = f4((byte*)pc); pc += 4;
+        ACASE IP2   : st[++sp] = f2(pc); pc += 2;
+        ACASE IP4   : st[++sp] = *(int *)pc; pc += 4;
         ACASE IDROP : --sp;
         ACASE IADD  : NOS += TOS; --sp;
         ACASE ISUB  : NOS -= TOS; --sp;
         ACASE IMUL  : NOS *= TOS; --sp;
-        ACASE IDIV  : NOS /= TOS; --sp;
-        ACASE IMOD  :
-                        if (TOS == 0) { error("-modulo by zero-"); }
-                        NOS %= TOS; --sp;
+        ACASE IDIV  : if (TOS == 0) { error("-divide by zero-"); }
+                      NOS /= TOS; --sp;
+        ACASE IMOD  : if (TOS == 0) { error("-modulo by zero-"); }
+                      NOS %= TOS; --sp;
         ACASE ILT   : NOS =  (NOS<TOS)?1:0; --sp;
         ACASE IGT   : NOS =  (NOS>TOS)?1:0; --sp;
         ACASE IEQ   : NOS =  (NOS==TOS)?1:0; --sp;
         ACASE INE   : NOS =  (NOS!=TOS)?1:0; --sp;
-        ACASE SYS   : {
-                        int operation = *(pc++);
-                        switch (operation) {
-                          case SYS_EMIT:
-                            if (sp < 1) { error("-VM emit stack underflow-"); }
-                            TOS = putchar((unsigned char)TOS);
-                            break;
-                          default:
-                            error("-unknown VM service-");
-                        }
-                        goto again;
+        ACASE SYS   : { int op = *(pc++);
+                        if (op == SYS_EMIT) { TOS = putchar((char)TOS); }
+                        // more here later
                       }
-        ACASE JMP   : pc += (short)f2((byte*)pc);
-        ACASE JZ    : if (st[sp--] == 0) pc += (short)f2((byte*)pc); else pc += 2;
-        ACASE JNZ   : if (st[sp--] != 0) pc += (short)f2((byte*)pc); else pc += 2;
-        ACASE ICALL : {
-                        int argc = f2((byte*)pc + 2);
-                        int locals = f2((byte*)pc + 4);
+        ACASE JMP   : pc += (short)f2(pc);
+        ACASE JZ    : if (st[sp--] == 0) pc += (short)f2(pc); else pc += 2;
+        ACASE JNZ   : if (st[sp--] != 0) pc += (short)f2(pc); else pc += 2;
+        ACASE ICALL : { int argc = f2(pc + 2);
+                        int locals = f2(pc + 4);
                         if (return_sp >= 1000) { error("-call stack overflow-"); }
                         if (sp < argc || sp + locals >= 1000) { error("-call frame overflow-"); }
                         return_stack[return_sp].pc = pc + 6;
                         return_stack[return_sp].frame_base = frame_base;
                         return_sp++;
                         frame_base = sp - argc + 1;
-                        memset(&st[sp + 1], 0, locals * sizeof st[0]);
                         sp += locals;
-                        pc = vm + f2((byte*)pc);
+                        pc = vm + f2(pc);
                       }
         ACASE IRET : if (return_sp) {
                           st[frame_base] = TOS;

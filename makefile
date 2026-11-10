@@ -1,7 +1,7 @@
 app := tc
 
 CXX := clang
-CXXFLAGS := -m64 -O3 -D IS_LINUX
+CXXFLAGS := -m32 -O3 -D IS_LINUX
 
 srcfiles := $(shell find . -name "*.c")
 incfiles := $(shell find . -name "*.h")
