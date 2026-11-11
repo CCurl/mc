@@ -1,8 +1,8 @@
 /*---------------------------------------------------------------------------*/
-/* Virtual machine. */
-#define ACASE    goto again; case
-#define TOS      st[sp]
-#define NOS      st[sp-1]
+/* Virtual machine for tiny-c. */
+
+#include "tiny-c.h"
+
 struct return_s { code *pc; int frame_base; };
 
 short f2(code *a) { return *(short *)a; }

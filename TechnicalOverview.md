@@ -19,11 +19,13 @@ flowchart LR
 
 ## Source layout
 
-- `tiny-c.c`: includes the four headers in order, and defines `compile()` and `main()`.
-- `lexer.h`: tokens, the include file stack, and error reporting.
+- `tiny-c.c`: includes `tiny-c.h`, then `lexer.h`, `parser.h`, `gen.h`, and `vm.h` in that order; defines `compile()` and `main()`.
+- `tiny-c.h`: shared limits, token/node/opcode definitions, and VM macros.
+- `lexer.h`: tokenization, global variable storage, the source/include stack, and error reporting.
 - `parser.h`: AST nodes, function and variable tables, and program checks.
-- `gen.h`: bytecode generation and call patching.
+- `gen.h`: bytecode generation, constant folding, and call patching.
 - `vm.h`: the `run()` interpreter.
+- `lib/*.tc`: Tiny-C source libraries included by programs, not C headers. `dis.h` is an unused, out-of-date disassembler.
 
 ## 1. Lexer
 
@@ -32,6 +34,7 @@ flowchart LR
 - Keywords are matched against `words[]`. `//` comments are skipped. Character and string literals support a fixed escape set.
 - `include "path";` is handled in the lexer. `include_file()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `close_source()` returns to the includer at EOF.
 - `fail()` prints `path:line:` before every compile error.
+- The default input opened by `main()` is `unit-tests.tc`; a command-line path selects another input file.
 
 ## 2. Parser: builds an AST, not code
 
@@ -39,6 +42,7 @@ flowchart LR
 - `parse_function_definition()` records each function in `functions[]`, including its parameters, array flags, locals, and body. A function's index is assigned on first reference, so calls can precede definitions.
 - Statements and expressions become `node` structs in the fixed pool `nodes[MAX_NODES]`. Each node has a `kind`, up to three children (`o1`, `o2`, `o3`), and a `val`.
 - Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Globals use absolute slot numbers in `globals[]`.
+- Local slots follow the parameters in a function frame. Their encoded local index includes the function's parameter count; parameter indexes are relative to the start of the frame.
 - Each `statement()` call builds one node tree, for example `IF1`, `WHILE`, `DO`, `SEQ`, `EXPR`, `RETURN_NODE`, or `VOID_RETURN`.
 - Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. `expr()` accepts assignment only when the left side is `VAR`, `LOCAL`, or `ARRAY_GET`.
 - Unary minus is lowered to `0 - term`. Integer literals are never negative.
@@ -54,6 +58,7 @@ flowchart LR
 - `prog->o1` is set to `main`'s body.
 
 Strings are lexed into `string_values[]`, then materialized during parsing. `allocate_string_literal()` reserves anonymous global storage laid out as `[length, chars..., 0]` and writes it directly into `globals[]`.
+String literals are permitted only as array arguments or global array initializers. Explicitly sized string-initialized arrays must fit the length slot, all characters, and the terminating zero.
 
 ## 4. Code generation (`c()` walks the AST)
 
@@ -65,7 +70,7 @@ The output is a flat byte array `vm[MAX_CODE]` (65536 bytes). Opcodes are one by
 | Local read/write | `LLOAD` / `LSTORE` + 2-byte frame slot |
 | Parameter read/write | `PLOAD` / `PSTORE` + 2-byte index |
 | Array element | `IAFETCH`/`IASTORE` (global base) or `PAFETCH`/`PASTORE` (base taken from a parameter) |
-| Constants | `IP1` (0 to 127), `IP2` (128 to 32767), `IP4` (larger) |
+| Constants | `IP1` (0 to 127), `IP2` (128 to 32767), `IP4` (other `int` values) |
 | Arithmetic and comparison | `IADD` to `INE` (operands already on the stack) |
 | Control flow | `JZ`, `JNZ`, `JMP` with 2-byte signed relative offsets, patched via `hole()` and `fix()` |
 | Call | `ICALL` + 2-byte address + 2-byte argc + 2-byte locals count (7 bytes total) |
@@ -79,12 +84,14 @@ Notable generation details:
 - Call targets are unknown when the call is emitted, so each call is recorded in `call_fixups[]`. `patch_calls()` fills in the addresses after all functions are generated.
 - Every function leaves exactly one value on the operand stack when it returns. An explicit `return;` in a `void` function and the implicit fall-through return both produce `0`. Calls used as statements discard the returned value with `IDROP`.
 - Program layout: `PROG` emits a call to `main`, then `IDROP`, then `HALT`, then each function body in index order, each ending with `IRET`.
+- `IP2` operands and jump offsets are native 16-bit `short` values; `IP4` operands are native C `int` values. The configured Linux build uses `-m32`; the Visual Studio project supports Win32 and x64. These targets use 32-bit `int` and 16-bit `short`, and the bytecode representation assumes those widths and the target's native byte order.
 
 ## 5. The "VM image" in memory
 
 - `vm[]`: the code bytes, starting with the call to `main`.
 - `globals[]`: global values. The C runtime zero-initializes this static array; parsing writes string initializer data into it.
 - `num_global_slots`: the number of global slots in use.
+- VM values and global slots use C `int` (32 bits on the configured Linux and Visual Studio targets).
 
 `run()` in `vm.h` starts the interpreter by:
 
@@ -141,11 +148,13 @@ When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0
 - **Fixed limits.**
   - `MAX_CODE` is 65536 bytes
   - `MAX_NODES` is 4096
+  - `MAX_FUNCTIONS` is 256
   - `MAX_NAMES` is 1024 global names
   - `MAX_GLOBAL_SLOTS` is 256000 `int` slots
   - `MAX_STRING_LENGTH` is 1024 characters
   - `MAX_LOCALS` is 256 per function
   - `MAX_PARAMETERS` is 64 per function
+  - `MAX_CALL_FIXUPS` is `MAX_NODES`
   - the VM stack is 1000 entries.
 - **Call addresses.** Call targets are 2-byte addresses, so `MAX_CODE` cannot exceed 65536 bytes.
 - **Include limits.** `MAX_INCLUDE_DEPTH` is 16 and `MAX_INCLUDED_FILES` is 128. Paths are at most 63 characters (`MAX_PATH_LENGTH` is 64).

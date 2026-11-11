@@ -1,13 +1,7 @@
 // ---------------------------------------------------------------------------
 // Lexer for tiny-c
 
-enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-        LBRA, RBRA, LPAR, RPAR, PLUS,                           //  6 -> 10
-        MINUS, STAR, SLASH, MODULO,                             // 11 -> 14
-        LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                 // 15 -> 20
-        INT, ID, EOI, LBRACKET, RBRACKET, COMMA, RETURN_SYM,    // 21 -> 27
-	CHAR_LITERAL, STRING_LITERAL                                // 28 -> 29
-};
+#include "tiny-c.h"
 
 char *words[] = { "do", "else", "if", "while", "void", "int", NULL };
 

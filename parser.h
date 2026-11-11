@@ -1,12 +1,8 @@
 //--------------------------------------------------------------------------
 // Parser for tiny-c
 
-enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
-       ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
-       IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG };
+#include "tiny-c.h"
 
-struct node_s { int kind; struct node_s *o1, *o2, *o3; int val; };
-typedef struct node_s node;
 int num_nodes = 0;
 node nodes[MAX_NODES];
 
@@ -15,7 +11,7 @@ struct function_s {
     node *body;
     int address;
     int defined;
-    int returns_value;
+    int returns_value;  
     int num_parameters;
     char parameter_names[MAX_PARAMETERS][sizeof(id_name)];
     int parameter_is_array[MAX_PARAMETERS];

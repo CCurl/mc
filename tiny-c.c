@@ -9,21 +9,7 @@
 #include <stdarg.h>
 
 // ---------------------------------------------------------------------------
-#define BTWI(n,l,h) ((l<=n)&&(n<=h))
-
-// ---------------------------------------------------------------------------
-#define MAX_PATH_LENGTH        64
-#define MAX_INCLUDE_DEPTH      16
-#define MAX_INCLUDED_FILES    128
-#define MAX_NAMES            1024
-#define MAX_STRING_LENGTH    1024
-#define MAX_NODES            4096
-#define MAX_FUNCTIONS         256
-#define MAX_PARAMETERS         64
-#define MAX_LOCALS            256
-#define MAX_CODE            65536
-#define MAX_GLOBAL_SLOTS   256000
-#define MAX_CALL_FIXUPS MAX_NODES
+#include "tiny-c.h"
 
 // ---------------------------------------------------------------------------
 #include "lexer.h"

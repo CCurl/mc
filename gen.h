@@ -1,11 +1,7 @@
 //--------------------------------------------------------------------------
 // Code generator for tiny-c
 
-enum { IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
-        IMOD,         ILT, IGT, IEQ, INE, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
-        PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS };
-
-enum { SYS_EMIT };
+#include "tiny-c.h"
 
 typedef char code;
 typedef unsigned char byte;
