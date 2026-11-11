@@ -3,7 +3,7 @@
 
 #include "tiny-c.h"
 
-char *words[] = { "do", "else", "if", "while", "void", "int", "char", NULL };
+char *words[] = { "do", "else", "if", "while", "void", "int", "byte", NULL };
 
 int ch = ' ', sym, int_val;
 char id_name[64];
@@ -23,8 +23,10 @@ int variable_is_array[MAX_NAMES];
 int variable_types[MAX_NAMES];
 int string_values[MAX_STRING_LENGTH], string_length;
 int globals[MAX_GLOBAL_SLOTS];
+unsigned char global_bytes[MAX_GLOBAL_BYTES];
 int num_variables;
 int num_global_slots;
+int num_global_bytes;
 
 void fail(const char *fmt, ...) {
     va_list args;
@@ -50,29 +52,40 @@ int declare_variable(const char *name, int size, int is_array, int type) {
         fail("-duplicate variable %s-\n", name);
     }
     if (size <= 0) { error("-array size must be positive-"); }
-    if (num_variables >= MAX_NAMES || size > MAX_GLOBAL_SLOTS - num_global_slots) {
+    int is_byte = type == TYPE_BYTE;
+    int *used = is_byte ? &num_global_bytes : &num_global_slots;
+    int capacity = is_byte ? MAX_GLOBAL_BYTES : MAX_GLOBAL_SLOTS;
+    if (num_variables >= MAX_NAMES || size > capacity - *used) {
         error("-too many variables-");
     }
     strcpy(variable_names[num_variables], name);
-    variable_bases[num_variables] = num_global_slots;
+    variable_bases[num_variables] = *used;
     variable_sizes[num_variables] = size;
     variable_is_array[num_variables] = is_array;
     variable_types[num_variables] = type;
-    num_global_slots += size;
+    *used += size;
     return num_variables++;
 }
 
+/* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
+#define STRING_OVERHEAD 3
+
+void store_string_bytes(int base) {
+    global_bytes[base] = string_length & 0xff;
+    global_bytes[base + 1] = (string_length >> 8) & 0xff;
+    for (int i = 0; i < string_length; i++) {
+        global_bytes[base + i + 2] = string_values[i];
+    }
+}
+
 int allocate_string_literal() {
-    int size = string_length + 2;
-    if (size > MAX_GLOBAL_SLOTS - num_global_slots) {
+    int size = string_length + STRING_OVERHEAD;
+    if (size > MAX_GLOBAL_BYTES - num_global_bytes) {
         error("-too much global storage-");
     }
-    int base = num_global_slots;
-    num_global_slots += size;
-    globals[base] = string_length;
-    for (int i = 0; i < string_length; i++) {
-        globals[base + i + 1] = string_values[i];
-    }
+    int base = num_global_bytes;
+    num_global_bytes += size;
+    store_string_bytes(base);
     return base;
 }
 

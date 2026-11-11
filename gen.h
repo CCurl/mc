@@ -58,7 +58,7 @@ int fold(node *x, int *out) {
     int a, b;
     if (!x) { return 0; }
     if (x->kind == CST) { *out = x->val; return 1; }
-    if (x->kind == CHAR_CONVERT) {
+    if (x->kind == BYTE_CONVERT) {
         if (!fold(x->o1, &a)) { return 0; }
         *out = (unsigned char)a;
         return 1;
@@ -86,6 +86,7 @@ void c(node *x) {
     switch (x->kind) {
         case VAR:
             if (x->val < 0) { g(PLOAD); g2(-x->val - 1); }
+            else if (x->type == TYPE_BYTE) { g(BGET); g2(x->val); }
             else { g(IFETCH); g2(x->val); }
             break;
         case LOCAL: g(LLOAD); g2(x->val); break;
@@ -95,17 +96,22 @@ void c(node *x) {
             break;
         case ARRAY_GET:
             c(x->o1);
-            if (x->val < 0) { g(PAFETCH); g2(-x->val - 1); }
+            if (x->type == TYPE_BYTE) {
+                if (x->val < 0) { g(PBAFETCH); g2(-x->val - 1); }
+                else { g(BAFETCH); g2(x->val); }
+            } else if (x->val < 0) { g(PAFETCH); g2(-x->val - 1); }
             else { g(IAFETCH); g2(x->val); }
-            if (x->type == TYPE_CHAR) { g(IC2C); }
             break;
         case ARRAY_SET:
             c(x->o1); c(x->o2);
-            if (x->val < 0) { g(PASTORE); g2(-x->val - 1); }
+            if (x->type == TYPE_BYTE) {
+                if (x->val < 0) { g(PBASTORE); g2(-x->val - 1); }
+                else { g(BASTORE); g2(x->val); }
+            } else if (x->val < 0) { g(PASTORE); g2(-x->val - 1); }
             else { g(IASTORE); g2(x->val); }
             break;
         case CST  : emit_const(x->val); break;
-        case CHAR_CONVERT: c(x->o1); g(IC2C); break;
+        case BYTE_CONVERT: c(x->o1); g(I2B); break;
         case ADD  : c(x->o1);  c(x->o2); g(IADD); break;
         case MUL  : c(x->o1);  c(x->o2); g(IMUL); break;
         case SUB  : c(x->o1);  c(x->o2); g(ISUB); break;
@@ -118,6 +124,7 @@ void c(node *x) {
         case SET  : c(x->o2);
             if (x->o1->kind == LOCAL) { g(LSTORE); g2(x->o1->val); }
             else if (x->o1->val < 0) { g(PSTORE); g2(-x->o1->val - 1); }
+            else if (x->o1->type == TYPE_BYTE) { g(BSET); g2(x->o1->val); }
             else { g(ISTORE); g2(x->o1->val); }
             break;
         case IF1  : c(x->o1);  g(JZ); p1=hole(); c(x->o2); fix(p1,here); break;

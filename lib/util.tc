@@ -1,9 +1,12 @@
 // Some standard utilities
 
-int strlen(int text[]) { return text[0]; }
+// Strings are byte arrays: a 2-byte little-endian length, the characters, then a 0.
 
-void strcatc(int txt[], int c) {
-    int len; len = txt[0]+1;
-    txt[len] = c; txt[len+1] = 0;
-    txt[0] = len;
+int strlen(byte text[]) { return (text[1] * 256) + text[0]; }
+
+void strcatc(byte txt[], int c) {
+    int len; len = strlen(txt);
+    txt[len + 2] = c; txt[len + 3] = 0;
+    len = len + 1;
+    txt[0] = len % 256; txt[1] = len / 256;
 }

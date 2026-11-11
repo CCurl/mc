@@ -46,7 +46,15 @@ void run() {
                         if (op == SYS_EMIT) { TOS = putchar((char)TOS); }
                         // more here later
                       }
-        ACASE IC2C  : TOS = (unsigned char)TOS;
+        ACASE I2B   : TOS = (unsigned char)TOS;
+        ACASE BGET  : st[++sp] = global_bytes[f2(pc)]; pc += 2;
+        ACASE BSET  : global_bytes[f2(pc)] = st[sp]; pc += 2;
+        ACASE BAFETCH: st[sp] = global_bytes[f2(pc) + st[sp]]; pc += 2;
+        ACASE BASTORE: global_bytes[f2(pc) + st[sp-1]] = st[sp];
+                        st[sp-1] = st[sp]; --sp; pc += 2;
+        ACASE PBAFETCH: st[sp] = global_bytes[st[frame_base + f2(pc)] + st[sp]]; pc += 2;
+        ACASE PBASTORE: global_bytes[st[frame_base + f2(pc)] + st[sp-1]] = st[sp];
+                        st[sp-1] = st[sp]; --sp; pc += 2;
         ACASE JMP   : pc += (short)f2(pc);
         ACASE JZ    : if (st[sp--] == 0) pc += (short)f2(pc); else pc += 2;
         ACASE JNZ   : if (st[sp--] != 0) pc += (short)f2(pc); else pc += 2;

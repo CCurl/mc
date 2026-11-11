@@ -38,10 +38,10 @@ flowchart LR
 
 ## 2. Parser: builds an AST, not code
 
-- `defs()` handles top-level globals and functions. `variable_declarations()` handles global `int` and `char` scalars and arrays, including string initializers.
+- `defs()` handles top-level globals and functions. `variable_declarations()` handles global `int` and `byte` scalars and arrays, including string initializers.
 - `parse_function_definition()` records each function in `functions[]`, including its return type, parameter types and array flags, locals, and body. A function's index is assigned on first reference, so calls can precede definitions.
 - Statements and expressions become `node` structs in the fixed pool `nodes[MAX_NODES]`. Each node has a `kind`, up to three children (`o1`, `o2`, `o3`), and a `val`.
-- Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Globals use absolute slot numbers in `globals[]`. The parser records each scalar or array element's `int`/`char` type for conversions and array argument checks.
+- Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Int globals use absolute slot numbers in `globals[]`; byte globals and byte arrays use byte offsets in `global_bytes[]`. The parser records each scalar or array element's `int`/`byte` type for conversions and array argument checks.
 - Local slots follow the parameters in a function frame. Their encoded local index includes the function's parameter count; parameter indexes are relative to the start of the frame.
 - Each `statement()` call builds one node tree, for example `IF1`, `WHILE`, `DO`, `SEQ`, `EXPR`, `RETURN_NODE`, or `VOID_RETURN`.
 - Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. `expr()` accepts assignment only when the left side is `VAR`, `LOCAL`, or `ARRAY_GET`.
@@ -53,12 +53,12 @@ flowchart LR
 - A `main` must exist and must take no parameters.
 - Every called function must be defined.
 - Call arity is checked against each function's parameter count.
-- `validate_node()` and `validate_call()` check that array references appear only as array arguments, and that array element types match (with a compatibility exception for string literals passed to existing `int[]` routines).
-- `returns_on_all_paths()` checks that `int` and `char` functions return on every path.
+- `validate_node()` and `validate_call()` check that array references appear only as array arguments, and that array element types match.
+- `returns_on_all_paths()` checks that `int` and `byte` functions return on every path.
 - `prog->o1` is set to `main`'s body.
 
-Strings are lexed into `string_values[]`, then materialized during parsing. `allocate_string_literal()` reserves anonymous global storage laid out as `[length, chars..., 0]` and writes it directly into `globals[]`.
-String literals are permitted only as array arguments or global array initializers. Explicitly sized string-initialized arrays must fit the length slot, all characters, and the terminating zero.
+Strings are lexed into `string_values[]`, then materialized during parsing. `allocate_string_literal()` reserves anonymous global byte storage laid out as `[length low byte, length high byte, chars..., 0]` and writes it directly into `global_bytes[]`.
+String literals are permitted only as array arguments or global array initializers. Explicitly sized string-initialized arrays must fit the 2-byte length, all characters, and the terminating zero.
 
 ## 4. Code generation (`c()` walks the AST)
 
@@ -69,14 +69,15 @@ The output is a flat byte array `vm[MAX_CODE]` (65536 bytes). Opcodes are one by
 | Global read/write | `IFETCH` / `ISTORE` + 2-byte slot |
 | Local read/write | `LLOAD` / `LSTORE` + 2-byte frame slot |
 | Parameter read/write | `PLOAD` / `PSTORE` + 2-byte index |
-| Array element | `IAFETCH`/`IASTORE` (global base) or `PAFETCH`/`PASTORE` (base taken from a parameter) |
+| Int array element | `IAFETCH`/`IASTORE` (global base) or `PAFETCH`/`PASTORE` (base taken from a parameter) |
+| Byte global / byte array element | `BGET`/`BSET`, `BAFETCH`/`BASTORE` (global base) or `PBAFETCH`/`PBASTORE` (base from a parameter); these address `global_bytes[]` |
 | Constants | `IP1` (0 to 127), `IP2` (128 to 32767), `IP4` (other `int` values) |
 | Arithmetic and comparison | `IADD` to `INE` (operands already on the stack) |
 | Control flow | `JZ`, `JNZ`, `JMP` with 2-byte signed relative offsets, patched via `hole()` and `fix()` |
 | Call | `ICALL` + 2-byte address + 2-byte argc + 2-byte locals count (7 bytes total) |
 | Return | `IRET` |
 | Built-in `emit` | `SYS` + `SYS_EMIT` |
-| Char conversion | `IC2C` narrows the stack value to unsigned 8-bit `char` (0 to 255) |
+| Byte conversion | `I2B` narrows the stack value to unsigned 8-bit `byte` (0 to 255) |
 
 Notable generation details:
 
@@ -90,9 +91,10 @@ Notable generation details:
 ## 5. The "VM image" in memory
 
 - `vm[]`: the code bytes, starting with the call to `main`.
-- `globals[]`: global values. The C runtime zero-initializes this static array; parsing writes string initializer data into it.
+- `globals[]`: global `int` values. The C runtime zero-initializes this static array.
+- `global_bytes[]`: global `byte` scalars and `byte` array elements, one byte each. Parsing writes string initializer data into it.
 - `num_global_slots`: the number of global slots in use.
-- VM values and global slots use C `int` (32 bits on the configured Linux and Visual Studio targets). `char` values are unsigned 8-bit values (0 to 255) in those same slots; generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts and scalar initializers are not supported.
+- VM values and global slots use C `int` (32 bits on the configured Linux and Visual Studio targets). `byte` values are unsigned 8-bit values (0 to 255). Global `byte` storage is byte-sized in `global_bytes[]`; `byte` locals and parameters use int stack slots. Generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts and scalar initializers are not supported.
 
 `run()` in `vm.h` starts the interpreter by:
 
@@ -110,7 +112,8 @@ The VM is a stack machine implemented by `run()` in `vm.h`. It has no separate l
 | State | Declaration | Purpose |
 |---|---|---|
 | Operand stack | `int st[1000]`, index `sp` | Holds intermediate values, call frames, and locals. `TOS` is `st[sp]`, `NOS` is `st[sp-1]`. |
-| Globals | `globals[]` | Program-wide variables and arrays; static storage starts at zero, with string initializers written by the compiler. |
+| Globals | `globals[]` | Program-wide `int` variables and arrays; static storage starts at zero. |
+| Byte globals | `global_bytes[]` | Program-wide `byte` variables and arrays, one byte per element; string initializers are written by the compiler. |
 | Frame base | `frame_base` | Index in `st[]` of the current frame's first parameter or local. |
 | Return stack | `struct return_s return_stack[1000]`, `return_sp` | Saved return `pc` and caller `frame_base` for each active call. |
 
@@ -140,7 +143,7 @@ When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0
 - Return-stack overflow (1000 entries) and call-frame/operand-stack overflow stop with an error.
 - `IDIV` and `IMOD` stop on a zero divisor.
 - `SYS_EMIT` expects one value on the stack; stack underflow is not checked.
-- Array indexes are not checked at runtime, so a bad index reads or writes an arbitrary `globals[]` slot.
+- Array indexes are not checked at runtime, so a bad index reads or writes an arbitrary `globals[]` slot or `global_bytes[]` byte.
 - Stack underflow is not checked for most opcodes.
 
 ## 7. Limitations

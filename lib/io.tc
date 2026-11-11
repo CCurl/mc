@@ -1,8 +1,8 @@
 // io.tc - common I/O functions
 
-void print(int str[]) {
+void print(byte str[]) {
     int l,i;
-    l = str[0]; i = 1;
+    l = (str[1] * 256) + str[0]; i = 2;
     while (l) { emit(str[i]); i=i+1; l=l-1; }
 }
 

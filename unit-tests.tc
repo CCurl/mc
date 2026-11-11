@@ -2,31 +2,34 @@
 // Each check prints "name: ok" or "name: FAIL"; the last line prints the failure count.
 
 include "lib/io.tc";
+include "lib/util.tc";
 
 int failures, passes;
 int g_zero, g_a, g_b;
-char g_char;
-char g_chars[] = "abc";
+byte g_byte;
+byte g_bytes[] = "abc";
 int g_arr[4];
-int g_str[] = "abc";
-int g_pad[10] = "hi";
-int g_empty[] = "";
-int g_esc[] = "\n\t\\\"";
+byte g_str[] = "abc";
+byte g_pad[10] = "hi";
+byte g_empty[] = "";
+byte g_esc[] = "\n\t\\\"";
 int g_counter;
-int g_esc2[] = "\r\e\'";
-int g_esc3[] = "a\0b";
+byte g_esc2[] = "\r\e\'";
+byte g_esc3[] = "a\0b";
+byte g_cat[8] = "ab";
+byte g_long[] = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 
-void check(int name[], int ok) {
+void check(byte name[], int ok) {
     print(name);
     if (ok) { print(": ok\n"); passes = passes + 1; }
     else { print(": FAIL\n"); failures = failures + 1; }
 }
 
-char pass_char(char value) { return value; }
-int promote_char(char value) { return value; }
-char narrow_char(int value) { return value; }
-char array_char(char values[], int index) { return values[index]; }
-void update_char_array(char values[]) { values[0] = 'Z'; }
+byte pass_byte(byte value) { return value; }
+int promote_byte(byte value) { return value; }
+byte narrow_byte(int value) { return value; }
+byte array_byte(byte values[], int index) { return values[index]; }
+void update_byte_array(byte values[]) { values[2] = 'Z'; }
 
 // Global storage and string initializers.
 void test_globals() {
@@ -36,19 +39,22 @@ void test_globals() {
     g_b = g_a + 1;
     check("multiple declarators are independent", g_b == 5);
     check("inferred string length", g_str[0] == 3);
-    check("string first character", g_str[1] == 'a');
-    check("string last character", g_str[3] == 'c');
-    check("string terminator", g_str[4] == 0);
+    check("inferred string high length byte", g_str[1] == 0);
+    check("string first character", g_str[2] == 'a');
+    check("string last character", g_str[4] == 'c');
+    check("string terminator", g_str[5] == 0);
     check("sized string length", g_pad[0] == 2);
+    check("sized string high length byte", g_pad[1] == 0);
     check("sized string padded with zero", g_pad[9] == 0);
     check("empty string length", g_empty[0] == 0);
-    check("empty string terminator", g_empty[1] == 0);
+    check("empty string high length byte", g_empty[1] == 0);
+    check("empty string terminator", g_empty[2] == 0);
     check("escape string length", g_esc[0] == 4);
-    check("newline escape", g_esc[1] == '\n');
-    check("tab escape", g_esc[2] == '\t');
-    check("backslash escape", g_esc[3] == '\\');
-    check("quote escape", g_esc[4] == '"');
-    check("escape string terminator", g_esc[5] == 0);
+    check("newline escape", g_esc[2] == '\n');
+    check("tab escape", g_esc[3] == '\t');
+    check("backslash escape", g_esc[4] == '\\');
+    check("quote escape", g_esc[5] == '"');
+    check("escape string terminator", g_esc[6] == 0);
 }
 
 // Integer and character literals, unary minus.
@@ -70,29 +76,29 @@ void test_literals() {
     check("unary minus on parenthesized sum", -(3 + 4) == 0 - 7);
 }
 
-void test_char_types() {
-    char local, another;
-    check("char global is zero-initialized", g_char == 0);
-    g_char = 258;
-    check("char global assignment narrows", g_char == 2);
+void test_byte_types() {
+    byte local, another;
+    check("byte global is zero-initialized", g_byte == 0);
+    g_byte = 258;
+    check("byte global assignment narrows", g_byte == 2);
     local = 258;
-    check("int assignment narrows to char", local == 2);
-    check("char assignment yields converted value", (local = 259) == 3);
+    check("int assignment narrows to byte", local == 2);
+    check("byte assignment yields converted value", (local = 259) == 3);
     another = 255;
-    check("char conversion uses unsigned 8-bit values", another == 255);
-    check("char conversion wraps negative int", narrow_char(0 - 1) == 255);
-    check("char parameter converts int argument", pass_char(258) == 2);
-    check("char promotes when passed to int parameter", promote_char(255) == 255);
-    check("char return converts int result", narrow_char(255) == 255);
-    check("char arithmetic promotes to int", another + 2 == 257);
-    check("char array stores narrow values", (g_chars[1] = 258) == 2);
-    g_chars[2] = 255;
-    check("char array reads unsigned value", g_chars[2] == 255);
-    check("char array parameter reads elements", array_char(g_chars, 2) == 255);
-    update_char_array(g_chars);
-    check("char array parameter writes elements", g_chars[0] == 'Z');
-    check("string literal passed to char array parameter",
-          array_char("abc", 1) == 'a');
+    check("byte conversion uses unsigned 8-bit values", another == 255);
+    check("byte conversion wraps negative int", narrow_byte(0 - 1) == 255);
+    check("byte parameter converts int argument", pass_byte(258) == 2);
+    check("byte promotes when passed to int parameter", promote_byte(255) == 255);
+    check("byte return converts int result", narrow_byte(255) == 255);
+    check("byte arithmetic promotes to int", another + 2 == 257);
+    check("byte array stores narrow values", (g_bytes[2] = 258) == 2);
+    g_bytes[3] = 255;
+    check("byte array reads unsigned value", g_bytes[3] == 255);
+    check("byte array parameter reads elements", array_byte(g_bytes, 3) == 255);
+    update_byte_array(g_bytes);
+    check("byte array parameter writes elements", g_bytes[2] == 'Z');
+    check("string literal passed to byte array parameter",
+          array_byte("abc", 2) == 'a');
 }
 
 void test_arithmetic() {
@@ -245,8 +251,7 @@ int sum(int arr[], int count) {
 }
 
 int sum_forward(int arr[], int count) { return sum(arr, count); }
-int first_char(int s[]) { return s[1]; }
-int length(int s[]) { return s[0]; }
+int first_char(byte s[]) { return s[2]; }
 void put(int index, int arr[], int value) { arr[index] = value; }
 
 void test_arrays() {
@@ -257,7 +262,13 @@ void test_arrays() {
     put(2, g_arr, 9);
     check("array parameter after scalar", g_arr[2] == 9);
     check("string literal as array argument", first_char("xyz") == 'x');
-    check("string literal length", length("hello") == 5);
+    check("string literal length", strlen("hello") == 5);
+    check("long string length above 255", strlen(g_long) == 260);
+    check("long string last character", g_long[261] == 'z');
+    strcatc(g_cat, 'c');
+    check("strcatc appends a character", strlen(g_cat) == 3);
+    check("strcatc character is at index 4", g_cat[4] == 'c');
+    check("strcatc keeps terminator", g_cat[5] == 0);
 }
 
 // emit() prints the newline and returns the byte written.
@@ -376,12 +387,12 @@ void test_literals2() {
     check("negative divide", 12 / -4 == -3);
     check("large product", 200 * 300 == 60000);
     check("large constant arithmetic", 70000 - 1 == 69999);
-    check("carriage return escape in string", g_esc2[1] == 13);
-    check("escape e in string", g_esc2[2] == 27);
-    check("escaped single quote in string", g_esc2[3] == 39);
-    check("string terminator after escapes", g_esc2[4] == 0);
-    check("NUL escape inside string", g_esc3[2] == 0);
-    check("character after NUL escape", g_esc3[3] == 'b');
+    check("carriage return escape in string", g_esc2[2] == 13);
+    check("escape e in string", g_esc2[3] == 27);
+    check("escaped single quote in string", g_esc2[4] == 39);
+    check("string terminator after escapes", g_esc2[5] == 0);
+    check("NUL escape inside string", g_esc3[3] == 0);
+    check("character after NUL escape", g_esc3[4] == 'b');
 }
 
 void test_arrays2() {
@@ -428,7 +439,7 @@ void test_long_jumps() {
 int main() {
     test_globals();
     test_literals();
-    test_char_types();
+    test_byte_types();
     test_arithmetic();
     test_comparisons();
     test_assignment();

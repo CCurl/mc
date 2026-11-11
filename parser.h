@@ -78,7 +78,6 @@ node *new_node(int k) {
     x->o1 = x->o2 = x->o3 = NULL;
     x->val = 0;
     x->type = TYPE_INT;
-    x->is_string = 0;
     return x;
 }
 
@@ -88,9 +87,9 @@ node *gen(int k, node *o1, node *o2) {
     return x;
 }
 
-node *char_conversion(node *value) {
-    node *conversion = gen(CHAR_CONVERT, value, NULL);
-    conversion->type = TYPE_CHAR;
+node *byte_conversion(node *value) {
+    node *conversion = gen(BYTE_CONVERT, value, NULL);
+    conversion->type = TYPE_BYTE;
     return conversion;
 }
 
@@ -193,8 +192,7 @@ node *term() {
       next_sym();
       x = new_node(ARRAY_REF);
       x->val = base;
-      x->type = TYPE_CHAR;
-      x->is_string = 1;
+      x->type = TYPE_BYTE;
   } else x = paren_expr();
   return x;
 }
@@ -238,7 +236,7 @@ node *expr() {
   if (((x->kind==VAR) || (x->kind==LOCAL) || (x->kind==ARRAY_GET)) && (sym==EQUAL)) {
       next_sym();
       node *value = expr();
-      if (x->type == TYPE_CHAR) { value = char_conversion(value); }
+      if (x->type == TYPE_BYTE) { value = byte_conversion(value); }
       if (x->kind == ARRAY_GET) {
           node *set = gen(ARRAY_SET, x->o1, value);
           set->val = x->val;
@@ -263,8 +261,8 @@ node *paren_expr() {
 
 node *statement() {
   node *x;
-  if ((sym == INT_SYM || sym == CHAR_SYM) && current_function >= 0) {
-      int local_type = sym == CHAR_SYM ? TYPE_CHAR : TYPE_INT;
+  if ((sym == INT_SYM || sym == BYTE_SYM) && current_function >= 0) {
+      int local_type = sym == BYTE_SYM ? TYPE_BYTE : TYPE_INT;
       next_sym();
       if (sym != ID) { syntax_error(); }
       while (1) {
@@ -296,8 +294,8 @@ node *statement() {
               error("-return value requires a non-void function-");
           }
           node *value = expr();
-          if (functions[current_function].return_type == TYPE_CHAR) {
-              value = char_conversion(value);
+          if (functions[current_function].return_type == TYPE_BYTE) {
+              value = byte_conversion(value);
           }
           x = gen(RETURN_NODE, value, NULL);
       }
@@ -361,8 +359,8 @@ void parse_parameters(int function_index_value) {
         return;
     }
     while (1) {
-        if (sym != INT_SYM && sym != CHAR_SYM) { syntax_error(); }
-        int parameter_type = sym == CHAR_SYM ? TYPE_CHAR : TYPE_INT;
+        if (sym != INT_SYM && sym != BYTE_SYM) { syntax_error(); }
+        int parameter_type = sym == BYTE_SYM ? TYPE_BYTE : TYPE_INT;
         next_sym();
         if (sym != ID) { syntax_error(); }
         for (int i = 0; i < function->num_parameters; i++) {
@@ -407,10 +405,10 @@ void parse_variable_declarator(const char *name, int type) {
     int has_string_initializer = 0;
     if (sym == EQUAL) {
         next_sym();
-        if (!is_array || sym != STRING_LITERAL) {
-            error("-string initializer requires an array declaration-");
+        if (!is_array || type != TYPE_BYTE || sym != STRING_LITERAL) {
+            error("-string initializer requires a byte array-");
         }
-        int required_size = string_length + 2;
+        int required_size = string_length + STRING_OVERHEAD;
         if (!inferred_size && size < required_size) {
             error("-array is too small for string initializer-");
         }
@@ -421,11 +419,7 @@ void parse_variable_declarator(const char *name, int type) {
     }
     int variable = declare_variable(name, size, is_array, type);
     if (has_string_initializer) {
-        int base = variable_bases[variable];
-        globals[base] = string_length;
-        for (int i = 0; i < string_length; i++) {
-            globals[base + i + 1] = string_values[i];
-        }
+        store_string_bytes(variable_bases[variable]);
         next_sym();
     }
 }
@@ -456,7 +450,7 @@ void parse_function_definition(const char *name, int return_type) {
     functions[index].returns_value = return_type != TYPE_VOID;
     parse_parameters(index);
     if (strcmp(name, "main") == 0) {
-        if (return_type == TYPE_CHAR) { error("-main must return int or void-"); }
+        if (return_type == TYPE_BYTE) { error("-main must return int or void-"); }
         if (functions[index].num_parameters != 0) { error("-main must not have parameters-"); }
         main_function = index;
     }
@@ -501,13 +495,12 @@ void validate_call(node *call) {
             fail("-argument %d to %s must be %s-\n", i + 1, function->name,
                  function->parameter_is_array[i] ? "an array reference" : "a scalar");
         }
-        if (is_array && arg->o1->type != function->parameter_types[i] &&
-            !arg->o1->is_string) {
+        if (is_array && arg->o1->type != function->parameter_types[i]) {
             fail("-argument %d to %s must be %s array-\n", i + 1, function->name,
-                 function->parameter_types[i] == TYPE_CHAR ? "a char" : "an int");
+                 function->parameter_types[i] == TYPE_BYTE ? "a byte" : "an int");
         }
-        if (!is_array && function->parameter_types[i] == TYPE_CHAR) {
-            arg->o1 = char_conversion(arg->o1);
+        if (!is_array && function->parameter_types[i] == TYPE_BYTE) {
+            arg->o1 = byte_conversion(arg->o1);
         }
         validate_expression(arg->o1, function->parameter_is_array[i]);
         arg = arg->o2;
@@ -552,9 +545,9 @@ node *defs(node *st) {
         if (main_function < 0) { error("-program must define main()-"); }
         syntax_error();
     }
-    if (sym==VOID_SYM || sym==INT_SYM || sym==CHAR_SYM) {
+    if (sym==VOID_SYM || sym==INT_SYM || sym==BYTE_SYM) {
       int type = sym == VOID_SYM ? TYPE_VOID :
-                 (sym == CHAR_SYM ? TYPE_CHAR : TYPE_INT);
+                 (sym == BYTE_SYM ? TYPE_BYTE : TYPE_INT);
       next_sym();
       if (sym != ID) { syntax_error(); }
       char name[sizeof(id_name)];

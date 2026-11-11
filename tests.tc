@@ -4,9 +4,9 @@ include "lib/util.tc";
 int global_int, another_global, _leading2, UpperCase;
 int char_code, newline_code, escape_code, quote_code, backslash_code, output_code, mod_result;
 int global_arr[10], nums[5];
-int cat[10] = "cat";
-int empty_string[] = "";
-int escaped_string[] = "A\n\"\\\0";
+byte cat[10] = "cat";
+byte empty_string[] = "";
+byte escaped_string[] = "A\n\"\\\0";
 
 void nop() {}
 
@@ -96,7 +96,7 @@ int parity(int x) {
 
 int isFalse(int value) { return value == 0; }
 
-void passFail(int name[], int res) {
+void passFail(byte name[], int res) {
     print(name);
     if (res) { print(": pass\n"); }
     else { print(": fail\n"); }
@@ -104,7 +104,7 @@ void passFail(int name[], int res) {
 
 int modTest(int a, int b, int c) { return (a % b) == c; }
 
-int greeting[] = "\ncat";
+byte greeting[] = "\ncat";
 int main() {
     int local_a;
     int local_b;
@@ -130,7 +130,7 @@ int main() {
     quote_code = '\'';
     backslash_code = '\\';
     local_a = strlen(greeting);
-    local_b = greeting[2];
+    local_b = greeting[3];
     global_int = another_global = 7;
 
     nop();
@@ -201,10 +201,10 @@ int main() {
     passFail("character escape", newline_code == 10);
     passFail("escape character", escape_code == 27);
     passFail("string length", strlen("ABC") == 3);
-    passFail("string first character", greeting[2] == 'c');
-    passFail("string terminator", greeting[5] == 0);
+    passFail("string first character", greeting[3] == 'c');
+    passFail("string terminator", greeting[6] == 0);
     passFail("empty string length", empty_string[0] == 0);
-    passFail("empty string terminator", empty_string[1] == 0);
+    passFail("empty string terminator", empty_string[2] == 0);
     passFail("global array reference", global_arr[1] == 8);
     passFail("recursive function fib(10)", fib(10) == 55);
     passFail("recursive function fact(5)", fact(5) == 120);
