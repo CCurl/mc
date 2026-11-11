@@ -60,7 +60,7 @@ int fold(node *x, int *out) {
     if (x->kind == CST) { *out = x->val; return 1; }
     if (x->kind == CHAR_CONVERT) {
         if (!fold(x->o1, &a)) { return 0; }
-        *out = (signed char)a;
+        *out = (unsigned char)a;
         return 1;
     }
     if (!fold(x->o1, &a) || !fold(x->o2, &b)) { return 0; }
@@ -101,7 +101,6 @@ void c(node *x) {
             break;
         case ARRAY_SET:
             c(x->o1); c(x->o2);
-            if (x->type == TYPE_CHAR) { g(IC2C); }
             if (x->val < 0) { g(PASTORE); g2(-x->val - 1); }
             else { g(IASTORE); g2(x->val); }
             break;

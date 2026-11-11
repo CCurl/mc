@@ -79,15 +79,16 @@ void test_char_types() {
     check("int assignment narrows to char", local == 2);
     check("char assignment yields converted value", (local = 259) == 3);
     another = 255;
-    check("char conversion uses signed 8-bit values", another == -1);
+    check("char conversion uses unsigned 8-bit values", another == 255);
+    check("char conversion wraps negative int", narrow_char(0 - 1) == 255);
     check("char parameter converts int argument", pass_char(258) == 2);
-    check("char promotes when passed to int parameter", promote_char(255) == -1);
-    check("char return converts int result", narrow_char(255) == -1);
-    check("char arithmetic promotes to int", another + 2 == 1);
+    check("char promotes when passed to int parameter", promote_char(255) == 255);
+    check("char return converts int result", narrow_char(255) == 255);
+    check("char arithmetic promotes to int", another + 2 == 257);
     check("char array stores narrow values", (g_chars[1] = 258) == 2);
     g_chars[2] = 255;
-    check("char array reads signed value", g_chars[2] == -1);
-    check("char array parameter reads elements", array_char(g_chars, 2) == -1);
+    check("char array reads unsigned value", g_chars[2] == 255);
+    check("char array parameter reads elements", array_char(g_chars, 2) == 255);
     update_char_array(g_chars);
     check("char array parameter writes elements", g_chars[0] == 'Z');
     check("string literal passed to char array parameter",

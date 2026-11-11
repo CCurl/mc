@@ -76,7 +76,7 @@ The output is a flat byte array `vm[MAX_CODE]` (65536 bytes). Opcodes are one by
 | Call | `ICALL` + 2-byte address + 2-byte argc + 2-byte locals count (7 bytes total) |
 | Return | `IRET` |
 | Built-in `emit` | `SYS` + `SYS_EMIT` |
-| Char conversion | `IC2C` narrows the stack value to signed 8-bit `char` |
+| Char conversion | `IC2C` narrows the stack value to unsigned 8-bit `char` (0 to 255) |
 
 Notable generation details:
 
@@ -92,7 +92,7 @@ Notable generation details:
 - `vm[]`: the code bytes, starting with the call to `main`.
 - `globals[]`: global values. The C runtime zero-initializes this static array; parsing writes string initializer data into it.
 - `num_global_slots`: the number of global slots in use.
-- VM values and global slots use C `int` (32 bits on the configured Linux and Visual Studio targets). `char` values are signed 8-bit values in those same slots; generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts and scalar initializers are not supported.
+- VM values and global slots use C `int` (32 bits on the configured Linux and Visual Studio targets). `char` values are unsigned 8-bit values (0 to 255) in those same slots; generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts and scalar initializers are not supported.
 
 `run()` in `vm.h` starts the interpreter by:
 

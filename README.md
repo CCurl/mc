@@ -49,7 +49,7 @@
  *  <string> ::= '"' { <string_character_or_escape> } '"'
  *  Character literals are int-valued and represent the numeric value of one byte; supported escapes
  * are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
- *  Char objects use signed 8-bit values stored in the VM's int slots. Assignments,
+ *  Char objects use unsigned 8-bit values (0 to 255) stored in the VM's int slots. Assignments,
  *  char parameters, returns, and char array stores narrow to this range; char values
  *  promote to int in expressions. Conversions are implicit; casts and scalar
  *  initializers are not supported.
