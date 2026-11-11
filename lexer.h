@@ -3,7 +3,7 @@
 
 #include "tiny-c.h"
 
-char *words[] = { "do", "else", "if", "while", "void", "int", NULL };
+char *words[] = { "do", "else", "if", "while", "void", "int", "char", NULL };
 
 int ch = ' ', sym, int_val;
 char id_name[64];
@@ -20,6 +20,7 @@ int num_included_paths = 0;
 char variable_names[MAX_NAMES][sizeof(id_name)];
 int variable_bases[MAX_NAMES], variable_sizes[MAX_NAMES];
 int variable_is_array[MAX_NAMES];
+int variable_types[MAX_NAMES];
 int string_values[MAX_STRING_LENGTH], string_length;
 int globals[MAX_GLOBAL_SLOTS];
 int num_variables;
@@ -43,7 +44,7 @@ int find_variable(const char *name) {
     return -1;
 }
 
-int declare_variable(const char *name, int size, int is_array) {
+int declare_variable(const char *name, int size, int is_array, int type) {
     int index = find_variable(name);
     if (index >= 0) {
         fail("-duplicate variable %s-\n", name);
@@ -56,6 +57,7 @@ int declare_variable(const char *name, int size, int is_array) {
     variable_bases[num_variables] = num_global_slots;
     variable_sizes[num_variables] = size;
     variable_is_array[num_variables] = is_array;
+    variable_types[num_variables] = type;
     num_global_slots += size;
     return num_variables++;
 }

@@ -58,6 +58,11 @@ int fold(node *x, int *out) {
     int a, b;
     if (!x) { return 0; }
     if (x->kind == CST) { *out = x->val; return 1; }
+    if (x->kind == CHAR_CONVERT) {
+        if (!fold(x->o1, &a)) { return 0; }
+        *out = (signed char)a;
+        return 1;
+    }
     if (!fold(x->o1, &a) || !fold(x->o2, &b)) { return 0; }
     switch (x->kind) {
         case ADD: *out = a + b; return 1;
@@ -92,13 +97,16 @@ void c(node *x) {
             c(x->o1);
             if (x->val < 0) { g(PAFETCH); g2(-x->val - 1); }
             else { g(IAFETCH); g2(x->val); }
+            if (x->type == TYPE_CHAR) { g(IC2C); }
             break;
         case ARRAY_SET:
             c(x->o1); c(x->o2);
+            if (x->type == TYPE_CHAR) { g(IC2C); }
             if (x->val < 0) { g(PASTORE); g2(-x->val - 1); }
             else { g(IASTORE); g2(x->val); }
             break;
         case CST  : emit_const(x->val); break;
+        case CHAR_CONVERT: c(x->o1); g(IC2C); break;
         case ADD  : c(x->o1);  c(x->o2); g(IADD); break;
         case MUL  : c(x->o1);  c(x->o2); g(IMUL); break;
         case SUB  : c(x->o1);  c(x->o2); g(ISUB); break;

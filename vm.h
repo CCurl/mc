@@ -46,6 +46,7 @@ void run() {
                         if (op == SYS_EMIT) { TOS = putchar((char)TOS); }
                         // more here later
                       }
+        ACASE IC2C  : TOS = (signed char)TOS;
         ACASE JMP   : pc += (short)f2(pc);
         ACASE JZ    : if (st[sp--] == 0) pc += (short)f2(pc); else pc += 2;
         ACASE JNZ   : if (st[sp--] != 0) pc += (short)f2(pc); else pc += 2;

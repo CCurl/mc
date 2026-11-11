@@ -12,11 +12,14 @@ struct function_s {
     int address;
     int defined;
     int returns_value;  
+    int return_type;
     int num_parameters;
     char parameter_names[MAX_PARAMETERS][sizeof(id_name)];
     int parameter_is_array[MAX_PARAMETERS];
+    int parameter_types[MAX_PARAMETERS];
     int num_locals;
     char local_names[MAX_LOCALS][sizeof(id_name)];
+    int local_types[MAX_LOCALS];
 };
 struct function_s functions[MAX_FUNCTIONS];
 int num_functions;
@@ -60,6 +63,7 @@ int function_index(const char *name) {
     functions[num_functions].address = 0;
     functions[num_functions].defined = 0;
     functions[num_functions].returns_value = 0;
+    functions[num_functions].return_type = TYPE_VOID;
     functions[num_functions].num_parameters = 0;
     functions[num_functions].num_locals = 0;
     return num_functions++;
@@ -71,6 +75,10 @@ node *new_node(int k) {
     if (MAX_NODES <= num_nodes) { error(""); }
     node *x = &nodes[num_nodes++];
     x->kind = k;
+    x->o1 = x->o2 = x->o3 = NULL;
+    x->val = 0;
+    x->type = TYPE_INT;
+    x->is_string = 0;
     return x;
 }
 
@@ -78,6 +86,12 @@ node *gen(int k, node *o1, node *o2) {
     node *x=new_node(k);
     x->o1=o1; x->o2=o2;
     return x;
+}
+
+node *char_conversion(node *value) {
+    node *conversion = gen(CHAR_CONVERT, value, NULL);
+    conversion->type = TYPE_CHAR;
+    return conversion;
 }
 
 void expect_sym(int exp) {
@@ -113,6 +127,14 @@ node *call_arguments(const char *name) {
     return call;
 }
 
+int array_element_type(const char *name) {
+    int parameter = parameter_index(name);
+    if (parameter >= 0) {
+        return functions[current_function].parameter_types[parameter];
+    }
+    return variable_types[find_variable(name)];
+}
+
 /* <term> ::= <id> | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> */
 node *term() {
   node *x;
@@ -134,6 +156,7 @@ node *term() {
           expect_sym(RBRACKET);
           x = gen(ARRAY_GET, index, NULL);
           x->val = base;
+          x->type = array_element_type(name);
       } else {
           int variable = find_variable(name);
           int parameter = parameter_index(name);
@@ -141,19 +164,24 @@ node *term() {
           if (local >= 0) {
               x = new_node(LOCAL);
               x->val = functions[current_function].num_parameters + local;
+              x->type = functions[current_function].local_types[local];
           } else if (parameter >= 0 &&
                      functions[current_function].parameter_is_array[parameter]) {
-              x = new_node(ARRAY_REF);
-              x->val = array_reference(name);
+            x = new_node(ARRAY_REF);
+            x->val = array_reference(name);
+            x->type = functions[current_function].parameter_types[parameter];
           } else if (parameter >= 0) {
-              x = new_node(VAR);
-              x->val = -parameter - 1;
+            x = new_node(VAR);
+            x->val = -parameter - 1;
+            x->type = functions[current_function].parameter_types[parameter];
           } else if (variable >= 0 && variable_is_array[variable]) {
-              x = new_node(ARRAY_REF);
-              x->val = variable_bases[variable];
+            x = new_node(ARRAY_REF);
+            x->val = variable_bases[variable];
+            x->type = variable_types[variable];
           } else {
-              x=new_node(VAR);
-              x->val=variable_index(name);
+            x=new_node(VAR);
+            x->val=variable_index(name);
+            x->type = variable_types[variable];
           }
       }
   } else if (sym == INT || sym == CHAR_LITERAL) {
@@ -165,6 +193,8 @@ node *term() {
       next_sym();
       x = new_node(ARRAY_REF);
       x->val = base;
+      x->type = TYPE_CHAR;
+      x->is_string = 1;
   } else x = paren_expr();
   return x;
 }
@@ -207,12 +237,17 @@ node *expr() {
   x = test();
   if (((x->kind==VAR) || (x->kind==LOCAL) || (x->kind==ARRAY_GET)) && (sym==EQUAL)) {
       next_sym();
+      node *value = expr();
+      if (x->type == TYPE_CHAR) { value = char_conversion(value); }
       if (x->kind == ARRAY_GET) {
-          node *set = gen(ARRAY_SET, x->o1, expr());
+          node *set = gen(ARRAY_SET, x->o1, value);
           set->val = x->val;
+          set->type = x->type;
           return set;
       }
-      return gen(SET, x, expr());
+      node *set = gen(SET, x, value);
+      set->type = x->type;
+      return set;
   }
   return x;
 }
@@ -228,7 +263,8 @@ node *paren_expr() {
 
 node *statement() {
   node *x;
-  if (sym == INT_SYM && current_function >= 0) {
+  if ((sym == INT_SYM || sym == CHAR_SYM) && current_function >= 0) {
+      int local_type = sym == CHAR_SYM ? TYPE_CHAR : TYPE_INT;
       next_sym();
       if (sym != ID) { syntax_error(); }
       while (1) {
@@ -239,7 +275,8 @@ node *statement() {
           }
           struct function_s *function = &functions[current_function];
           if (function->num_locals >= MAX_LOCALS) { error("-too many local variables-"); }
-          strcpy(function->local_names[function->num_locals++], name);
+          strcpy(function->local_names[function->num_locals], name);
+          function->local_types[function->num_locals++] = local_type;
           next_sym();
           if (sym != COMMA) { break; }
           next_sym();
@@ -256,9 +293,13 @@ node *statement() {
           x = new_node(VOID_RETURN);
       } else {
           if (current_function < 0 || !functions[current_function].returns_value) {
-              error("-return value requires an int function-");
+              error("-return value requires a non-void function-");
           }
-          x = gen(RETURN_NODE, expr(), NULL);
+          node *value = expr();
+          if (functions[current_function].return_type == TYPE_CHAR) {
+              value = char_conversion(value);
+          }
+          x = gen(RETURN_NODE, value, NULL);
       }
       expect_sym(SEMI);
   } else if (sym == IF_SYM) { /* "if" <paren_expr> <statement> */
@@ -320,7 +361,9 @@ void parse_parameters(int function_index_value) {
         return;
     }
     while (1) {
-        expect_sym(INT_SYM);
+        if (sym != INT_SYM && sym != CHAR_SYM) { syntax_error(); }
+        int parameter_type = sym == CHAR_SYM ? TYPE_CHAR : TYPE_INT;
+        next_sym();
         if (sym != ID) { syntax_error(); }
         for (int i = 0; i < function->num_parameters; i++) {
             if (strcmp(function->parameter_names[i], id_name) == 0) {
@@ -332,6 +375,7 @@ void parse_parameters(int function_index_value) {
         }
         strcpy(function->parameter_names[function->num_parameters++], id_name);
         int parameter = function->num_parameters - 1;
+        function->parameter_types[parameter] = parameter_type;
         next_sym();
         if (sym == LBRACKET) {
             next_sym();
@@ -344,7 +388,7 @@ void parse_parameters(int function_index_value) {
     expect_sym(RPAR);
 }
 
-void parse_variable_declarator(const char *name) {
+void parse_variable_declarator(const char *name, int type) {
     int size = 1;
     int is_array = 0;
     int inferred_size = 0;
@@ -375,7 +419,7 @@ void parse_variable_declarator(const char *name) {
     } else if (inferred_size) {
         error("-array size required unless initialized by a string-");
     }
-    int variable = declare_variable(name, size, is_array);
+    int variable = declare_variable(name, size, is_array, type);
     if (has_string_initializer) {
         int base = variable_bases[variable];
         globals[base] = string_length;
@@ -386,20 +430,20 @@ void parse_variable_declarator(const char *name) {
     }
 }
 
-void variable_declarations(const char *first_name) {
-    parse_variable_declarator(first_name);
+void variable_declarations(const char *first_name, int type) {
+    parse_variable_declarator(first_name, type);
     while (sym == COMMA) {
         next_sym();
         if (sym != ID) { syntax_error(); }
         char name[sizeof(id_name)];
         strcpy(name, id_name);
         next_sym();
-        parse_variable_declarator(name);
+        parse_variable_declarator(name, type);
     }
     expect_sym(SEMI);
 }
 
-void parse_function_definition(const char *name, int returns_value) {
+void parse_function_definition(const char *name, int return_type) {
     if (strcmp(name, "emit") == 0) {
         error("-emit is a built-in function-");
     }
@@ -408,7 +452,8 @@ void parse_function_definition(const char *name, int returns_value) {
         fail("-duplicate function %s-\n", name);
     }
     functions[index].defined = 1;
-    functions[index].returns_value = returns_value;
+    functions[index].return_type = return_type;
+    functions[index].returns_value = return_type != TYPE_VOID;
     parse_parameters(index);
     if (strcmp(name, "main") == 0) {
         if (functions[index].num_parameters != 0) { error("-main must not have parameters-"); }
@@ -425,8 +470,8 @@ void parse_function_definition(const char *name, int returns_value) {
     }
     functions[index].body = body;
     current_function = previous_function;
-    if (returns_value && !returns_on_all_paths(body)) {
-        fail("-int function %s does not return on all paths-\n", name);
+    if (return_type != TYPE_VOID && !returns_on_all_paths(body)) {
+        fail("-non-void function %s does not return on all paths-\n", name);
     }
     next_sym();
 }
@@ -454,6 +499,14 @@ void validate_call(node *call) {
         if (is_array != function->parameter_is_array[i]) {
             fail("-argument %d to %s must be %s-\n", i + 1, function->name,
                  function->parameter_is_array[i] ? "an array reference" : "a scalar");
+        }
+        if (is_array && arg->o1->type != function->parameter_types[i] &&
+            !arg->o1->is_string) {
+            fail("-argument %d to %s must be an %s array-\n", i + 1, function->name,
+                 function->parameter_types[i] == TYPE_CHAR ? "char" : "int");
+        }
+        if (!is_array && function->parameter_types[i] == TYPE_CHAR) {
+            arg->o1 = char_conversion(arg->o1);
         }
         validate_expression(arg->o1, function->parameter_is_array[i]);
         arg = arg->o2;
@@ -498,17 +551,18 @@ node *defs(node *st) {
         if (main_function < 0) { error("-program must define main()-"); }
         syntax_error();
     }
-    if (sym==VOID_SYM || sym==INT_SYM) {
-      int returns_value = sym == INT_SYM;
+    if (sym==VOID_SYM || sym==INT_SYM || sym==CHAR_SYM) {
+      int type = sym == VOID_SYM ? TYPE_VOID :
+                 (sym == CHAR_SYM ? TYPE_CHAR : TYPE_INT);
       next_sym();
       if (sym != ID) { syntax_error(); }
       char name[sizeof(id_name)];
       strcpy(name, id_name);
       next_sym();
       if (sym == LPAR) {
-          parse_function_definition(name, returns_value);
-      } else if (returns_value) {
-          variable_declarations(name);
+          parse_function_definition(name, type);
+      } else if (type != TYPE_VOID) {
+          variable_declarations(name, type);
       } else {
           syntax_error();
       }

@@ -22,27 +22,34 @@
 
 // ---------------------------------------------------------------------------
 // For the lexer ...
-enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-        LBRA, RBRA, LPAR, RPAR, PLUS,                           //  6 -> 10
-        MINUS, STAR, SLASH, MODULO,                             // 11 -> 14
-        LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                 // 15 -> 20
-        INT, ID, EOI, LBRACKET, RBRACKET, COMMA, RETURN_SYM,    // 21 -> 27
-	CHAR_LITERAL, STRING_LITERAL                            // 28 -> 29
+enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM, CHAR_SYM, // 0 -> 6
+        LBRA, RBRA, LPAR, RPAR, PLUS,                                  // 7 -> 11
+        MINUS, STAR, SLASH, MODULO,                             // 12 -> 15
+        LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                 // 16 -> 21
+        INT, ID, EOI, LBRACKET, RBRACKET, COMMA, RETURN_SYM,    // 22 -> 28
+	CHAR_LITERAL, STRING_LITERAL                            // 29 -> 30
 };
+enum { TYPE_INT, TYPE_CHAR, TYPE_VOID };
 // ---------------------------------------------------------------------------
 // For the parser ...
 enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
        ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
-       IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG };
+       IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, CHAR_CONVERT };
 
-struct node_s { int kind; struct node_s *o1, *o2, *o3; int val; };
+struct node_s {
+    int kind;
+    struct node_s *o1, *o2, *o3;
+    int val;
+    int type;
+    int is_string;
+};
 typedef struct node_s node;
 
 // ---------------------------------------------------------------------------
 // For the code generator ...
 enum { IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
         IMOD, ILT, IGT, IEQ, INE, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
-        PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS };
+        PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS, IC2C };
 
 enum { BUILTIN_EMIT };
 enum { SYS_EMIT };
