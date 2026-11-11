@@ -5,6 +5,8 @@ include "lib/io.tc";
 
 int failures, passes;
 int g_zero, g_a, g_b;
+char g_char;
+char g_chars[] = "abc";
 int g_arr[4];
 int g_str[] = "abc";
 int g_pad[10] = "hi";
@@ -19,6 +21,12 @@ void check(int name[], int ok) {
     if (ok) { print(": ok\n"); passes = passes + 1; }
     else { print(": FAIL\n"); failures = failures + 1; }
 }
+
+char pass_char(char value) { return value; }
+int promote_char(char value) { return value; }
+char narrow_char(int value) { return value; }
+char array_char(char values[], int index) { return values[index]; }
+void update_char_array(char values[]) { values[0] = 'Z'; }
 
 // Global storage and string initializers.
 void test_globals() {
@@ -60,6 +68,30 @@ void test_literals() {
     check("unary minus", -5 == 0 - 5);
     check("double unary minus", - -5 == 5);
     check("unary minus on parenthesized sum", -(3 + 4) == 0 - 7);
+}
+
+void test_char_types() {
+    char local, another;
+    check("char global is zero-initialized", g_char == 0);
+    g_char = 258;
+    check("char global assignment narrows", g_char == 2);
+    local = 258;
+    check("int assignment narrows to char", local == 2);
+    check("char assignment yields converted value", (local = 259) == 3);
+    another = 255;
+    check("char conversion uses signed 8-bit values", another == -1);
+    check("char parameter converts int argument", pass_char(258) == 2);
+    check("char promotes when passed to int parameter", promote_char(255) == -1);
+    check("char return converts int result", narrow_char(255) == -1);
+    check("char arithmetic promotes to int", another + 2 == 1);
+    check("char array stores narrow values", (g_chars[1] = 258) == 2);
+    g_chars[2] = 255;
+    check("char array reads signed value", g_chars[2] == -1);
+    check("char array parameter reads elements", array_char(g_chars, 2) == -1);
+    update_char_array(g_chars);
+    check("char array parameter writes elements", g_chars[0] == 'Z');
+    check("string literal passed to char array parameter",
+          array_char("abc", 1) == 'a');
 }
 
 void test_arithmetic() {
@@ -395,6 +427,7 @@ void test_long_jumps() {
 int main() {
     test_globals();
     test_literals();
+    test_char_types();
     test_arithmetic();
     test_comparisons();
     test_assignment();

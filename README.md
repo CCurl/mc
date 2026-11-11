@@ -15,10 +15,10 @@
  *  <main_def> ::= ("void" | "int") "main" "(" ")" "{" { <statement> } "}"
  *  <defs> ::= { <def> }
  *  <def> ::= <func_def> | <var_def>
- *  <func_def> ::= ("void" | "int") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
- *  <parameter> ::= "int" <id> [ "[" "]" ]
- *  <local_decl> ::= "int" <id> { "," <id> } ";"
- *  <var_def> ::= "int" <var_decl> { "," <var_decl> } ";"
+ *  <func_def> ::= ("void" | "int" | "char") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
+ *  <parameter> ::= ("int" | "char") <id> [ "[" "]" ]
+ *  <local_decl> ::= ("int" | "char") <id> { "," <id> } ";"
+ *  <var_def> ::= ("int" | "char") <var_decl> { "," <var_decl> } ";"
  *  <var_decl> ::= <id> [ "[" <int> "]" ] | <id> "[" [ <int> ] "]" "=" <string>
  *  <statement> ::= <local_decl> |
  *                  <void_func_call> ";" |
@@ -36,24 +36,30 @@
  *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)
  *  <math_op> ::= "+" | "-" | "*" | "/" | "%"
  *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <int> | <char> | <string> | <paren_expr> | "-" <term>
- *  <func_call> ::= <int_func_id> "(" [ <expr> { "," <expr> } ] ")"
+ *  <func_call> ::= (<int_func_id> | <char_func_id>) "(" [ <expr> { "," <expr> } ] ")"
  *  <void_func_call> ::= <void_func_id> "(" [ <expr> { "," <expr> } ] ")"
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
- *  <int_func_id> and <void_func_id> are IDs of functions with the
- *  corresponding return type. Void calls are statements, not terms.
+ *  <int_func_id> and <char_func_id> are IDs of functions returning a value;
+ *  void calls are statements, not terms.
  *  emit(int value) is a built-in VM service that writes the low byte and
  *  returns the written byte.
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*
  *  <int> ::= <a_decimal_integer>
  *  <char> ::= "'" <single_character_or_escape> "'"
  *  <string> ::= '"' { <string_character_or_escape> } '"'
- * Character literals represent the numeric value of one byte; supported escapes
+ *  Character literals are int-valued and represent the numeric value of one byte; supported escapes
  * are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
- * String initializers are global integer arrays laid out as [length, ASCII values..., 0].
+ *  Char objects use signed 8-bit values stored in the VM's int slots. Assignments,
+ *  char parameters, returns, and char array stores narrow to this range; char values
+ *  promote to int in expressions. Conversions are implicit; casts and scalar
+ *  initializers are not supported.
+ *  String initializers are global arrays laid out as [length, ASCII values..., 0].
  * The length excludes the final zero; an omitted array size is inferred, and an
  * explicit size must fit the length and terminator. Non-ASCII characters are
  * rejected outside comments and character literals. String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
- * String literals used as array arguments get anonymous global storage.
+ *  String literals used as array arguments get anonymous global storage. They can
+ *  be passed to either char[] or int[] parameters for compatibility with existing
+ *  int[] string-library functions; other array arguments must match their element type.
  * String literals are valid only as array arguments or global array initializers.
  * Array parameters pass global-array base slots by reference.
  * Array indexes are unchecked at runtime.

@@ -1,5 +1,7 @@
 app := tc
 
+.PHONY: all clean test1 tests unit-tests invalid-tests
+
 CXX := clang
 CXXFLAGS := -m32 -O3 -D IS_LINUX
 
@@ -24,6 +26,14 @@ tests: $(app)
 
 unit-tests: $(app)
 	./$(app) unit-tests.tc
+
+invalid-tests: $(app)
+	@set -e; for test in invalid-tests/*.tc; do \
+		if ./$(app) "$$test" >/dev/null 2>&1; then \
+			echo "expected $$test to fail"; exit 1; \
+		fi; \
+		echo "$$test: rejected"; \
+	done
 
 bin: $(app)
 	cp -u -p $(app) ~/.local/bin/

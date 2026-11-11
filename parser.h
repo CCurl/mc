@@ -456,6 +456,7 @@ void parse_function_definition(const char *name, int return_type) {
     functions[index].returns_value = return_type != TYPE_VOID;
     parse_parameters(index);
     if (strcmp(name, "main") == 0) {
+        if (return_type == TYPE_CHAR) { error("-main must return int or void-"); }
         if (functions[index].num_parameters != 0) { error("-main must not have parameters-"); }
         main_function = index;
     }
@@ -502,8 +503,8 @@ void validate_call(node *call) {
         }
         if (is_array && arg->o1->type != function->parameter_types[i] &&
             !arg->o1->is_string) {
-            fail("-argument %d to %s must be an %s array-\n", i + 1, function->name,
-                 function->parameter_types[i] == TYPE_CHAR ? "char" : "int");
+            fail("-argument %d to %s must be %s array-\n", i + 1, function->name,
+                 function->parameter_types[i] == TYPE_CHAR ? "a char" : "an int");
         }
         if (!is_array && function->parameter_types[i] == TYPE_CHAR) {
             arg->o1 = char_conversion(arg->o1);

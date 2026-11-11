@@ -38,10 +38,10 @@ flowchart LR
 
 ## 2. Parser: builds an AST, not code
 
-- `defs()` handles top-level globals and functions. `variable_declarations()` handles global scalars and arrays, including string initializers.
-- `parse_function_definition()` records each function in `functions[]`, including its parameters, array flags, locals, and body. A function's index is assigned on first reference, so calls can precede definitions.
+- `defs()` handles top-level globals and functions. `variable_declarations()` handles global `int` and `char` scalars and arrays, including string initializers.
+- `parse_function_definition()` records each function in `functions[]`, including its return type, parameter types and array flags, locals, and body. A function's index is assigned on first reference, so calls can precede definitions.
 - Statements and expressions become `node` structs in the fixed pool `nodes[MAX_NODES]`. Each node has a `kind`, up to three children (`o1`, `o2`, `o3`), and a `val`.
-- Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Globals use absolute slot numbers in `globals[]`.
+- Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Globals use absolute slot numbers in `globals[]`. The parser records each scalar or array element's `int`/`char` type for conversions and array argument checks.
 - Local slots follow the parameters in a function frame. Their encoded local index includes the function's parameter count; parameter indexes are relative to the start of the frame.
 - Each `statement()` call builds one node tree, for example `IF1`, `WHILE`, `DO`, `SEQ`, `EXPR`, `RETURN_NODE`, or `VOID_RETURN`.
 - Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. `expr()` accepts assignment only when the left side is `VAR`, `LOCAL`, or `ARRAY_GET`.
@@ -53,8 +53,8 @@ flowchart LR
 - A `main` must exist and must take no parameters.
 - Every called function must be defined.
 - Call arity is checked against each function's parameter count.
-- `validate_node()` and `validate_call()` check that array references appear only as array arguments, and that array and scalar arguments match the parameter types.
-- `returns_on_all_paths()` checks that `int` functions return on every path.
+- `validate_node()` and `validate_call()` check that array references appear only as array arguments, and that array element types match (with a compatibility exception for string literals passed to existing `int[]` routines).
+- `returns_on_all_paths()` checks that `int` and `char` functions return on every path.
 - `prog->o1` is set to `main`'s body.
 
 Strings are lexed into `string_values[]`, then materialized during parsing. `allocate_string_literal()` reserves anonymous global storage laid out as `[length, chars..., 0]` and writes it directly into `globals[]`.
@@ -76,6 +76,7 @@ The output is a flat byte array `vm[MAX_CODE]` (65536 bytes). Opcodes are one by
 | Call | `ICALL` + 2-byte address + 2-byte argc + 2-byte locals count (7 bytes total) |
 | Return | `IRET` |
 | Built-in `emit` | `SYS` + `SYS_EMIT` |
+| Char conversion | `IC2C` narrows the stack value to signed 8-bit `char` |
 
 Notable generation details:
 
@@ -91,7 +92,7 @@ Notable generation details:
 - `vm[]`: the code bytes, starting with the call to `main`.
 - `globals[]`: global values. The C runtime zero-initializes this static array; parsing writes string initializer data into it.
 - `num_global_slots`: the number of global slots in use.
-- VM values and global slots use C `int` (32 bits on the configured Linux and Visual Studio targets).
+- VM values and global slots use C `int` (32 bits on the configured Linux and Visual Studio targets). `char` values are signed 8-bit values in those same slots; generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts and scalar initializers are not supported.
 
 `run()` in `vm.h` starts the interpreter by:
 
