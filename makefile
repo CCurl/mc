@@ -26,7 +26,7 @@ invalid-tests: $(app)
 		if ./$(app) "$$test" >/dev/null 2>&1; then \
 			echo "expected $$test to fail"; exit 1; \
 		fi; \
-		echo "$$test: rejected"; \
+		echo "$$test: rejected (as expected)"; \
 	done
 
 bin: $(app)
