@@ -148,12 +148,28 @@
     <None Include="LICENSE" />
     <None Include="makefile" />
     <None Include="README.md" />
-    <None Include="test1.tc" />
-    <None Include="tests.tc" />
+    <None Include="TechnicalOverview.md" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="system.c" />
+    <ClInclude Include="dis.c">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="gen.c">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="lexer.c">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+    <ClInclude Include="parser.c">
+      <FileType>CppCode</FileType>
+    </ClInclude>
     <ClCompile Include="tiny-c.c" />
+    <ClInclude Include="vm.c">
+      <FileType>CppCode</FileType>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="tiny-c.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
