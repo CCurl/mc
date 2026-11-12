@@ -47,7 +47,7 @@ void emitConst(int v) {
     else { g(IP4); g4(v); }
 }
 
-/* Returns 1 and sets *out if x is a constant expression that can be folded. */
+// Returns 1 and sets *out if x is a constant expression that can be folded.
 int fold(node *x, int *out) {
     int a, b;
     if (!x) { return 0; }
@@ -72,8 +72,8 @@ int fold(node *x, int *out) {
     }
 }
 
-/* Emits an in-place step of an int scalar: LINC/LDEC for locals and parameters, GINC/GDEC
-   for globals. Returns 0 and emits nothing for byte targets. */
+// Emits an in-place step of an int scalar: LINC/LDEC for locals and parameters, GINC/GDEC
+// for globals. Returns 0 and emits nothing for byte targets.
 int emitStep(node *target, int delta) {
     if (target->type == TYPE_BYTE) { return 0; }
     if (target->kind == LOCAL) { g(delta > 0 ? LINC : LDEC); g4(target->val); }
@@ -82,7 +82,7 @@ int emitStep(node *target, int delta) {
     return 1;
 }
 
-/* Stores the top of stack into a scalar target; the value stays on the stack. */
+// Stores the top of stack into a scalar target; the value stays on the stack.
 void emitStore(node *t) {
     if (t->kind == LOCAL) { g(LSTORE); g4(t->val); }
     else if (t->val < 0) { g(PSTORE); g4(-t->val - 1); }
@@ -91,7 +91,7 @@ void emitStore(node *t) {
 }
 
 void c(node *x) {
-    byte *p1, *p2;
+    byte *p1, *p2;  // Patch pointers for call fixups
     int folded;
     if (!x) { return; }
     if (x->kind != CST && fold(x, &folded)) { emitConst(folded); return; }
