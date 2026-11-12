@@ -4,7 +4,7 @@
 
 /*
 void dis() {
-    code *pc = &vm[0];
+    byte *pc = &vm[0];
     FILE *fp = fopen("list.txt", "wt");
   again:
     if (here <= pc) { fclose(fp); return; }

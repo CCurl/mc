@@ -3,25 +3,24 @@
 
 #include "tiny-c.h"
 
-typedef char code;
-code vm[MAX_CODE], *here = vm;
+byte vm[MAX_CODE], *here = vm;
 
-struct call_fixup_s { code *operand; int functionIndex; };
+struct call_fixup_s { byte *operand; int functionIndex; };
 struct call_fixup_s callFixups[MAX_CALL_FIXUPS];
 int numCallFixups;
 
 void checkSize(int sz) { if (here + sz > vm + MAX_CODE) { error("-program too large-"); } }
-void g(code c)   { checkSize(1); *here++ = c; }
+void g(byte c)   { checkSize(1); *here++ = c; }
 void g2(short c) { checkSize(2); *(short *)here = c; here += 2; }
 void g4(int c)   { checkSize(4); *(int *)here = c; here += 4; }
 
-code *hole() {
+byte *hole() {
     checkSize(4);
-    code *p = here;
+    byte *p = here;
     here += 4;
     return p;
 }
-void fix(code *src, code *dst) {
+void fix(byte *src, byte *dst) {
     *(int *)src = (int)(dst - src);
 }
 
@@ -92,7 +91,7 @@ void emitStore(node *t) {
 }
 
 void c(node *x) {
-    code *p1, *p2;
+    byte *p1, *p2;
     int folded;
     if (!x) { return; }
     if (x->kind != CST && fold(x, &folded)) { emitConst(folded); return; }

@@ -20,12 +20,13 @@ flowchart LR
 ## Source layout
 
 - `tiny-c.c`: includes `tiny-c.h`, then `lexer.c`, `parser.c`, `gen.c`, and `vm.c` in that order; defines `compile()` and `main()`. It is the only file the makefile compiles. The module files are `#include`d into it, so the whole compiler is one translation unit and the modules share its globals and functions without `extern` declarations.
-- `tiny-c.h`: shared limits (including `ID_NAME_LENGTH` and `STACK_SIZE`), token/node/opcode definitions, the `node` and `function_s` structs, the `byte` typedef, and VM macros.
+- `tiny-c.h`: shared types, structures, sizes, and defines
 - `lexer.c`: tokenization, global variable storage, the source/include stack, and error reporting.
 - `parser.c`: AST nodes, function and variable tables, and program checks.
 - `gen.c`: bytecode generation, constant folding, and call patching.
 - `vm.c`: the `run()` interpreter.
-- `lib/*.tc`: Tiny-C source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. `dis.c` is an unused, out-of-date disassembler, and it is entirely commented out.
+- `dis.c`: an unused, out-of-date disassembler, and it is entirely commented out.
+- `lib/*.tc`: Tiny-C source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
 
 ## 1. Lexer
 
@@ -155,17 +156,20 @@ When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0
 ## 7. Limitations
 
 - **Fixed limits.**
-  - `MAX_CODE` is 65536 bytes
-  - `MAX_NODES` is 16384
-  - `MAX_FUNCTIONS` is 1024
-  - `MAX_NAMES` is 2048 global names
-  - `MAX_GLOBAL_SLOTS` is 256000 `int` slots
-  - `MAX_GLOBAL_BYTES` is 256000 bytes
-  - `MAX_STRING_LENGTH` is 1024 characters
-  - `MAX_LOCALS` is 256 per function
-  - `MAX_PARAMETERS` is 64 per function
-  - `MAX_CALL_FIXUPS` is `MAX_NODES`
-  - the VM operand stack and return stack are each `STACK_SIZE` (1024) entries.
-- **Local arrays.** Locals are scalars only. `int` and `byte` local declarations do not accept `[...]`.
-- **Names and literals.** Identifiers are limited to 63 characters (`ID_NAME_LENGTH` is 64, including the terminating zero). Integer literals are not range-checked, so overflow is not detected.
-- **Include limits.** `MAX_INCLUDE_DEPTH` is 16 and `MAX_INCLUDED_FILES` is 128. Paths are at most 63 characters (`MAX_PATH_LENGTH` is 64).
+  - `ID_NAME_LENGTH` is 64. Used for variable and parameter names.
+  - `MAX_CODE` is 65536 bytes.
+  - `MAX_NODES` is 16384 AST nodes.
+  - `MAX_FUNCTIONS` is 1024 functions.
+  - `MAX_NAMES` is 2048 global variable names.
+  - `MAX_GLOBAL_SLOTS` is 256000 `int` slots.
+  - `MAX_GLOBAL_BYTES` is 256000 bytes.
+  - `MAX_STRING_LENGTH` is 1024 characters.
+  - `MAX_LOCALS` is 256 per function.
+  - `MAX_PARAMETERS` is 64 per function.
+  - `MAX_CALL_FIXUPS` is the same as `MAX_NODES`.
+  - `MAX_PATH_LENGTH` is 64 chars.
+  - `MAX_INCLUDE_DEPTH` is 16.
+  - `MAX_INCLUDED_FILES` is 128.
+  - `STACK_SIZE` is 1024 entries. The size of the VM operand and return stacks.
+
+- **Local variables.** Locals are scalars only. Local arrays are not supported.

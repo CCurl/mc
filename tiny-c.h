@@ -42,8 +42,9 @@ enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
 
 
 // ---------------------------------------------------------------------------
-// Shared structs ...
+// Shared types and structs ...
 typedef unsigned char byte;
+
 struct node_s {
     int kind;
     struct node_s *o1, *o2, *o3;

@@ -3,15 +3,15 @@
 
 #include "tiny-c.h"
 
-struct return_s { code *pc; int frameBase; };
+struct return_s { byte *pc; int frameBase; };
 
-short f2(code *a) { return *(short *)a; }
-int f4(code *a) { return *(int *)a; }
+short f2(byte *a) { return *(short *)a; }
+int f4(byte *a) { return *(int *)a; }
 
 void run() {
     /* Each frame's parameters and locals sit on st[] starting at frameBase. */
     int st[STACK_SIZE], sp = 0, frameBase = 1, returnSp = 0;
-    code *pc = vm;
+    byte *pc = vm;
     struct return_s returnStack[STACK_SIZE];
 
     again:
