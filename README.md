@@ -36,7 +36,7 @@
  *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math> | <math> "!=" <math>
  *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)
  *  <math_op> ::= "+" | "-" | "*" | "/" | "%"
- *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <int> | <char> | <string> | <paren_expr> | "-" <term>
+ *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <incdec> | <int> | <char> | <string> | <paren_expr> | "-" <term>
  *  <func_call> ::= (<int_func_id> | <byte_func_id>) "(" [ <expr> { "," <expr> } ] ")"
  *  <void_func_call> ::= <void_func_id> "(" [ <expr> { "," <expr> } ] ")"
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
