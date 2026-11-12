@@ -6,6 +6,8 @@ include "lib/util.tc";
 
 int failures, passes;
 int g_zero, g_a, g_b;
+int g_init = 7, g_init_neg = -3, g_init_expr = 2 * 3 + 1;
+byte g_byte_init = 258, g_byte_neg = -1;
 byte g_byte;
 byte g_bytes[] = "abc";
 int g_arr[4];
@@ -18,6 +20,17 @@ byte g_esc2[] = "\r\e\'";
 byte g_esc3[] = "a\0b";
 byte g_cat[8] = "ab";
 byte g_long[] = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
+int global_int, another_global, _leading2, UpperCase;
+int char_code, newline_code, escape_code, quote_code, backslash_code, output_code, mod_result;
+int global_arr[10], nums[5];
+byte cat[10] = "cat";
+byte empty_string[] = "";
+byte escaped_string[] = "A\n\"\\\0";
+byte greeting[] = "\ncat";
+int g_big_pad[40000];
+int g_after_big = 9;
+byte g_big_bytes[40000];
+byte g_after_bytes = 3;
 
 void check(byte name[], int ok) {
     print(name);
@@ -55,6 +68,19 @@ void test_globals() {
     check("backslash escape", g_esc[4] == '\\');
     check("quote escape", g_esc[5] == '"');
     check("escape string terminator", g_esc[6] == 0);
+    check("int global scalar initializer", g_init == 7);
+    check("negative int global initializer", g_init_neg == -3);
+    check("constant expression global initializer", g_init_expr == 7);
+    check("byte global initializer narrows", g_byte_init == 2);
+    check("negative byte global initializer wraps", g_byte_neg == 255);
+    g_big_pad[39999] = 4;
+    check("int global above slot 32767 is addressable", g_big_pad[39999] == 4);
+    check("int global above slot 32767 does not alias lower slots", g_big_pad[14463] == 0);
+    check("int global above slot 32767 keeps its value", g_after_big == 9);
+    g_big_bytes[39999] = 200;
+    check("byte global above byte 32767 is addressable", g_big_bytes[39999] == 200);
+    check("byte global above byte 32767 does not alias lower bytes", g_big_bytes[14463] == 0);
+    check("byte global above byte 32767 keeps its value", g_after_bytes == 3);
 }
 
 // Integer and character literals, unary minus.
@@ -360,7 +386,32 @@ void test_calls() {
     check("emit in argument list", twice(emit('\n')) == 20);
 }
 
+int local_inits(int x) {
+    int a = x, b = a + 1;
+    byte c = 300;
+    return a + b + c;
+}
+
+int byte_local_from_param(int x) {
+    byte b = x;
+    return b;
+}
+
+int init_in_loop(int n) {
+    int total = 0, i = 0;
+    while (i < n) {
+        int step = i * 2;
+        total = total + step;
+        i = i + 1;
+    }
+    return total;
+}
+
 void test_locals() {
+    check("local initializers see earlier declarators", local_inits(1) == 47);
+    check("byte local initializer narrows", byte_local_from_param(300) == 44);
+    check("negative byte local initializer wraps", byte_local_from_param(-1) == 255);
+    check("local initializer runs each loop pass", init_in_loop(4) == 12);
     check("locals across statements", locals_mix(1, 2, 3) == 404);
     check("declaration after statements", late_decl(3) == 8);
     g_a = 77;
@@ -436,6 +487,207 @@ void test_long_jumps() {
     check("if body over 127 bytes skipped", long_jump_if(0) == 0);
 }
 
+void nop() {}
+
+void return_early(int should_return) {
+    if (should_return) { return; }
+    global_int = global_int + 100;
+}
+
+void set_global() { global_int = 42; }
+int get_global() { return global_int; }
+
+void write_second(int value, int items[]) {
+    items[1] = value;
+}
+
+void statement_forms(int limit) {
+    int i;
+    i = 0;
+    ;
+    while (i < limit) i = i + 1;
+    do i = i - 1; while (i > 0);
+    if (i == 0) global_int = global_int + 1;
+    if (i > 0) ; else global_int = global_int + 1;
+}
+
+int identity(int x) { return x; }
+void cr() { emit('\n'); }
+
+int mul(int left, int right) { return left * right; }
+int div(int left, int right) { return left / right; }
+
+int sum_to(int n) {
+    int total, i;
+    total = 0;
+    i = 1;
+    while (i < n + 1) {
+        total = total + i;
+        i = i + 1;
+    }
+    return total;
+}
+
+int fib(int n) {
+    n = n-1;
+    if (n < 2) { return 1; }
+    return (fib(n) + fib(n-1));
+}
+
+int array_sum(int values[], int count) {
+    int total, i;
+    total = 0;
+    i = 0;
+    while (i < count) {
+        total = total + values[i];
+        i = i + 1;
+    }
+    return total;
+}
+
+int set_first(int items[], int value) {
+    items[0] = value;
+    return items[0];
+}
+
+int max2(int a, int b) {
+    if (a > b) { return a; }
+    else { return b; }
+}
+
+int parity(int x) {
+    if (x < 0) { x = -x; }
+    if (x == 0) { return 0; }
+    return x % 2;
+}
+
+int isFalse(int value) { return value == 0; }
+
+int modTest(int a, int b, int c) { return (a % b) == c; }
+
+void test_program_flow() {
+    int local_a;
+    int local_b;
+    int local_c;
+    int local_d;
+    int local_e;
+    int i, j;
+    printNum(12345, 16); emit('\n');
+    printNum(-12345, 10);
+
+    global_int = 7;
+    global_arr[0] = 10;
+    global_arr[1] = 20;
+    global_arr[2] = 30;
+    global_arr[3] = 40;
+    local_a = global_arr[0];
+    write_second(8, global_arr);
+    _leading2 = (2 + 3) * 4;
+    UpperCase = -1;
+    char_code = 'A';
+    newline_code = '\n';
+    escape_code = '\e';
+    quote_code = '\'';
+    backslash_code = '\\';
+    local_a = strlen(greeting);
+    local_b = greeting[3];
+    global_int = another_global = 7;
+
+    nop();
+    return_early(1);
+    set_global();
+    local_a = get_global();
+    statement_forms(3);
+    print(greeting);
+    print("\nthis is a test");
+    output_code = emit('!');
+    print("\nhi there\n");
+
+    local_a = identity(123);
+    local_b = add(3, 4);
+    local_c = sub(9, 4);
+    local_d = mul(6, 7);
+    local_e = div(20, 5);
+
+    another_global = local_a + local_b + local_c + local_d + local_e + global_int;
+
+    print("sum to 10: "); printNum(sum_to(10), 10); emit('\n');
+    local_b = fact(5);
+
+    nums[0] = 5;
+    nums[1] = 10;
+    nums[2] = 15;
+    nums[3] = 20;
+    nums[4] = 25;
+    write_second(identity(2 + 1), nums);
+    i = 0;
+    nums[i] = nums[i] + 1;
+
+    local_a = set_first(nums, 99);
+    local_b = array_sum(nums, 5);
+    local_c = max2(11, 7);
+    local_d = parity(13);
+
+    i = 0;
+    j = 0;
+    while (i < 5) {
+        j = j + nums[i];
+        i = i + 1;
+    }
+
+    do {
+        local_e = local_e + 1;
+    } while (local_e < 20);
+
+    if (local_c == 11) { local_a = 1; }
+    else { local_a = 2; }
+
+    if (local_d < 2) { local_b = local_b + 1; }
+
+    strcatc(cat, 's');
+    print(cat); cr();
+
+    check("addition", add(3, 4) == 7);
+    check("subtraction", sub(9, 4) == 5);
+    check("multiplication", mul(6, 7) == 42);
+    check("division", div(20, 5) == 4);
+    check("modulo", modTest(123, 100, 23));
+    check("negative modulo", -7 % 3 == -1);
+    check("equality", 7 == 7);
+    check("equality false", isFalse(7 == 8));
+    check("inequality true", 7 != 8);
+    check("inequality false", isFalse(7 != 7));
+    check("character literal", char_code == 65);
+    check("character escape", newline_code == 10);
+    check("escape character", escape_code == 27);
+    check("string length", strlen("ABC") == 3);
+    check("string first character", greeting[3] == 'c');
+    check("string terminator", greeting[6] == 0);
+    check("empty string length", empty_string[0] == 0);
+    check("empty string terminator", empty_string[2] == 0);
+    check("global array reference", global_arr[1] == 8);
+    check("recursive function fib(10)", fib(10) == 55);
+    check("recursive function fact(5)", fact(5) == 120);
+    check("while loop", j == 162);
+    check("do while loop", local_e == 20);
+    check("if else", local_c == 11);
+    check("emit return", output_code == '!');
+    check("void side effects", get_global() == 44);
+    check("void early return", get_global() == 44);
+}
+
+int mil(int n) { return n * 1000 * 1000; }
+
+void test_benchmark() {
+    int i, n;
+    i = mil(100);
+    while (i) { i = i - 1; }
+    check("100 million iteration while loop completes", i == 0);
+    i = n = 0;
+    do { i = i + (n = n + 1); } while (i < 1000);
+    check("do while sums to 1000 in 45 passes", n == 45);
+}
+
 int main() {
     test_globals();
     test_literals();
@@ -453,6 +705,8 @@ int main() {
     test_literals2();
     test_long_jumps();
     test_emit();
+    test_program_flow();
+    test_benchmark();
     print("\npassed: "); printNum(passes, 10);
     print(", failed: "); printNum(failures, 10);
     emit('\n');

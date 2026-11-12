@@ -1,2 +1,0 @@
-byte value = 'a';
-int main() { return 0; }

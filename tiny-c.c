@@ -12,16 +12,16 @@
 #include "tiny-c.h"
 
 // ---------------------------------------------------------------------------
-#include "lexer.h"
-#include "parser.h"
-#include "gen.h"
-#include "vm.h"
+#include "lexer.c"
+#include "parser.c"
+#include "gen.c"
+#include "vm.c"
 
 void compile() { c(program()); }
 
 int main(int argc, char* argv[]) {
-    if (argc > 1) { open_source(argv[1]); }
-    else { open_source("unit-tests.tc"); }
+    if (argc > 1) { openSource(argv[1]); }
+    else { openSource("unit-tests.tc"); }
     compile();
     run();
     return 0;

@@ -7,10 +7,10 @@
 #define MAX_PATH_LENGTH        64
 #define MAX_INCLUDE_DEPTH      16
 #define MAX_INCLUDED_FILES    128
-#define MAX_NAMES            1024
+#define MAX_NAMES            2048
 #define MAX_STRING_LENGTH    1024
-#define MAX_NODES            4096
-#define MAX_FUNCTIONS         256
+#define MAX_NODES           16384
+#define MAX_FUNCTIONS        1024
 #define MAX_PARAMETERS         64
 #define MAX_LOCALS            256
 #define MAX_CODE            65536
@@ -23,12 +23,13 @@
 
 // ---------------------------------------------------------------------------
 // For the lexer ...
-enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM, BYTE_SYM, // 0 -> 6
-        LBRA, RBRA, LPAR, RPAR, PLUS,                                  // 7 -> 11
-        MINUS, STAR, SLASH, MODULO,                             // 12 -> 15
-        LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                 // 16 -> 21
-        INT, ID, EOI, LBRACKET, RBRACKET, COMMA, RETURN_SYM,    // 22 -> 28
-	CHAR_LITERAL, STRING_LITERAL                            // 29 -> 30
+enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM, BYTE_SYM, EMIT_SYM,  // 0 -> 7
+        RETURN_SYM, INCLUDE_SYM,                                       // 8 -> 9
+        LBRA, RBRA, LPAR, RPAR, PLUS,                                  // 10 -> 14
+        MINUS, STAR, SLASH, MODULO,                             // 15 -> 18
+        LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                 // 19 -> 24
+        INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                // 25 -> 30
+	CHAR_LITERAL, STRING_LITERAL                            // 31 -> 32
 };
 enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ struct node_s {
     int type;
 };
 typedef struct node_s node;
+typedef unsigned char byte;
 
 // ---------------------------------------------------------------------------
 // For the code generator ...

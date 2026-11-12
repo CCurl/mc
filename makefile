@@ -1,6 +1,6 @@
 app := tc
 
-.PHONY: all clean test1 tests unit-tests invalid-tests
+.PHONY: all clean unit-tests invalid-tests
 
 CXX := clang
 CXXFLAGS := -m32 -O3 -D IS_LINUX
@@ -12,17 +12,11 @@ LDLIBS   := -lm
 all: $(app)
 
 $(app): $(srcfiles) $(incfiles)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) $(srcfiles) $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) tiny-c.c $(LDLIBS)
 	ls -l $(app)
 
 clean:
 	rm -f $(app)
-
-test1: $(app)
-	./$(app) test1.tc
-
-tests: $(app)
-	./$(app) tests.tc
 
 unit-tests: $(app)
 	./$(app) unit-tests.tc
