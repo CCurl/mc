@@ -15,6 +15,7 @@ byte gPad[10] = "hi";
 byte gEmpty[] = "";
 byte gEsc[] = "\n\t\\\"";
 int gCounter;
+int gInc;
 byte gEsc2[] = "\r\e\'";
 byte gEsc3[] = "a\0b";
 byte gCat[8] = "ab";
@@ -687,6 +688,27 @@ void testBenchmark() {
     check("do while sums to 1000 in 45 passes", n == 45);
 }
 
+int incParam(int n) { n++; return n; }
+int incLocal() { int k = 3; k--; ++k; return k; }
+int incByte() { byte b = 255; b++; return b; }
+int decByte() { byte b = 0; --b; return b; }
+
+void testIncDec() {
+    int old;
+    gInc = 5;
+    gInc++;
+    check("postfix increment statement on global", gInc == 6);
+    old = gInc++;
+    check("postfix returns old value", old == 6);
+    check("postfix updates global", gInc == 7);
+    check("prefix returns new value", (++gInc) == 8);
+    check("prefix decrement on global", (--gInc) == 7);
+    check("decrement and increment on local", incLocal() == 3);
+    check("increment on parameter", incParam(4) == 5);
+    check("byte increment wraps", incByte() == 0);
+    check("byte decrement wraps", decByte() == 255);
+}
+
 int main() {
     testGlobals();
     testLiterals();
@@ -700,6 +722,7 @@ int main() {
     testArrays2();
     testCalls();
     testLocals();
+    testIncDec();
     testRecursion();
     testLiterals2();
     testLongJumps();

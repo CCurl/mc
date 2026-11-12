@@ -30,7 +30,7 @@ flowchart LR
 ## 1. Lexer
 
 - `nextCh()` reads from `inputFp`, or stdin if it is null, and counts newlines in `lineNumber`.
-- `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, and `RETURN_SYM`.
+- `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, `PLUS_PLUS`, and `RETURN_SYM`. `++` and `--` are single tokens, so `a--b` is a syntax error; write `a - -b`.
 - Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `tiny-c.h` must stay in the same order. `include` is a keyword, and when `nextSym()` sees it, it calls `includeFile()` instead of returning a token. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, `return`, and `include`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
 - `include "path";` is handled in the lexer. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
 - `fail()` prints `path:line:` before every compile error.
@@ -47,6 +47,7 @@ flowchart LR
 - A local declaration with an initializer becomes a `SET` to the local, wrapped in `EXPR` and sequenced with `SEQ`. `byte` locals convert the value first. The initializer runs each time the declaration executes, so it works inside loops.
 - Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. `expr()` accepts assignment only when the left side is `VAR`, `LOCAL`, or `ARRAY_GET`.
 - Unary minus is lowered to `0 - term`. Integer literals are never negative.
+- `x++`, `x--`, `++x`, and `--x` apply to scalar locals, parameters, and globals. The parser builds `POST_INC` or `PRE_INC` nodes; postfix yields the old value and prefix the new. Applying them to arrays or literals is an error.
 - Comparison operators (`<`, `>`, `==`, `!=`) produce `1` when true and `0` when false.
 
 ## 3. Program-level checks (`program()`)
@@ -80,6 +81,7 @@ The output is a flat byte array `vm[MAX_CODE]` (65536 bytes). Opcodes are one by
 | Call | `ICALL` + 4-byte address + 4-byte argc + 4-byte locals count (13 bytes total) |
 | Return | `IRET` |
 | Built-in `emit` | `SYS` + `SYS_EMIT` |
+| Fused increment | `LINC`, `LDEC` (local or parameter slot) and `GINC`, `GDEC` (global slot) each take only a 4-byte slot and add or subtract one. They are used for `++` and `--` on `int` variables in statements and in expressions: postfix loads the old value first, then steps, and prefix steps first, then loads. `byte` variables use load, add, narrow (`I2B`), and store. |
 | Byte conversion | `I2B` narrows the stack value to unsigned 8-bit `byte` (0 to 255) |
 
 Notable generation details:
@@ -154,7 +156,7 @@ When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0
 
 - **Fixed limits.**
   - `MAX_CODE` is 65536 bytes
-  - `MAX_NODES` is 16384 (exceeding it stops compilation with `-too many syntax nodes-`)
+  - `MAX_NODES` is 16384
   - `MAX_FUNCTIONS` is 1024
   - `MAX_NAMES` is 2048 global names
   - `MAX_GLOBAL_SLOTS` is 256000 `int` slots

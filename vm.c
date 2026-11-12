@@ -59,6 +59,10 @@ void run() {
         ACASE JMP   : pc += f4(pc);
         ACASE JZ    : if (st[sp--] == 0) pc += f4(pc); else pc += 4;
         ACASE JNZ   : if (st[sp--] != 0) pc += f4(pc); else pc += 4;
+        ACASE LINC  : st[frameBase + f4(pc)]++; pc += 4;
+        ACASE LDEC  : st[frameBase + f4(pc)]--; pc += 4;
+        ACASE GINC  : globals[f4(pc)]++; pc += 4;
+        ACASE GDEC  : globals[f4(pc)]--; pc += 4;
         ACASE ICALL : { int argc = f4(pc + 4);
                         int locals = f4(pc + 8);
                         if (returnSp >= 1000) { error("-call stack overflow-"); }

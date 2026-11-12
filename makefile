@@ -30,4 +30,4 @@ invalid-tests: $(app)
 	done
 
 bin: $(app)
-	cp -u -p $(app) ~/.local/bin/
+	cp -u -p $(app) ~/bin/

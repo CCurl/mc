@@ -29,14 +29,14 @@ enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM, BYTE_SYM, EMIT_SY
         MINUS, STAR, SLASH, MODULO,                             // 15 -> 18
         LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                 // 19 -> 24
         INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                // 25 -> 30
-	CHAR_LITERAL, STRING_LITERAL                            // 31 -> 32
+	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS                            // 31 -> 34
 };
 enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
 // ---------------------------------------------------------------------------
 // For the parser ...
 enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
        ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
-       IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT };
+       IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC };
 
 struct node_s {
     int kind;
@@ -52,7 +52,7 @@ typedef unsigned char byte;
 enum { IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
         IMOD, ILT, IGT, IEQ, INE, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
         PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS, I2B,
-        BGET, BSET, BAFETCH, BASTORE, PBAFETCH, PBASTORE };
+        BGET, BSET, BAFETCH, BASTORE, PBAFETCH, PBASTORE, LINC, LDEC, GINC, GDEC };
 
 enum { BUILTIN_EMIT };
 enum { SYS_EMIT };

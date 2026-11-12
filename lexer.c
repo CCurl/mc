@@ -254,8 +254,8 @@ void nextSym() {
       case '}': nextCh(); sym = RBRA;  break;
       case '(': nextCh(); sym = LPAR;  break;
       case ')': nextCh(); sym = RPAR;  break;
-      case '+': nextCh(); sym = PLUS;  break;
-      case '-': nextCh(); sym = MINUS; break;
+      case '+': nextCh(); if (ch == '+') { nextCh(); sym = PLUS_PLUS; } else { sym = PLUS; } break;
+      case '-': nextCh(); if (ch == '-') { nextCh(); sym = MINUS_MINUS; } else { sym = MINUS; } break;
       case '*': nextCh(); sym = STAR;  break;
       case '/':
         nextCh();

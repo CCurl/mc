@@ -136,6 +136,27 @@ int arrayElementType(const char *name) {
 }
 
 /* <term> ::= <id> | <id> "(" [ <expr> { "," <expr> } ] ")" | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> */
+/* The scalar variable that ++ or -- changes: a local, a parameter, or a global. */
+node *scalarTarget(const char *name) {
+    int local = localIndex(name);
+    int parameter = parameterIndex(name);
+    node *x;
+    if (local >= 0) {
+        x = newNode(LOCAL);
+        x->val = functions[currentFunction].numParameters + local;
+        x->type = functions[currentFunction].localTypes[local];
+    } else if (parameter >= 0) {
+        x = newNode(VAR);
+        x->val = variableIndex(name);
+        x->type = functions[currentFunction].parameterTypes[parameter];
+    } else {
+        x = newNode(VAR);
+        x->val = variableIndex(name);
+        x->type = variableTypes[findVariable(name)];
+    }
+    return x;
+}
+
 node *term() {
   node *x;
   if (sym == MINUS) {
@@ -143,6 +164,17 @@ node *term() {
       x = newNode(CST);
       x->val = 0;
       return gen(SUB, x, term());
+  } else if (sym == PLUS_PLUS || sym == MINUS_MINUS) {
+      int delta = sym == PLUS_PLUS ? 1 : -1;
+      nextSym();
+      if (sym != ID) { syntaxError(); }
+      char name[sizeof(idName)];
+      strcpy(name, idName);
+      nextSym();
+      x = newNode(PRE_INC);
+      x->o1 = scalarTarget(name);
+      x->val = delta;
+      x->type = x->o1->type;
   } else if (sym == ID || sym == EMIT_SYM) {
       char name[sizeof(idName)];
       strcpy(name, idName);
@@ -185,6 +217,15 @@ node *term() {
             x=newNode(VAR);
             x->val=variableIndex(name);
             x->type = variableTypes[variable];
+          }
+          if (sym == PLUS_PLUS || sym == MINUS_MINUS) {
+              if (x->kind != VAR && x->kind != LOCAL) { error("-++ and -- need a scalar variable-"); }
+              node *post = newNode(POST_INC);
+              post->o1 = x;
+              post->val = sym == PLUS_PLUS ? 1 : -1;
+              post->type = x->type;
+              nextSym();
+              x = post;
           }
       }
   } else if (sym == INT || sym == CHAR_LITERAL) {

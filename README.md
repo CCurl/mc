@@ -32,6 +32,7 @@
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
  *  <expr> ::= <test> | <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr>
+ *  <incdec> ::= ("++" | "--") <scalar_id> | <scalar_id> ("++" | "--")   (scalar locals, parameters, and globals only; postfix yields the old value, prefix the new)
  *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math> | <math> "!=" <math>
  *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)
  *  <math_op> ::= "+" | "-" | "*" | "/" | "%"
@@ -75,9 +76,9 @@
  */
 ```
 
-## Testing
+## Building and Testing
 
 - `make` builds `tc` with clang and `-m32`.
-- `make bin` copies `tc` to `~/.local/bin/`.
+- `make bin` copies `tc` to `~/bin/`.
 - `make unit-tests` runs `unit-tests.tc`, which holds the program-level checks, and prints `passed: N, failed: M`.
 - `make invalid-tests` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.

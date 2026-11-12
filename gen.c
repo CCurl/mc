@@ -73,6 +73,24 @@ int fold(node *x, int *out) {
     }
 }
 
+/* Emits an in-place step of an int scalar: LINC/LDEC for locals and parameters, GINC/GDEC
+   for globals. Returns 0 and emits nothing for byte targets. */
+int emitStep(node *target, int delta) {
+    if (target->type == TYPE_BYTE) { return 0; }
+    if (target->kind == LOCAL) { g(delta > 0 ? LINC : LDEC); g4(target->val); }
+    else if (target->val < 0) { g(delta > 0 ? LINC : LDEC); g4(-target->val - 1); }
+    else { g(delta > 0 ? GINC : GDEC); g4(target->val); }
+    return 1;
+}
+
+/* Stores the top of stack into a scalar target; the value stays on the stack. */
+void emitStore(node *t) {
+    if (t->kind == LOCAL) { g(LSTORE); g4(t->val); }
+    else if (t->val < 0) { g(PSTORE); g4(-t->val - 1); }
+    else if (t->type == TYPE_BYTE) { g(BSET); g4(t->val); }
+    else { g(ISTORE); g4(t->val); }
+}
+
 void c(node *x) {
     code *p1, *p2;
     int folded;
@@ -116,11 +134,16 @@ void c(node *x) {
         case GT   : c(x->o1);  c(x->o2); g(IGT); break;
         case EQ   : c(x->o1);  c(x->o2); g(IEQ); break;
         case NE   : c(x->o1);  c(x->o2); g(INE); break;
-        case SET  : c(x->o2);
-            if (x->o1->kind == LOCAL) { g(LSTORE); g4(x->o1->val); }
-            else if (x->o1->val < 0) { g(PSTORE); g4(-x->o1->val - 1); }
-            else if (x->o1->type == TYPE_BYTE) { g(BSET); g4(x->o1->val); }
-            else { g(ISTORE); g4(x->o1->val); }
+        case SET  : c(x->o2); emitStore(x->o1); break;
+        case PRE_INC:
+            if (x->type != TYPE_BYTE) { emitStep(x->o1, x->val); c(x->o1); break; }
+            c(x->o1); emitConst(x->val); g(IADD); g(I2B);
+            emitStore(x->o1);
+            break;
+        case POST_INC:
+            if (x->type != TYPE_BYTE) { c(x->o1); emitStep(x->o1, x->val); break; }
+            c(x->o1); c(x->o1); emitConst(x->val); g(IADD); g(I2B);
+            emitStore(x->o1); g(IDROP);
             break;
         case IF1  : c(x->o1);  g(JZ); p1=hole(); c(x->o2); fix(p1,here); break;
         case IF2  : c(x->o1);  g(JZ); p1=hole(); c(x->o2); g(JMP); p2=hole();
@@ -131,6 +154,7 @@ void c(node *x) {
         case EMPTY: break;
         case SEQ  : c(x->o1); c(x->o2); break;
         case EXPR:
+            if ((x->o1->kind == PRE_INC || x->o1->kind == POST_INC) && emitStep(x->o1->o1, x->o1->val)) { break; }
             if (x->o1->kind == FUNC_CALL && x->o1->val != BUILTIN_EMIT) {
                 c(x->o1->o1);
                 emitCall(x->o1->val, argumentCount(x->o1->o1));
