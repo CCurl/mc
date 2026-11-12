@@ -6,21 +6,6 @@
 int numNodes = 0;
 node nodes[MAX_NODES];
 
-struct function_s {
-    char name[sizeof(idName)];
-    node *body;
-    int address;
-    int defined;
-    int returnsValue;  
-    int returnType;
-    int numParameters;
-    char parameterNames[MAX_PARAMETERS][sizeof(idName)];
-    int parameterIsArray[MAX_PARAMETERS];
-    int parameterTypes[MAX_PARAMETERS];
-    int numLocals;
-    char localNames[MAX_LOCALS][sizeof(idName)];
-    int localTypes[MAX_LOCALS];
-};
 struct function_s functions[MAX_FUNCTIONS];
 int numFunctions;
 int currentFunction = -1;

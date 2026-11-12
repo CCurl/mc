@@ -16,6 +16,8 @@
 #define MAX_CODE            65536
 #define MAX_GLOBAL_SLOTS   256000
 #define MAX_GLOBAL_BYTES   256000
+#define ID_NAME_LENGTH         64
+#define STACK_SIZE           1024
 #define MAX_CALL_FIXUPS MAX_NODES
 
 // ---------------------------------------------------------------------------
@@ -38,6 +40,10 @@ enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
        ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
        IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC };
 
+
+// ---------------------------------------------------------------------------
+// Shared structs ...
+typedef unsigned char byte;
 struct node_s {
     int kind;
     struct node_s *o1, *o2, *o3;
@@ -45,7 +51,23 @@ struct node_s {
     int type;
 };
 typedef struct node_s node;
-typedef unsigned char byte;
+
+struct function_s {
+    char name[ID_NAME_LENGTH];
+    node* body;
+    int address;
+    int defined;
+    int returnsValue;
+    int returnType;
+    int numParameters;
+    char parameterNames[MAX_PARAMETERS][ID_NAME_LENGTH];
+    int parameterIsArray[MAX_PARAMETERS];
+    int parameterTypes[MAX_PARAMETERS];
+    int numLocals;
+    char localNames[MAX_LOCALS][ID_NAME_LENGTH];
+    int localTypes[MAX_LOCALS];
+};
+
 
 // ---------------------------------------------------------------------------
 // For the code generator ...

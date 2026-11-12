@@ -6,7 +6,7 @@
 char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", "include", NULL };
 
 int ch = ' ', sym, intVal;
-char idName[64];
+char idName[ID_NAME_LENGTH];
 
 FILE *inputFp = NULL;
 char currentPath[MAX_PATH_LENGTH] = "";
@@ -17,7 +17,7 @@ int sourceDepth = 0;
 char includedPaths[MAX_INCLUDED_FILES][MAX_PATH_LENGTH];
 int numIncludedPaths = 0;
 
-char variableNames[MAX_NAMES][sizeof(idName)];
+char variableNames[MAX_NAMES][ID_NAME_LENGTH];
 int variableBases[MAX_NAMES], variableSizes[MAX_NAMES];
 int variableIsArray[MAX_NAMES];
 int variableTypes[MAX_NAMES];

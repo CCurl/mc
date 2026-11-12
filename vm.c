@@ -10,9 +10,9 @@ int f4(code *a) { return *(int *)a; }
 
 void run() {
     /* Each frame's parameters and locals sit on st[] starting at frameBase. */
-    int st[1000], sp = 0, frameBase = 1, returnSp = 0;
+    int st[STACK_SIZE], sp = 0, frameBase = 1, returnSp = 0;
     code *pc = vm;
-    struct return_s returnStack[1000];
+    struct return_s returnStack[STACK_SIZE];
 
     again:
     switch (*pc++) {
@@ -65,8 +65,8 @@ void run() {
         ACASE GDEC  : globals[f4(pc)]--; pc += 4;
         ACASE ICALL : { int argc = f4(pc + 4);
                         int locals = f4(pc + 8);
-                        if (returnSp >= 1000) { error("-call stack overflow-"); }
-                        if (sp < argc || sp + locals >= 1000) { error("-call frame overflow-"); }
+                        if (returnSp >= STACK_SIZE) { error("-call stack overflow-"); }
+                        if (sp < argc || sp + locals >= STACK_SIZE) { error("-call frame overflow-"); }
                         returnStack[returnSp].pc = pc + 12;
                         returnStack[returnSp].frameBase = frameBase;
                         returnSp++;

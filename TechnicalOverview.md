@@ -20,7 +20,7 @@ flowchart LR
 ## Source layout
 
 - `tiny-c.c`: includes `tiny-c.h`, then `lexer.c`, `parser.c`, `gen.c`, and `vm.c` in that order; defines `compile()` and `main()`. It is the only file the makefile compiles. The module files are `#include`d into it, so the whole compiler is one translation unit and the modules share its globals and functions without `extern` declarations.
-- `tiny-c.h`: shared limits, token/node/opcode definitions, and VM macros.
+- `tiny-c.h`: shared limits (including `ID_NAME_LENGTH` and `STACK_SIZE`), token/node/opcode definitions, the `node` and `function_s` structs, the `byte` typedef, and VM macros.
 - `lexer.c`: tokenization, global variable storage, the source/include stack, and error reporting.
 - `parser.c`: AST nodes, function and variable tables, and program checks.
 - `gen.c`: bytecode generation, constant folding, and call patching.
@@ -117,11 +117,11 @@ The VM is a stack machine implemented by `run()` in `vm.c`. It has no separate l
 
 | State | Declaration | Purpose |
 |---|---|---|
-| Operand stack | `int st[1000]`, index `sp` | Holds intermediate values, call frames, and locals. `TOS` is `st[sp]`, `NOS` is `st[sp-1]`. |
+| Operand stack | `int st[STACK_SIZE]` (1024), index `sp` | Holds intermediate values, call frames, and locals. `TOS` is `st[sp]`, `NOS` is `st[sp-1]`. |
 | Globals | `globals[]` | Program-wide `int` variables and arrays; static storage starts at zero. |
 | Byte globals | `globalBytes[]` | Program-wide `byte` variables and arrays, one byte per element; string initializers are written by the compiler. |
 | Frame base | `frameBase` | Index in `st[]` of the current frame's first parameter or local. |
-| Return stack | `struct return_s returnStack[1000]`, `returnSp` | Saved return `pc` and caller `frameBase` for each active call. |
+| Return stack | `struct return_s returnStack[STACK_SIZE]` (1024), `returnSp` | Saved return `pc` and caller `frameBase` for each active call. |
 
 ### Dispatch loop
 
@@ -146,7 +146,7 @@ When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0
 
 ### Runtime checks
 
-- Return-stack overflow (1000 entries) and call-frame overflow stop with an error at `ICALL`. Operand-stack pushes inside an expression are not checked, so a sufficiently deep expression writes past the 1000-entry array.
+- Return-stack overflow (`STACK_SIZE`, 1024 entries) and call-frame overflow stop with an error at `ICALL`. Operand-stack pushes inside an expression are not checked, so a sufficiently deep expression writes past the 1024-entry array.
 - `IDIV` and `IMOD` stop on a zero divisor.
 - `SYS_EMIT` expects one value on the stack.
 - Array indexes are not checked at runtime, so a bad index reads or writes an arbitrary `globals[]` slot or `globalBytes[]` byte.
@@ -165,7 +165,7 @@ When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0
   - `MAX_LOCALS` is 256 per function
   - `MAX_PARAMETERS` is 64 per function
   - `MAX_CALL_FIXUPS` is `MAX_NODES`
-  - the VM stack is 1000 entries.
+  - the VM operand stack and return stack are each `STACK_SIZE` (1024) entries.
 - **Local arrays.** Locals are scalars only. `int` and `byte` local declarations do not accept `[...]`.
-- **Names and literals.** Identifiers are limited to 63 characters. Integer literals are not range-checked, so overflow is not detected.
+- **Names and literals.** Identifiers are limited to 63 characters (`ID_NAME_LENGTH` is 64, including the terminating zero). Integer literals are not range-checked, so overflow is not detected.
 - **Include limits.** `MAX_INCLUDE_DEPTH` is 16 and `MAX_INCLUDED_FILES` is 128. Paths are at most 63 characters (`MAX_PATH_LENGTH` is 64).
