@@ -26,20 +26,24 @@
 // ---------------------------------------------------------------------------
 // For the lexer and the parser ...
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-        BYTE_SYM, EMIT_SYM, RETURN_SYM, INCLUDE_SYM,            //  6 ->  9
-        LBRA, RBRA, LPAR, RPAR, PLUS,                           // 10 -> 14
-        MINUS, STAR, SLASH, MODULO,                             // 15 -> 18
-        LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                 // 19 -> 24
-        INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                // 25 -> 30
+    BYTE_SYM, EMIT_SYM, RETURN_SYM, INCLUDE_SYM,                //  6 ->  9
+    LBRA, RBRA, LPAR, RPAR, PLUS,                               // 10 -> 14
+    MINUS, STAR, SLASH, MODULO,                                 // 15 -> 18
+    LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 19 -> 24
+    INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 25 -> 30
 	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS        // 31 -> 34
 };
+
 enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
+
 // ---------------------------------------------------------------------------
 // For the parser and the code generator ...
 enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, EQ, NE, SET, FUNC_CALL,
-       ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
-       IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC };
+    ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
+    IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC
+};
 
+#define BUILTIN_EMIT -1
 
 // ---------------------------------------------------------------------------
 // Shared types and structs ...
@@ -69,16 +73,15 @@ struct function_s {
     int localTypes[MAX_LOCALS];
 };
 
-
 // ---------------------------------------------------------------------------
 // For the code generator and the VM ...
 enum { IFETCH, ISTORE, IP1, IP2, IP4, IDROP, IADD, ISUB, IMUL, IDIV,
-        IMOD, ILT, IGT, IEQ, INE, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
-        PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS, I2B,
-        BGET, BSET, BAFETCH, BASTORE, PBAFETCH, PBASTORE, LINC, LDEC, GINC, GDEC };
+    IMOD, ILT, IGT, IEQ, INE, JZ, JNZ, JMP, ICALL, IRET, HALT, IAFETCH, IASTORE,
+    PLOAD, PSTORE, PAFETCH, PASTORE, LLOAD, LSTORE, SYS, I2B,
+    BGET, BSET, BAFETCH, BASTORE, PBAFETCH, PBASTORE, LINC, LDEC, GINC, GDEC
+};
 
-enum { BUILTIN_EMIT };
-enum { SYS_EMIT };
+#define SYS_EMIT      0
 
 // ---------------------------------------------------------------------------
 // For the VM ...

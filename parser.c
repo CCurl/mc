@@ -54,8 +54,6 @@ int functionIndex(const char *name) {
     return numFunctions++;
 }
 
-#define BUILTIN_EMIT (-1)
-
 node *newNode(int k) {
     if (MAX_NODES <= numNodes) { error("-too many syntax nodes-"); }
     node *x = &nodes[numNodes++];
