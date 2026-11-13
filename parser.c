@@ -3,6 +3,33 @@
 
 #include "tiny-c.h"
 
+// -------------------------------------------------
+// external references
+extern int sym, intVal;
+extern char idName[ID_NAME_LENGTH];
+extern int variableBases[MAX_NAMES], variableIsArray[MAX_NAMES], variableTypes[MAX_NAMES];
+extern int stringLength;
+extern int globals[MAX_GLOBAL_SLOTS];
+extern byte globalBytes[MAX_GLOBAL_BYTES];
+
+// forward references
+extern void fail(const char *fmt, ...);
+extern void syntaxError(void);
+extern void nextSym(void);
+extern int findVariable(const char *name);
+extern int declareVariable(const char *name, int size, int isArray, int type);
+extern int variableIndex(const char *name);
+extern int arrayIndex(const char *name);
+extern int arrayReference(const char *name);
+extern int allocateStringLiteral(void);
+extern void storeStringBytes(int base);
+extern int fold(node *x, int *out);
+
+extern node *parenExpr(void);
+extern node *expr(void);
+extern void validateExpression(node *x, int allowArrayRef);
+
+// -------------------------------------------------
 int numNodes = 0;
 node nodes[MAX_NODES];
 
@@ -42,7 +69,7 @@ int functionIndex(const char *name) {
     for (int i = 0; i < numFunctions; i++) {
         if (strcmp(functions[i].name, name) == 0) { return i; }
     }
-    if (numFunctions >= MAX_FUNCTIONS) { error("-too many functions-"); }
+    if (numFunctions >= MAX_FUNCTIONS) { fail("-too many functions-"); }
     strcpy(functions[numFunctions].name, name);
     functions[numFunctions].body = NULL;
     functions[numFunctions].address = 0;
@@ -55,7 +82,7 @@ int functionIndex(const char *name) {
 }
 
 node *newNode(int k) {
-    if (MAX_NODES <= numNodes) { error("-too many syntax nodes-"); }
+    if (MAX_NODES <= numNodes) { fail("-too many syntax nodes-"); }
     node *x = &nodes[numNodes++];
     x->kind = k;
     x->o1 = x->o2 = x->o3 = NULL;
@@ -83,10 +110,6 @@ void expectSym(int exp) {
     nextSym();
 }
 
-node *parenExpr(); /* forward declaration */
-node *expr();
-int fold(node *x, int *out);
-
 node *callArguments(const char *name) {
     int index = strcmp(name, "emit") == 0 ? BUILTIN_EMIT : functionIndex(name);
     node *args = NULL;
@@ -105,7 +128,7 @@ node *callArguments(const char *name) {
     node *call = newNode(FUNC_CALL);
     call->val = index;
     call->o1 = args;
-    if (numFunctionCalls >= MAX_NODES) { error("-too many function calls-"); }
+    if (numFunctionCalls >= MAX_NODES) { fail("-too many function calls-"); }
     functionCalls[numFunctionCalls++] = call;
     return call;
 }
@@ -166,7 +189,7 @@ node *term() {
       if (sym == LPAR) {
           x = callArguments(name);
       } else if (isEmit) {
-          error("-emit is a built-in function-");
+          fail("-emit is a built-in function-");
       } else if (sym == LBRACKET) {
           int base = arrayIndex(name);
           nextSym();
@@ -202,7 +225,7 @@ node *term() {
             x->type = variableTypes[variable];
           }
           if (sym == PLUS_PLUS || sym == MINUS_MINUS) {
-              if (x->kind != VAR && x->kind != LOCAL) { error("-++ and -- need a scalar variable-"); }
+              if (x->kind != VAR && x->kind != LOCAL) { fail("-++ and -- need a scalar variable-"); }
               node *post = newNode(POST_INC);
               post->o1 = x;
               post->val = sym == PLUS_PLUS ? 1 : -1;
@@ -301,7 +324,7 @@ node *statement() {
               fail("-duplicate local variable %s-\n", name);
           }
           struct function_s *function = &functions[currentFunction];
-          if (function->numLocals >= MAX_LOCALS) { error("-too many local variables-"); }
+          if (function->numLocals >= MAX_LOCALS) { fail("-too many local variables-"); }
           int local = function->numLocals;
           strcpy(function->localNames[local], name);
           function->localTypes[function->numLocals++] = localType;
@@ -327,12 +350,12 @@ node *statement() {
       nextSym();
       if (sym == SEMI) {
           if (currentFunction < 0 || functions[currentFunction].returnsValue) {
-              error("-return without a value requires a void function-");
+              fail("-return without a value requires a void function-");
           }
           x = newNode(VOID_RETURN);
       } else {
           if (currentFunction < 0 || !functions[currentFunction].returnsValue) {
-              error("-return value requires a non-void function-");
+              fail("-return value requires a non-void function-");
           }
           node *value = expr();
           if (functions[currentFunction].returnType == TYPE_BYTE) {
@@ -410,7 +433,7 @@ void parseParameters(int functionIndexValue) {
             }
         }
         if (function->numParameters >= MAX_PARAMETERS) {
-            error("-too many parameters-");
+            fail("-too many parameters-");
         }
         strcpy(function->parameterNames[function->numParameters++], idName);
         int parameter = function->numParameters - 1;
@@ -450,21 +473,21 @@ void parseVariableDeclarator(const char *name, int type) {
         nextSym();
         node *value = expr();
         if (type == TYPE_BYTE) { value = byteConversion(value); }
-        if (!fold(value, &scalarValue)) { error("-global initializer must be constant-"); }
+        if (!fold(value, &scalarValue)) { fail("-global initializer must be constant-"); }
         hasScalarInitializer = 1;
     } else if (sym == EQUAL) {
         nextSym();
         if (type != TYPE_BYTE || sym != STRING_LITERAL) {
-            error("-string initializer requires a byte array-");
+            fail("-string initializer requires a byte array-");
         }
         int requiredSize = stringLength + STRING_OVERHEAD;
         if (!inferredSize && size < requiredSize) {
-            error("-array is too small for string initializer-");
+            fail("-array is too small for string initializer-");
         }
         if (inferredSize) { size = requiredSize; }
         hasStringInitializer = 1;
     } else if (inferredSize) {
-        error("-array size required unless initialized by a string-");
+        fail("-array size required unless initialized by a string-");
     }
     int variable = declareVariable(name, size, isArray, type);
     if (hasScalarInitializer) {
@@ -493,7 +516,7 @@ void variableDeclarations(const char *firstName, int type) {
 
 void parseFunctionDefinition(const char *name, int returnType) {
     if (strcmp(name, "emit") == 0) {
-        error("-emit is a built-in function-");
+        fail("-emit is a built-in function-");
     }
     int index = functionIndex(name);
     if (functions[index].defined) {
@@ -504,8 +527,8 @@ void parseFunctionDefinition(const char *name, int returnType) {
     functions[index].returnsValue = returnType != TYPE_VOID;
     parseParameters(index);
     if (strcmp(name, "main") == 0) {
-        if (returnType == TYPE_BYTE) { error("-main must return int or void-"); }
-        if (functions[index].numParameters != 0) { error("-main must not have parameters-"); }
+        if (returnType == TYPE_BYTE) { fail("-main must return int or void-"); }
+        if (functions[index].numParameters != 0) { fail("-main must not have parameters-"); }
         mainFunction = index;
     }
     expectSym(LBRA);
@@ -531,12 +554,10 @@ int argumentCount(node *args) {
     return count;
 }
 
-void validateExpression(node *x, int allowArrayRef);
-
 void validateCall(node *call) {
     if (call->val == BUILTIN_EMIT) {
         if (argumentCount(call->o1) != 1) {
-            error("-emit expects 1 argument-");
+            fail("-emit expects 1 argument-");
         }
         validateExpression(call->o1->o1, 0);
         return;
@@ -564,7 +585,7 @@ void validateCall(node *call) {
 void validateExpression(node *x, int allowArrayRef) {
     if (!x) { return; }
     if (x->kind == ARRAY_REF) {
-        if (!allowArrayRef) { error("-array reference only valid as an array argument-"); }
+        if (!allowArrayRef) { fail("-array reference only valid as an array argument-"); }
         return;
     }
     if (x->kind == FUNC_CALL) {
@@ -579,7 +600,7 @@ void validateExpression(node *x, int allowArrayRef) {
 void validateNode(node *x) {
     if (!x) { return; }
     if (x->kind == ARRAY_REF) {
-        error("-array reference only valid as an array argument-");
+        fail("-array reference only valid as an array argument-");
     }
     if (x->kind == FUNC_CALL) {
         validateCall(x);
@@ -596,7 +617,7 @@ node *defs(node *st) {
   while (1) {
     if (sym==EOI) { break; }
     if (sym==LBRA) {
-        if (mainFunction < 0) { error("-program must define main()-"); }
+        if (mainFunction < 0) { fail("-program must define main()-"); }
         syntaxError();
     }
     if (sym==VOID_SYM || sym==INT_SYM || sym==BYTE_SYM) {
@@ -626,7 +647,7 @@ node *program() {
   node *prog = gen(PROG, NULL, NULL);
   defs(prog);
   if (mainFunction < 0) {
-      error("-program must define main()-");
+      fail("-program must define main()-");
   }
   if (sym != EOI) { syntaxError(); }
   for (int i = 0; i < numFunctions; i++) {

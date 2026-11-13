@@ -12,7 +12,7 @@ LDLIBS   := -lm
 all: $(app)
 
 $(app): $(srcfiles) $(incfiles)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) tiny-c.c $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) $(srcfiles) $(LDLIBS)
 	ls -l $(app)
 
 clean:

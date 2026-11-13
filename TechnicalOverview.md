@@ -19,7 +19,7 @@ flowchart LR
 
 ## Source layout
 
-- `tiny-c.c`: includes `tiny-c.h`, then `lexer.c`, `parser.c`, `gen.c`, and `vm.c` in that order; defines `compile()` and `main()`. It is the only file the makefile compiles. The module files are `#include`d into it, so the whole compiler is one translation unit and the modules share its globals and functions without `extern` declarations.
+- `tiny-c.c`: defines the `main()` function.
 - `tiny-c.h`: shared types, structures, sizes, and defines
 - `lexer.c`: tokenization, global variable storage, the source/include stack, and error reporting.
 - `parser.c`: AST nodes, function and variable tables, and program checks.

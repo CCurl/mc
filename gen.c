@@ -3,13 +3,19 @@
 
 #include "tiny-c.h"
 
-byte vm[MAX_CODE], *here = vm;
+// -------------------------------------------------
+// external references
+extern struct function_s functions[MAX_FUNCTIONS];
+extern int numFunctions, mainFunction;
+extern void fail(const char *fmt, ...);
+extern int argumentCount(node *args);
 
-struct call_fixup_s { byte *operand; int functionIndex; };
+// -------------------------------------------------
 struct call_fixup_s callFixups[MAX_CALL_FIXUPS];
+byte vm[MAX_CODE], *here = vm;
 int numCallFixups;
 
-void checkSize(int sz) { if (here + sz > vm + MAX_CODE) { error("-program too large-"); } }
+void checkSize(int sz) { if (here + sz > vm + MAX_CODE) { fail("-program too large-"); } }
 void g(byte c)   { checkSize(1); *here++ = c; }
 void g2(short c) { checkSize(2); *(short *)here = c; here += 2; }
 void g4(int c)   { checkSize(4); *(int *)here = c; here += 4; }
@@ -25,7 +31,7 @@ void fix(byte *src, byte *dst) {
 }
 
 void emitCall(int index, int argc) {
-    if (numCallFixups >= MAX_CALL_FIXUPS) { error("-too many function calls-"); }
+    if (numCallFixups >= MAX_CALL_FIXUPS) { fail("-too many function calls-"); }
     g(ICALL);
     callFixups[numCallFixups].operand = here;
     callFixups[numCallFixups].functionIndex = index;
