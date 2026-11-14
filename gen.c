@@ -225,6 +225,10 @@ static void cIncrement(node *x, int dst) {
     int isPost = x->kind == POST_INC, isByte = x->type == TYPE_BYTE;
     if (isRegVar(t)) {
         int r = regOf(t);
+        if (dst < 0 && !isByte && (x->val == 1 || x->val == -1)) {
+            g(x->val == 1 ? IINC1 : IDEC1); g2(r);
+            return;
+        }
         if (isPost && dst >= 0) { emitMov(dst, r); }
         emitIaddi(r, r, x->val);
         if (isByte) { emitI2b(r, r); }

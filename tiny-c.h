@@ -94,27 +94,29 @@ struct return_s { byte *pc; int frameBase; };
 // and "t" a 4-byte jump offset counted from the offset field itself.
 // Array indexes are element indexes held in registers; the VM scales int elements by 4.
 #define OPCODES(X) \
-    X(LDI,    "ra")                      /* r, a: r = a */ \
-    X(MOV,    "rr")                      /* r, r: r = r */ \
-    X(IGET,   "ra")                      /* r, a: r = int global at a */ \
-    X(ISET,   "ra")                      /* r, a: int global at a = r */ \
-    X(BGET,   "ra")                      /* r, a: r = byte global at a */ \
-    X(BSET,   "ra")                      /* r, a: byte global at a = r */ \
-    X(IAGET,  "rar")                     /* r, a, r: r = int global at a + index*4 */ \
-    X(IASET,  "rar")                     /* r, a, r: int global at a + index*4 = r */ \
-    X(BAGET,  "rar")                     /* r, a, r: r = byte global at a + index */ \
-    X(BASET,  "rar")                     /* r, a, r: byte global at a + index = r */ \
-    X(PIAGET, "rrr")                     /* r, r, r: r = int at base + index*4 (base is a register holding an address) */ \
-    X(PIASET, "rrr")                     /* r, r, r: int at base + index*4 = r */ \
-    X(PBAGET, "rrr")                     /* r, r, r: r = byte at base + index */ \
-    X(PBASET, "rrr")                     /* r, r, r: byte at base + index = r */ \
-    X(I2B,    "rr")                      /* r, r: r = (byte) r */ \
-    X(IADDI,  "rra")                     /* r, r, a: r = r + a */ \
-    X(IINC,   "raa")                     /* r, a, a: int global at a += delta; r = the new value */ \
-    X(IINCP,  "raa")                     /* r, a, a: as IINC, but r = the old value */ \
-    X(BINC,   "raa")                     /* r, a, a: byte global at a += delta; r = the new value */ \
-    X(BINCP,  "raa")                     /* r, a, a: as BINC, but r = the old value */ \
-    X(IADD,   "rrr")                     /* r, r, r: r = r op r for the operators below */ \
+    X(LDI,    "ra")      /* r, a: r = a */ \
+    X(MOV,    "rr")      /* r, r: r = r */ \
+    X(IGET,   "ra")      /* r, a: r = int global at a */ \
+    X(ISET,   "ra")      /* r, a: int global at a = r */ \
+    X(BGET,   "ra")      /* r, a: r = byte global at a */ \
+    X(BSET,   "ra")      /* r, a: byte global at a = r */ \
+    X(IAGET,  "rar")     /* r, a, r: r = int global at a + index*4 */ \
+    X(IASET,  "rar")     /* r, a, r: int global at a + index*4 = r */ \
+    X(BAGET,  "rar")     /* r, a, r: r = byte global at a + index */ \
+    X(BASET,  "rar")     /* r, a, r: byte global at a + index = r */ \
+    X(PIAGET, "rrr")     /* r, r, r: r = int at base + index*4 (base is a register holding an address) */ \
+    X(PIASET, "rrr")     /* r, r, r: int at base + index*4 = r */ \
+    X(PBAGET, "rrr")     /* r, r, r: r = byte at base + index */ \
+    X(PBASET, "rrr")     /* r, r, r: byte at base + index = r */ \
+    X(I2B,    "rr")      /* r, r: r = (byte) r */ \
+    X(IADDI,  "rra")     /* r, r, a: r = r + a */ \
+    X(IINC,   "raa")     /* r, a, a: int global at a += delta; r = the new value */ \
+    X(IINCP,  "raa")     /* r, a, a: as IINC, but r = the old value */ \
+    X(IINC1,  "r")       /* r: r += 1 - increment register by 1 */ \
+    X(IDEC1,  "r")       /* r: r -= 1 - decrement register by 1 */ \
+    X(BINC,   "raa")     /* r, a, a: byte global at a += delta; r = the new value */ \
+    X(BINCP,  "raa")     /* r, a, a: as BINC, but r = the old value */ \
+    X(IADD,   "rrr")     /* r, r, r: r = r op r for the operators below */ \
     X(ISUB,   "rrr") \
     X(IMUL,   "rrr") \
     X(IDIV,   "rrr") \
@@ -125,19 +127,19 @@ struct return_s { byte *pc; int frameBase; };
     X(INE,    "rrr") \
     X(ILE,    "rrr") \
     X(IGE,    "rrr") \
-    X(EMIT,   "rr")                      /* r, r: r = putchar(r) */ \
-    X(JMP,    "t")                       /* t: pc += t */ \
-    X(JZ,     "rt")                      /* r, t: if r is zero pc += t */ \
-    X(JNZ,    "rt")                      /* r, t: if r is non-zero pc += t */ \
-    X(JLT,    "rrt")                     /* r, r, t: if the comparison of the two registers holds, pc += t */ \
+    X(EMIT,   "rr")      /* r, r: r = putchar(r) */ \
+    X(JMP,    "t")       /* t: pc += t */ \
+    X(JZ,     "rt")      /* r, t: if r is zero pc += t */ \
+    X(JNZ,    "rt")      /* r, t: if r is non-zero pc += t */ \
+    X(JLT,    "rrt")     /* r, r, t: if the comparison of the two registers holds, pc += t */ \
     X(JGT,    "rrt") \
     X(JEQ,    "rrt") \
     X(JNE,    "rrt") \
     X(JGE,    "rrt") \
     X(JLE,    "rrt") \
-    X(CALL,   "ara")                     /* a, r, a: call the function at a with its frame starting at register r of the caller; the frame size is the final 4-byte operand. On return the callee's result is stored in the caller's register r. */ \
-    X(RET,    "r")                       /* r: return the value of register r */ \
-    X(RET0,   "")                        /* return 0 (void returns and falling off the end of a function) */ \
+    X(CALL,   "ara")     /* a, r, a: call the function at a with its frame starting at register r of the caller; the frame size is the final 4-byte operand. On return the callee's result is stored in the caller's register r. */ \
+    X(RET,    "r")       /* r: return the value of register r */ \
+    X(RET0,   "")        /* return 0 (void returns and falling off the end of a function) */ \
     X(HALT,   "")
 
 #define OPCODE_ENUM(name, kinds) name,

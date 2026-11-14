@@ -39,11 +39,8 @@ tc-listing: $(srcfiles) $(incfiles)
 	$(CXX) $(CXXFLAGS) -D LISTING -o tc-listing $(srcfiles) $(LDLIBS)
 
 listing-test: tc-listing
-	$(CXX) $(CXXFLAGS) -D LISTING -o tc-listing $(srcfiles) $(LDLIBS)
-	rm -f listing.txt
 	-./tc-listing listing-expected.tc
 	diff listing-expected.txt listing.txt
-	# rm -f ./tc-listing
 
 bin: $(app)
 	cp -u -p $(app) ~/bin/
