@@ -7,10 +7,10 @@
 // external references
 extern int sym, intVal;
 extern char idName[ID_NAME_LENGTH];
-extern int variableBases[MAX_NAMES], variableIsArray[MAX_NAMES], variableTypes[MAX_NAMES];
+extern int variableBases[MAX_GLOBAL_NAMES], variableIsArray[MAX_GLOBAL_NAMES], variableTypes[MAX_GLOBAL_NAMES];
 extern int stringLength;
-extern int globals[MAX_GLOBAL_SLOTS];
-extern byte globalBytes[MAX_GLOBAL_BYTES];
+extern byte globalMem[MAX_GLOBAL_BYTES];
+extern void storeInt(int addr, int value);
 
 // forward references
 extern void fail(const char *fmt, ...);
@@ -492,8 +492,8 @@ void parseVariableDeclarator(const char *name, int type) {
     int variable = declareVariable(name, size, isArray, type);
     if (hasScalarInitializer) {
         int base = variableBases[variable];
-        if (type == TYPE_BYTE) { globalBytes[base] = scalarValue; }
-        else { globals[base] = scalarValue; }
+        if (type == TYPE_BYTE) { globalMem[base] = scalarValue; }
+        else { storeInt(base, scalarValue); }
     }
     if (hasStringInitializer) {
         storeStringBytes(variableBases[variable]);

@@ -24,16 +24,17 @@ int sourceDepth = 0;
 char includedPaths[MAX_INCLUDED_FILES][MAX_PATH_LENGTH];
 int numIncludedPaths = 0;
 
-char variableNames[MAX_NAMES][ID_NAME_LENGTH];
-int variableBases[MAX_NAMES], variableSizes[MAX_NAMES];
-int variableIsArray[MAX_NAMES];
-int variableTypes[MAX_NAMES];
+char variableNames[MAX_GLOBAL_NAMES][ID_NAME_LENGTH];
+int variableTypes[MAX_GLOBAL_NAMES];
+int variableBases[MAX_GLOBAL_NAMES];
+int variableIsArray[MAX_GLOBAL_NAMES];
 int stringValues[MAX_STRING_LENGTH], stringLength;
-int globals[MAX_GLOBAL_SLOTS];
-byte globalBytes[MAX_GLOBAL_BYTES];
+byte globalMem[MAX_GLOBAL_BYTES];
 int numVariables;
-int numGlobalSlots;
 int numGlobalBytes;
+
+int loadInt(int addr) { return *(int *)(globalMem + addr); }
+void storeInt(int addr, int value) { *(int *)(globalMem + addr) = value; }
 
 void fail(const char *fmt, ...) {
     va_list args;
@@ -59,26 +60,23 @@ int declareVariable(const char *name, int size, int isArray, int type) {
         fail("-duplicate variable %s-\n", name);
     }
     if (size <= 0) { fail("-array size must be positive-"); }
-    int isByte = type == TYPE_BYTE;
-    int *used = isByte ? &numGlobalBytes : &numGlobalSlots;
-    int capacity = isByte ? MAX_GLOBAL_BYTES : MAX_GLOBAL_SLOTS;
-    if (numVariables >= MAX_NAMES || size > capacity - *used) {
+    int elementSize = type == TYPE_BYTE ? 1 : 4;
+    if (numVariables >= MAX_GLOBAL_NAMES || size > (MAX_GLOBAL_BYTES - numGlobalBytes) / elementSize) {
         fail("-too many variables-");
     }
     strcpy(variableNames[numVariables], name);
-    variableBases[numVariables] = *used;
-    variableSizes[numVariables] = size;
+    variableBases[numVariables] = numGlobalBytes;
     variableIsArray[numVariables] = isArray;
     variableTypes[numVariables] = type;
-    *used += size;
+    numGlobalBytes += size * elementSize;
     return numVariables++;
 }
 
 void storeStringBytes(int base) {
-    globalBytes[base] = stringLength & 0xff;
-    globalBytes[base + 1] = (stringLength >> 8) & 0xff;
+    globalMem[base] = stringLength & 0xff;
+    globalMem[base + 1] = (stringLength >> 8) & 0xff;
     for (int i = 0; i < stringLength; i++) {
-        globalBytes[base + i + 2] = stringValues[i];
+        globalMem[base + i + 2] = stringValues[i];
     }
 }
 

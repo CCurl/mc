@@ -11,12 +11,14 @@ extern void openSource(const char *path);
 extern node *program(void);
 extern void c(node *x);
 extern void run(void);
+extern int saveImage(const char *fileName);
 
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
     if (argc > 1) { openSource(argv[1]); }
     else { openSource("unit-tests.tc"); }
     c(program()); // The compiler
+    saveImage("out.img");
     run();
     return 0;
 }

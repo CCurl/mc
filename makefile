@@ -18,6 +18,9 @@ $(app): $(srcfiles) $(incfiles)
 clean:
 	rm -f $(app)
 
+bench: $(app)
+	./$(app) bench.tc
+
 unit-tests: $(app)
 	./$(app) unit-tests.tc
 

@@ -1,0 +1,29 @@
+// Benchmarks
+
+include "lib/util.tc";
+
+int mil(int x) { return x * 1000 * 1000; }
+
+void whileBench(int sz) {
+    int i = mil(sz);
+    while (i) { i--; }
+}
+
+int fib(int n) {
+    if (n<2) { return n; }
+    return fib(n-1) + fib(n-2);
+}
+
+int fact(int n) {
+    if (n < 2) { return 1; }
+    return n * fact(n - 1);
+}
+
+int main() {
+    print("while ...");
+    whileBench(100);
+    print("\nfib(30): "); printNum(fib(30), 10);
+    print("\nfact(15): "); printNum(fact(15), 10);
+    print("\n");
+    return 0;
+}

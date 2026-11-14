@@ -30,6 +30,10 @@ int gBigPad[40000];
 int gAfterBig = 9;
 byte gBigBytes[40000];
 byte gAfterBytes = 3;
+int gWide = 70000;
+int gBefore[2];
+byte gBetween[3];
+int gAfter[2];
 
 void check(byte name[], int ok) {
     print(name);
@@ -73,13 +77,20 @@ void testGlobals() {
     check("byte global initializer narrows", gByteInit == 2);
     check("negative byte global initializer wraps", gByteNeg == 255);
     gBigPad[39999] = 4;
-    check("int global above slot 32767 is addressable", gBigPad[39999] == 4);
-    check("int global above slot 32767 does not alias lower slots", gBigPad[14463] == 0);
-    check("int global above slot 32767 keeps its value", gAfterBig == 9);
+    check("int global far into global memory is addressable", gBigPad[39999] == 4);
+    check("int global far into global memory does not alias lower ones", gBigPad[14463] == 0);
+    check("int global far into global memory keeps its value", gAfterBig == 9);
     gBigBytes[39999] = 200;
     check("byte global above byte 32767 is addressable", gBigBytes[39999] == 200);
     check("byte global above byte 32767 does not alias lower bytes", gBigBytes[14463] == 0);
     check("byte global above byte 32767 keeps its value", gAfterBytes == 3);
+    check("int global holds a value above 16 bits", gWide == 70000);
+    gBefore[1] = 111;
+    gBetween[2] = 7;
+    gAfter[0] = 222;
+    check("byte write does not clobber preceding int array", gBefore[1] == 111);
+    check("int write does not clobber following int array", gAfter[0] == 222);
+    check("byte element between int arrays keeps its value", gBetween[2] == 7);
 }
 
 // Integer and character literals, unary minus.
