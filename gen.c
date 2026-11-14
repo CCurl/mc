@@ -51,6 +51,10 @@ static void patchCalls() {
     }
 }
 
+/*
+// These 2 functions are for a later stage when we want to save and 
+// load the generated code and global data.
+
 // Writes the code, the global data, and the sizes needed to read them back.
 int saveImage(const char *fileName) {
     FILE *fp = fopen(fileName, "wb");
@@ -63,23 +67,25 @@ int saveImage(const char *fileName) {
     return numGlobalBytes + here + (2*sizeof(int));
 }
 
-// Reads an image written by saveImage() and returns the bytes read, as saveImage() returns the bytes written.
+void badImage(const char *fileName) { fail("-bad image %s-\n", fileName); }
+
+// Reads an image written by saveImage() and returns the bytes read
 int loadImage(const char *fileName) {
     FILE *fp = fopen(fileName, "rb");
     if (!fp) { fail("-cannot read image %s-\n", fileName); }
     int codeSize, globalSize;
-    if (fread(&codeSize, sizeof(int), 1, fp) != 1) { fail("-truncated image %s-\n", fileName); }
-    if (fread(&globalSize, sizeof(int), 1, fp) != 1) { fail("-truncated image %s-\n", fileName); }
-    if (codeSize < 0 || codeSize > MAX_CODE || globalSize < 0 || globalSize > MAX_GLOBAL_BYTES) {
-        fail("-bad image %s-\n", fileName);
-    }
-    if (fread(vm, 1, codeSize, fp) != (size_t)codeSize) { fail("-truncated image %s-\n", fileName); }
-    if (fread(globalMem, 1, globalSize, fp) != (size_t)globalSize) { fail("-truncated image %s-\n", fileName); }
+    if (fread(&codeSize, sizeof(int), 1, fp) != 1) { badImage(fileName); }
+    if (fread(&globalSize, sizeof(int), 1, fp) != 1) { badImage(fileName); }
+    if (codeSize < 0 || codeSize > MAX_CODE) { badImage(fileName); }
+    if (globalSize < 0 || globalSize > MAX_GLOBAL_BYTES) { badImage(fileName); }
+    if (fread(vm, 1, codeSize, fp) != (size_t)codeSize) { badImage(fileName); }
+    if (fread(globalMem, 1, globalSize, fp) != (size_t)globalSize) { badImage(fileName); }
     fclose(fp);
     here = codeSize;
     numGlobalBytes = globalSize;
     return numGlobalBytes + here + (2*sizeof(int));
 }
+*/
 
 static void emitLdi(int r, int v) { g(LDI); g2(r); g4(v); }
 static void emitMov(int dst, int src) { if (dst != src) { g(MOV); g2(dst); g2(src); } }

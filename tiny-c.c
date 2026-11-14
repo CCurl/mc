@@ -12,6 +12,6 @@ int main(int argc, char* argv[]) {
     if (argc > 1) { openSource(argv[1]); }
     else { openSource("unit-tests.tc"); }
     c(program()); // The compiler
-    saveImage("out.img");
+    // saveImage("out.img"); // will be used later
     return run();
 }
