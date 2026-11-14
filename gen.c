@@ -12,8 +12,17 @@ int numCallFixups;
 // Register allocation for the function being generated: parameters, then locals, then temporaries.
 int nextReg, maxReg, firstTemp;
 
-#define OPCODE_LENGTH(name, operandBytes) 1 + (operandBytes),
-static const int insnLength[] = { OPCODES(OPCODE_LENGTH) };
+#define OPCODE_NAME(name, kinds) #name,
+#define OPCODE_KINDS(name, kinds) kinds,
+const char *const opcodeNames[] = { OPCODES(OPCODE_NAME) };
+const char *const opcodeKinds[] = { OPCODES(OPCODE_KINDS) };
+
+// The length of an instruction: the opcode byte plus its operands ('r' is 2 bytes; 'a' and 't' are 4).
+int opcodeLength(int op) {
+    int len = 1;
+    for (const char *k = opcodeKinds[op]; *k; k++) { len += (*k == 'r') ? 2 : 4; }
+    return len;
+}
 
 static void checkSize(int sz) { if (here + sz > MAX_CODE) { fail("-program too large-"); } }
 static void g(byte c)   { checkSize(1); vm[here++] = c; }
@@ -122,6 +131,7 @@ int fold(node *x, int *out) {
 
 static void emitRa(int op, int r, int a) { g(op); g2(r); g4(a); }
 static void emitRar(int op, int r, int a, int idx) { g(op); g2(r); g4(a); g2(idx); }
+static void emitRaa(int op, int r, int a, int b) { g(op); g2(r); g4(a); g4(b); }
 
 // Emits a conditional jump on register r. Returns the offset of its target field for fix().
 static int emitJumpIf(int op, int r) { g(op); g2(r); return hole(); }
@@ -221,12 +231,9 @@ static void cIncrement(node *x, int dst) {
         if (!isPost && dst >= 0) { emitMov(dst, r); }
         return;
     }
-    int old = allocReg(), updated = allocReg();
-    emitRa(isByte ? BGET : IGET, old, t->val);
-    emitIaddi(updated, old, x->val);
-    if (isByte) { emitI2b(updated, updated); }
-    emitRa(isByte ? BSET : ISET, updated, t->val);
-    if (dst >= 0) { emitMov(dst, isPost ? old : updated); }
+    if (dst < 0) { dst = allocReg(); }
+    int op = isByte ? (isPost ? BINCP : BINC) : (isPost ? IINCP : IINC);
+    emitRaa(op, dst, t->val, x->val);
 }
 
 // Calls the user function of node x, with the result in dst (-1 discards it). The callee's frame
@@ -386,7 +393,7 @@ static void checkCode() {
     int p = 0;
     while (p < here) {
         if (vm[p] >= NUM_OPCODES) { fail("-internal: bad opcode at %d-", p); }
-        p += insnLength[vm[p]];
+        p += opcodeLength(vm[p]);
     }
     if (p != here) { fail("-internal: code does not decode cleanly-"); }
 }

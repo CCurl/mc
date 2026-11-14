@@ -25,7 +25,7 @@ flowchart LR
 - `parser.c`: AST nodes, function and variable tables, and program checks.
 - `gen.c`: bytecode generation, constant folding, and call patching.
 - `vm.c`: the `run()` interpreter.
-- `dis.c`: an unused, out-of-date disassembler, and it is entirely commented out.
+- `listing.c`: the code listing. It is compiled only with `make LISTING=1`, and writes a listing of the generated code to `listing.txt`. `make listing-test` checks that listing against `listing-expected.txt`.
 - `lib/*.tc`: Tiny-C source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
 
 ## 1. Lexer
@@ -80,6 +80,8 @@ The output is a flat byte array `vm[MAX_CODE]` (65536 bytes) of register instruc
 | Local or parameter | No instruction for a read: the value stays in its register. Parameters are registers `0..numParameters-1`, locals follow them, and temporaries follow the locals. `MOV r, r` copies when a value must move. |
 | Global `int` read/write | `IGET` / `ISET` (`r, a`) |
 | Global `byte` read/write | `BGET` / `BSET` (`r, a`) |
+| Global `int` `++`/`--` | `IINC` (`r, a, delta`) gives the new value in `r`; `IINCP` gives the old value. One op in every context; a discarded result goes to a scratch register. |
+| Global `byte` `++`/`--` | `BINC` / `BINCP` (`r, a, delta`), same as the int forms, with the byte truncation. |
 | Int array element, global base | `IAGET` / `IASET` (`r, a, index`); the VM scales the index by 4. A constant index folds into the address. |
 | Byte array element, global base | `BAGET` / `BASET` (`r, a, index`); unscaled |
 | Array element, base from a parameter | `PIAGET` / `PIASET` / `PBAGET` / `PBASET` (`r, base, index`), where the base register holds an address |

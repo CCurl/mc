@@ -34,6 +34,10 @@ int run() {
         ACASE PBASET: globalMem[REG(pc + 2) + REG(pc + 4)] = REG(pc); pc += 6;
         ACASE I2B   : REG(pc) = (byte)REG(pc + 2); pc += 4;
         ACASE IADDI : REG(pc) = REG(pc + 2) + f4(pc + 4); pc += 8;
+        ACASE IINC  : REG(pc) = loadInt(f4(pc + 2)) + f4(pc + 6); storeInt(f4(pc + 2), REG(pc)); pc += 10;
+        ACASE IINCP : REG(pc) = loadInt(f4(pc + 2)); storeInt(f4(pc + 2), REG(pc) + f4(pc + 6)); pc += 10;
+        ACASE BINC  : REG(pc) = (byte)(globalMem[f4(pc + 2)] + f4(pc + 6)); globalMem[f4(pc + 2)] = REG(pc); pc += 10;
+        ACASE BINCP : REG(pc) = globalMem[f4(pc + 2)]; globalMem[f4(pc + 2)] = REG(pc) + f4(pc + 6); pc += 10;
         ACASE IADD  : REG(pc) = REG(pc + 2) + REG(pc + 4); pc += 6;
         ACASE ISUB  : REG(pc) = REG(pc + 2) - REG(pc + 4); pc += 6;
         ACASE IMUL  : REG(pc) = REG(pc + 2) * REG(pc + 4); pc += 6;

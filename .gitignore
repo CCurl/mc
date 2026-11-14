@@ -60,7 +60,8 @@ dkms.conf
 # Personal
 mc
 tc
-list.txt
+tc-listing
+listing.txt
 /tc.vcxproj
 /tc.vcxproj.user
 .vscode/settings.json

@@ -1,0 +1,22 @@
+     0  CALL   main r0 3
+    11  HALT  
+
+twice:
+    12  IADD   r1 r0 r0
+    19  RET    r1
+    22  RET0  
+
+main:
+    23  LDI    r0 0
+    30  LDI    r1 0
+    37  LDI    r2 3
+    44  JGE    r0 r2 ->108
+    53  MOV    r2 r0
+    58  CALL   twice r2 2
+    69  IASET  r2 0 r0
+    78  IAGET  r2 0 r0
+    87  IADD   r1 r1 r2
+    94  IADDI  r0 r0 1
+   103  JMP    ->37
+   108  RET    r1
+   111  RET0  

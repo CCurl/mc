@@ -13,5 +13,8 @@ int main(int argc, char* argv[]) {
     else { openSource("unit-tests.tc"); }
     c(program()); // The compiler
     // saveImage("out.img"); // will be used later
+#ifdef LISTING
+    listing();
+#endif
     return run();
 }
