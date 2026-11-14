@@ -3,6 +3,13 @@
 
 #include "tiny-c.h"
 
+// -------------------------------------------------
+// external references
+extern int parameterIndex(const char *name);
+extern int localIndex(const char *name);
+extern int currentParameterIsArray(int parameter);
+
+// -------------------------------------------------
 char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", "include", NULL };
 
 int ch = ' ', sym, intVal;
@@ -17,16 +24,17 @@ int sourceDepth = 0;
 char includedPaths[MAX_INCLUDED_FILES][MAX_PATH_LENGTH];
 int numIncludedPaths = 0;
 
-char variableNames[MAX_NAMES][ID_NAME_LENGTH];
-int variableBases[MAX_NAMES], variableSizes[MAX_NAMES];
-int variableIsArray[MAX_NAMES];
-int variableTypes[MAX_NAMES];
+char variableNames[MAX_GLOBAL_NAMES][ID_NAME_LENGTH];
+int variableTypes[MAX_GLOBAL_NAMES];
+int variableBases[MAX_GLOBAL_NAMES];
+int variableIsArray[MAX_GLOBAL_NAMES];
 int stringValues[MAX_STRING_LENGTH], stringLength;
-int globals[MAX_GLOBAL_SLOTS];
-byte globalBytes[MAX_GLOBAL_BYTES];
+byte globalMem[MAX_GLOBAL_BYTES];
 int numVariables;
-int numGlobalSlots;
 int numGlobalBytes;
+
+int loadInt(int addr) { return *(int *)(globalMem + addr); }
+void storeInt(int addr, int value) { *(int *)(globalMem + addr) = value; }
 
 void fail(const char *fmt, ...) {
     va_list args;
@@ -36,8 +44,8 @@ void fail(const char *fmt, ...) {
     va_end(args);
     exit(1);
 }
-void error(char *err) { fail("%s\n", err); }
-void syntaxError() { error("-syntax error-"); }
+
+void syntaxError() { fail("-syntax error-"); }
 
 int findVariable(const char *name) {
     for (int i = 0; i < numVariables; i++) {
@@ -51,47 +59,37 @@ int declareVariable(const char *name, int size, int isArray, int type) {
     if (index >= 0) {
         fail("-duplicate variable %s-\n", name);
     }
-    if (size <= 0) { error("-array size must be positive-"); }
-    int isByte = type == TYPE_BYTE;
-    int *used = isByte ? &numGlobalBytes : &numGlobalSlots;
-    int capacity = isByte ? MAX_GLOBAL_BYTES : MAX_GLOBAL_SLOTS;
-    if (numVariables >= MAX_NAMES || size > capacity - *used) {
-        error("-too many variables-");
+    if (size <= 0) { fail("-array size must be positive-"); }
+    int elementSize = type == TYPE_BYTE ? 1 : 4;
+    if (numVariables >= MAX_GLOBAL_NAMES || size > (MAX_GLOBAL_BYTES - numGlobalBytes) / elementSize) {
+        fail("-too many variables-");
     }
     strcpy(variableNames[numVariables], name);
-    variableBases[numVariables] = *used;
-    variableSizes[numVariables] = size;
+    variableBases[numVariables] = numGlobalBytes;
     variableIsArray[numVariables] = isArray;
     variableTypes[numVariables] = type;
-    *used += size;
+    numGlobalBytes += size * elementSize;
     return numVariables++;
 }
 
-/* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
-#define STRING_OVERHEAD 3
-
 void storeStringBytes(int base) {
-    globalBytes[base] = stringLength & 0xff;
-    globalBytes[base + 1] = (stringLength >> 8) & 0xff;
+    globalMem[base] = stringLength & 0xff;
+    globalMem[base + 1] = (stringLength >> 8) & 0xff;
     for (int i = 0; i < stringLength; i++) {
-        globalBytes[base + i + 2] = stringValues[i];
+        globalMem[base + i + 2] = stringValues[i];
     }
 }
 
 int allocateStringLiteral() {
     int size = stringLength + STRING_OVERHEAD;
     if (size > MAX_GLOBAL_BYTES - numGlobalBytes) {
-        error("-too much global storage-");
+        fail("-too much global storage-");
     }
     int base = numGlobalBytes;
     numGlobalBytes += size;
     storeStringBytes(base);
     return base;
 }
-
-int parameterIndex(const char *name);
-int localIndex(const char *name);
-int currentParameterIsArray(int parameter);
 
 int variableIndex(const char *name) {
     int parameter = parameterIndex(name);
@@ -167,7 +165,7 @@ int escapedCharacter(int ch) {
       case '\\': return '\\';
       case '\'': return '\'';
       case '"': return '"';
-      default: error("-invalid character escape-");
+      default: fail("-invalid character escape-");
     }
     return 0;
 }
@@ -179,7 +177,7 @@ void nextCh() {
 }
 
 void openSource(const char *path) {
-    if (strlen(path) >= MAX_PATH_LENGTH) { error("-path too long-"); }
+    if (strlen(path) >= MAX_PATH_LENGTH) { fail("-path too long-"); }
     inputFp = fopen(path, "rt");
     if (!inputFp) { fail("-cannot open %s-\n", path); }
     strcpy(currentPath, path);
@@ -191,7 +189,7 @@ void resolveInclude(const char *name, char *out) {
     for (int i = 0; currentPath[i] != '\0'; i++) {
         if (currentPath[i] == '/' || currentPath[i] == '\\') { dirLength = i + 1; }
     }
-    if (dirLength + strlen(name) >= MAX_PATH_LENGTH) { error("-include path too long-"); }
+    if (dirLength + strlen(name) >= MAX_PATH_LENGTH) { fail("-include path too long-"); }
     snprintf(out, MAX_PATH_LENGTH, "%.*s%s", dirLength, currentPath, name);
 }
 
@@ -200,25 +198,25 @@ void includeFile() {
     int length = 0;
     FILE *fp;
     while (ch == ' ' || ch == 9) { nextCh(); }
-    if (ch != '"') { error("-include expects a quoted file name-"); }
+    if (ch != '"') { fail("-include expects a quoted file name-"); }
     nextCh();
     while (ch != '"') {
-        if (ch == EOF || ch == '\n' || ch == '\r') { error("-unterminated include file name-"); }
-        if (length >= MAX_PATH_LENGTH - 1) { error("-include file name too long-"); }
+        if (ch == EOF || ch == '\n' || ch == '\r') { fail("-unterminated include file name-"); }
+        if (length >= MAX_PATH_LENGTH - 1) { fail("-include file name too long-"); }
         name[length++] = ch;
         nextCh();
     }
     name[length] = '\0';
     nextCh();
     while (ch == ' ' || ch == 9) { nextCh(); }
-    if (ch != ';') { error("-include must end with ';'-"); }
+    if (ch != ';') { fail("-include must end with ';'-"); }
     nextCh();
     resolveInclude(name, path);
     for (int i = 0; i < numIncludedPaths; i++) {
         if (strcmp(includedPaths[i], path) == 0) { return; }
     }
-    if (numIncludedPaths >= MAX_INCLUDED_FILES) { error("-too many included files-"); }
-    if (sourceDepth >= MAX_INCLUDE_DEPTH) { error("-includes nested too deeply-"); }
+    if (numIncludedPaths >= MAX_INCLUDED_FILES) { fail("-too many included files-"); }
+    if (sourceDepth >= MAX_INCLUDE_DEPTH) { fail("-includes nested too deeply-"); }
     fp = fopen(path, "rt");
     if (!fp) { fail("-cannot open include file %s-\n", path); }
     strcpy(includedPaths[numIncludedPaths++], path);
@@ -290,7 +288,7 @@ void nextSym() {
       case '\'':
         nextCh();
         if (ch == EOF || ch == '\n' || ch == '\r' || ch == '\'') {
-            error("-invalid character literal-");
+            fail("-invalid character literal-");
         }
         if (ch == '\\') {
             nextCh();
@@ -299,7 +297,7 @@ void nextSym() {
             intVal = ch;
         }
         nextCh();
-        if (ch != '\'') { error("-character literal must contain one character-"); }
+        if (ch != '\'') { fail("-character literal must contain one character-"); }
         nextCh();
         sym = CHAR_LITERAL;
         break;
@@ -308,7 +306,7 @@ void nextSym() {
         nextCh();
         while (ch != '"') {
             if (ch == EOF || ch == '\n' || ch == '\r') {
-                error("-unterminated string literal-");
+                fail("-unterminated string literal-");
             }
             int value;
             if (ch == '\\') {
@@ -317,9 +315,9 @@ void nextSym() {
             } else {
                 value = ch;
             }
-            if (value > 127) { error("-string literals must contain ASCII characters-"); }
+            if (value > 127) { fail("-string literals must contain ASCII characters-"); }
             if (stringLength >= MAX_STRING_LENGTH) {
-                error("-string literal too long-");
+                fail("-string literal too long-");
             }
             stringValues[stringLength++] = value;
             nextCh();
@@ -335,7 +333,7 @@ void nextSym() {
         } else if (isAlpha(ch)) {
             int i = 0;
             while (isAlphaNum(ch)) {
-                if (i >= (int)sizeof(idName) - 1) { error("-identifier too long-"); }
+                if (i >= (int)sizeof(idName) - 1) { fail("-identifier too long-"); }
                 idName[i++]=ch;
                 nextCh();
             }

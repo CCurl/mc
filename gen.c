@@ -3,29 +3,38 @@
 
 #include "tiny-c.h"
 
-byte vm[MAX_CODE], *here = vm;
+// -------------------------------------------------
+// external references
+extern struct function_s functions[MAX_FUNCTIONS];
+extern int numFunctions, mainFunction;
+extern void fail(const char *fmt, ...);
+extern int argumentCount(node *args);
+extern int numGlobalBytes;
+extern byte globalMem[MAX_GLOBAL_BYTES];
 
-struct call_fixup_s { byte *operand; int functionIndex; };
+// -------------------------------------------------
 struct call_fixup_s callFixups[MAX_CALL_FIXUPS];
+byte vm[MAX_CODE];
+int here;
 int numCallFixups;
 
-void checkSize(int sz) { if (here + sz > vm + MAX_CODE) { error("-program too large-"); } }
-void g(byte c)   { checkSize(1); *here++ = c; }
-void g2(short c) { checkSize(2); *(short *)here = c; here += 2; }
-void g4(int c)   { checkSize(4); *(int *)here = c; here += 4; }
+void checkSize(int sz) { if (here + sz > MAX_CODE) { fail("-program too large-"); } }
+void g(byte c)   { checkSize(1); vm[here++] = c; }
+void g2(short c) { checkSize(2); *(short *)(vm + here) = c; here += 2; }
+void g4(int c)   { checkSize(4); *(int *)(vm + here) = c; here += 4; }
 
-byte *hole() {
+int hole() {
     checkSize(4);
-    byte *p = here;
+    int p = here;
     here += 4;
     return p;
 }
-void fix(byte *src, byte *dst) {
-    *(int *)src = (int)(dst - src);
+void fix(int src, int dst) {
+    *(int *)(vm + src) = dst - src;
 }
 
 void emitCall(int index, int argc) {
-    if (numCallFixups >= MAX_CALL_FIXUPS) { error("-too many function calls-"); }
+    if (numCallFixups >= MAX_CALL_FIXUPS) { fail("-too many function calls-"); }
     g(ICALL);
     callFixups[numCallFixups].operand = here;
     callFixups[numCallFixups].functionIndex = index;
@@ -37,8 +46,38 @@ void emitCall(int index, int argc) {
 
 void patchCalls() {
     for (int i = 0; i < numCallFixups; i++) {
-        *(int *)callFixups[i].operand = functions[callFixups[i].functionIndex].address;
+        *(int *)(vm + callFixups[i].operand) = functions[callFixups[i].functionIndex].address;
     }
+}
+
+// Writes the code, the global data, and the sizes needed to read them back.
+int saveImage(char *fileName) {
+    FILE *fp = fopen(fileName, "wb");
+    if (!fp) { fail("-cannot write image %s-\n", fileName); }
+    fwrite(&here, sizeof(int), 1, fp);
+    fwrite(&numGlobalBytes, sizeof(int), 1, fp);
+    fwrite(vm, 1, here, fp);
+    fwrite(globalMem, 1, numGlobalBytes, fp);
+    fclose(fp);
+    return numGlobalBytes + here + (2*sizeof(int));
+}
+
+// Reads an image written by saveImage() and returns the bytes read, as saveImage() returns the bytes written.
+int loadImage(const char *fileName) {
+    FILE *fp = fopen(fileName, "rb");
+    if (!fp) { fail("-cannot read image %s-\n", fileName); }
+    int codeSize, globalSize;
+    if (fread(&codeSize, sizeof(int), 1, fp) != 1) { fail("-truncated image %s-\n", fileName); }
+    if (fread(&globalSize, sizeof(int), 1, fp) != 1) { fail("-truncated image %s-\n", fileName); }
+    if (codeSize < 0 || codeSize > MAX_CODE || globalSize < 0 || globalSize > MAX_GLOBAL_BYTES) {
+        fail("-bad image %s-\n", fileName);
+    }
+    if (fread(vm, 1, codeSize, fp) != (size_t)codeSize) { fail("-truncated image %s-\n", fileName); }
+    if (fread(globalMem, 1, globalSize, fp) != (size_t)globalSize) { fail("-truncated image %s-\n", fileName); }
+    fclose(fp);
+    here = codeSize;
+    numGlobalBytes = globalSize;
+    return numGlobalBytes + here + (2*sizeof(int));
 }
 
 void emitConst(int v) {
@@ -90,8 +129,20 @@ void emitStore(node *t) {
     else { g(ISTORE); g4(t->val); }
 }
 
+// Array indexes are scaled to byte offsets by the code generator.
+int elementSize(node *x) { return x->type == TYPE_BYTE ? 1 : 4; }
+
+void c(node *x);
+
+void emitIndex(node *index, int size) {
+    int folded;
+    if (fold(index, &folded)) { emitConst(folded * size); return; }
+    c(index);
+    if (size != 1) { emitConst(size); g(IMUL); }
+}
+
 void c(node *x) {
-    byte *p1, *p2;  // Patch pointers for call fixups
+    int p1, p2;  // Patch offsets for jumps
     int folded;
     if (!x) { return; }
     if (x->kind != CST && fold(x, &folded)) { emitConst(folded); return; }
@@ -107,7 +158,7 @@ void c(node *x) {
             else { emitConst(x->val); }
             break;
         case ARRAY_GET:
-            c(x->o1);
+            emitIndex(x->o1, elementSize(x));
             if (x->type == TYPE_BYTE) {
                 if (x->val < 0) { g(PBAFETCH); g4(-x->val - 1); }
                 else { g(BAFETCH); g4(x->val); }
@@ -115,7 +166,7 @@ void c(node *x) {
             else { g(IAFETCH); g4(x->val); }
             break;
         case ARRAY_SET:
-            c(x->o1); c(x->o2);
+            emitIndex(x->o1, elementSize(x)); c(x->o2);
             if (x->type == TYPE_BYTE) {
                 if (x->val < 0) { g(PBASTORE); g4(-x->val - 1); }
                 else { g(BASTORE); g4(x->val); }
@@ -170,7 +221,7 @@ void c(node *x) {
             g(IDROP);
             g(HALT);
             for (int i = 0; i < numFunctions; i++) {
-                functions[i].address = (int)(here - vm);
+                functions[i].address = here;
                 c(functions[i].body);
                 g(IP1); g(0); g(IRET);
             }

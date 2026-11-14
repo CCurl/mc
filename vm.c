@@ -3,8 +3,15 @@
 
 #include "tiny-c.h"
 
-struct return_s { byte *pc; int frameBase; };
+// -------------------------------------------------
+// external references
+extern byte vm[MAX_CODE];
+extern byte globalMem[MAX_GLOBAL_BYTES];
+extern int loadInt(int addr);
+extern void storeInt(int addr, int value);
+extern void fail(char *err);
 
+// -------------------------------------------------
 short f2(byte *a) { return *(short *)a; }
 int f4(byte *a) { return *(int *)a; }
 
@@ -16,17 +23,17 @@ void run() {
 
     again:
     switch (*pc++) {
-        case  IFETCH: st[++sp] = globals[f4(pc)]; pc += 4;
-        ACASE ISTORE: globals[f4(pc)] = st[sp]; pc += 4;
+        case  IFETCH: st[++sp] = loadInt(f4(pc)); pc += 4;
+        ACASE ISTORE: storeInt(f4(pc), st[sp]); pc += 4;
         ACASE PLOAD : st[++sp] = st[frameBase + f4(pc)]; pc += 4;
         ACASE PSTORE: st[frameBase + f4(pc)] = st[sp]; pc += 4;
         ACASE LLOAD : st[++sp] = st[frameBase + f4(pc)]; pc += 4;
         ACASE LSTORE: st[frameBase + f4(pc)] = st[sp]; pc += 4;
-        ACASE PAFETCH: st[sp] = globals[st[frameBase + f4(pc)] + st[sp]]; pc += 4;
-        ACASE PASTORE: globals[st[frameBase + f4(pc)] + st[sp-1]] = st[sp];
+        ACASE PAFETCH: st[sp] = loadInt(st[frameBase + f4(pc)] + st[sp]); pc += 4;
+        ACASE PASTORE: storeInt(st[frameBase + f4(pc)] + st[sp-1], st[sp]);
                         st[sp-1] = st[sp]; --sp; pc += 4;
-        ACASE IAFETCH: st[sp] = globals[f4(pc) + st[sp]]; pc += 4;
-        ACASE IASTORE: globals[f4(pc) + st[sp-1]] = st[sp];
+        ACASE IAFETCH: st[sp] = loadInt(f4(pc) + st[sp]); pc += 4;
+        ACASE IASTORE: storeInt(f4(pc) + st[sp-1], st[sp]);
                         st[sp-1] = st[sp]; --sp; pc += 4;
         ACASE IP1   : st[++sp] = *(pc++);
         ACASE IP2   : st[++sp] = f2(pc); pc += 2;
@@ -35,9 +42,9 @@ void run() {
         ACASE IADD  : NOS += TOS; --sp;
         ACASE ISUB  : NOS -= TOS; --sp;
         ACASE IMUL  : NOS *= TOS; --sp;
-        ACASE IDIV  : if (TOS == 0) { error("-divide by zero-"); }
+        ACASE IDIV  : if (TOS == 0) { fail("-divide by zero-"); }
                       NOS /= TOS; --sp;
-        ACASE IMOD  : if (TOS == 0) { error("-modulo by zero-"); }
+        ACASE IMOD  : if (TOS == 0) { fail("-modulo by zero-"); }
                       NOS %= TOS; --sp;
         ACASE ILT   : NOS =  (NOS<TOS)?1:0; --sp;
         ACASE IGT   : NOS =  (NOS>TOS)?1:0; --sp;
@@ -48,25 +55,25 @@ void run() {
                         // more here later
                       }
         ACASE I2B   : TOS = (byte)TOS;
-        ACASE BGET  : st[++sp] = globalBytes[f4(pc)]; pc += 4;
-        ACASE BSET  : globalBytes[f4(pc)] = st[sp]; pc += 4;
-        ACASE BAFETCH: st[sp] = globalBytes[f4(pc) + st[sp]]; pc += 4;
-        ACASE BASTORE: globalBytes[f4(pc) + st[sp-1]] = st[sp];
+        ACASE BGET  : st[++sp] = globalMem[f4(pc)]; pc += 4;
+        ACASE BSET  : globalMem[f4(pc)] = st[sp]; pc += 4;
+        ACASE BAFETCH: st[sp] = globalMem[f4(pc) + st[sp]]; pc += 4;
+        ACASE BASTORE: globalMem[f4(pc) + st[sp-1]] = st[sp];
                         st[sp-1] = st[sp]; --sp; pc += 4;
-        ACASE PBAFETCH: st[sp] = globalBytes[st[frameBase + f4(pc)] + st[sp]]; pc += 4;
-        ACASE PBASTORE: globalBytes[st[frameBase + f4(pc)] + st[sp-1]] = st[sp];
+        ACASE PBAFETCH: st[sp] = globalMem[st[frameBase + f4(pc)] + st[sp]]; pc += 4;
+        ACASE PBASTORE: globalMem[st[frameBase + f4(pc)] + st[sp-1]] = st[sp];
                         st[sp-1] = st[sp]; --sp; pc += 4;
         ACASE JMP   : pc += f4(pc);
         ACASE JZ    : if (st[sp--] == 0) pc += f4(pc); else pc += 4;
         ACASE JNZ   : if (st[sp--] != 0) pc += f4(pc); else pc += 4;
         ACASE LINC  : st[frameBase + f4(pc)]++; pc += 4;
         ACASE LDEC  : st[frameBase + f4(pc)]--; pc += 4;
-        ACASE GINC  : globals[f4(pc)]++; pc += 4;
-        ACASE GDEC  : globals[f4(pc)]--; pc += 4;
+        ACASE GINC  : storeInt(f4(pc), loadInt(f4(pc)) + 1); pc += 4;
+        ACASE GDEC  : storeInt(f4(pc), loadInt(f4(pc)) - 1); pc += 4;
         ACASE ICALL : { int argc = f4(pc + 4);
                         int locals = f4(pc + 8);
-                        if (returnSp >= STACK_SIZE) { error("-call stack overflow-"); }
-                        if (sp < argc || sp + locals >= STACK_SIZE) { error("-call frame overflow-"); }
+                        if (returnSp >= STACK_SIZE) { fail("-call stack overflow-"); }
+                        if (sp < argc || sp + locals >= STACK_SIZE) { fail("-call frame overflow-"); }
                         returnStack[returnSp].pc = pc + 12;
                         returnStack[returnSp].frameBase = frameBase;
                         returnSp++;

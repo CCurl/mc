@@ -3,22 +3,29 @@
 #ifndef _TINY_C_H_
 #define _TINY_C_H_
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+
 // ---------------------------------------------------------------------------
 #define MAX_PATH_LENGTH        64
 #define MAX_INCLUDE_DEPTH      16
 #define MAX_INCLUDED_FILES    128
-#define MAX_NAMES            2048
+#define MAX_GLOBAL_NAMES     2048
 #define MAX_STRING_LENGTH    1024
-#define MAX_NODES           16384
+#define MAX_NODES           16384 
 #define MAX_FUNCTIONS        1024
 #define MAX_PARAMETERS         64
 #define MAX_LOCALS            256
-#define MAX_CODE            65536
-#define MAX_GLOBAL_SLOTS   256000
-#define MAX_GLOBAL_BYTES   256000
+#define MAX_CODE           131072 // 128 KB
+#define MAX_GLOBAL_BYTES  4194304 // 4 MB
 #define ID_NAME_LENGTH         64
 #define STACK_SIZE           1024
 #define MAX_CALL_FIXUPS MAX_NODES
+
+/* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
+#define STRING_OVERHEAD         3
 
 // ---------------------------------------------------------------------------
 #define BTWI(n,l,h) ((l<=n)&&(n<=h))
@@ -72,6 +79,9 @@ struct function_s {
     char localNames[MAX_LOCALS][ID_NAME_LENGTH];
     int localTypes[MAX_LOCALS];
 };
+
+struct call_fixup_s { int operand; int functionIndex; };
+struct return_s { byte *pc; int frameBase; };
 
 // ---------------------------------------------------------------------------
 // For the code generator and the VM ...

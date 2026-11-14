@@ -67,7 +67,7 @@
  *  String literals used as array arguments get anonymous global storage. They must be
  *  passed to byte[] parameters; other array arguments must match their element type.
  * String literals are valid only as array arguments or global array initializers.
- * Array parameters pass global-array base slots by reference.
+ * Array parameters pass global-array base addresses by reference.
  * Array indexes are unchecked at runtime.
  * The VM service instruction is encoded as SYS followed by a one-byte service ID.
  *

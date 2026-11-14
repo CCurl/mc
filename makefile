@@ -12,11 +12,14 @@ LDLIBS   := -lm
 all: $(app)
 
 $(app): $(srcfiles) $(incfiles)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) tiny-c.c $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) $(srcfiles) $(LDLIBS)
 	ls -l $(app)
 
 clean:
 	rm -f $(app)
+
+bench: $(app)
+	./$(app) bench.tc
 
 unit-tests: $(app)
 	./$(app) unit-tests.tc

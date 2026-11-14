@@ -63,3 +63,5 @@ tc
 list.txt
 /tc.vcxproj
 /tc.vcxproj.user
+.vscode/settings.json
+out.img
