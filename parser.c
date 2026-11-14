@@ -4,32 +4,6 @@
 #include "tiny-c.h"
 
 // -------------------------------------------------
-// external references
-extern int sym, intVal;
-extern char idName[ID_NAME_LENGTH];
-extern int variableBases[MAX_GLOBAL_NAMES], variableIsArray[MAX_GLOBAL_NAMES], variableTypes[MAX_GLOBAL_NAMES];
-extern int stringLength;
-extern byte globalMem[MAX_GLOBAL_BYTES];
-extern void storeInt(int addr, int value);
-
-// forward references
-extern void fail(const char *fmt, ...);
-extern void syntaxError(void);
-extern void nextSym(void);
-extern int findVariable(const char *name);
-extern int declareVariable(const char *name, int size, int isArray, int type);
-extern int variableIndex(const char *name);
-extern int arrayIndex(const char *name);
-extern int arrayReference(const char *name);
-extern int allocateStringLiteral(void);
-extern void storeStringBytes(int base);
-extern int fold(node *x, int *out);
-
-extern node *parenExpr(void);
-extern node *expr(void);
-extern void validateExpression(node *x, int allowArrayRef);
-
-// -------------------------------------------------
 int numNodes = 0;
 node nodes[MAX_NODES];
 
@@ -37,8 +11,6 @@ struct function_s functions[MAX_FUNCTIONS];
 int numFunctions;
 int currentFunction = -1;
 int mainFunction = -1;
-node *functionCalls[MAX_NODES];
-int numFunctionCalls;
 
 int parameterIndex(const char *name) {
     if (currentFunction >= 0) {
@@ -65,7 +37,7 @@ int currentParameterIsArray(int parameter) {
            functions[currentFunction].parameterIsArray[parameter];
 }
 
-int functionIndex(const char *name) {
+static int functionIndex(const char *name) {
     for (int i = 0; i < numFunctions; i++) {
         if (strcmp(functions[i].name, name) == 0) { return i; }
     }
@@ -73,6 +45,7 @@ int functionIndex(const char *name) {
     strcpy(functions[numFunctions].name, name);
     functions[numFunctions].body = NULL;
     functions[numFunctions].address = 0;
+    functions[numFunctions].declared = 0;
     functions[numFunctions].defined = 0;
     functions[numFunctions].returnsValue = 0;
     functions[numFunctions].returnType = TYPE_VOID;
@@ -81,7 +54,7 @@ int functionIndex(const char *name) {
     return numFunctions++;
 }
 
-node *newNode(int k) {
+static node *newNode(int k) {
     if (MAX_NODES <= numNodes) { fail("-too many syntax nodes-"); }
     node *x = &nodes[numNodes++];
     x->kind = k;
@@ -91,49 +64,83 @@ node *newNode(int k) {
     return x;
 }
 
-node *gen(int k, node *o1, node *o2) {
+static node *gen(int k, node *o1, node *o2) {
     node *x=newNode(k);
     x->o1=o1; x->o2=o2;
     return x;
 }
 
-node *byteConversion(node *value) {
+static node *byteConversion(node *value) {
     node *conversion = gen(BYTE_CONVERT, value, NULL);
     conversion->type = TYPE_BYTE;
     return conversion;
 }
 
-void expectSym(int exp) {
+// The type named by a void, int, or byte keyword.
+static int keywordType(int keyword) {
+    if (keyword == VOID_SYM) { return TYPE_VOID; }
+    return keyword == BYTE_SYM ? TYPE_BYTE : TYPE_INT;
+}
+
+static void expectSym(int exp) {
     if (sym != exp) {
         fail("-expected symbol[%d],not[%d]-\n", exp, sym);
     }
     nextSym();
 }
 
-node *callArguments(const char *name) {
+static node *callArguments(const char *name) {
     int index = strcmp(name, "emit") == 0 ? BUILTIN_EMIT : functionIndex(name);
+    if (index != BUILTIN_EMIT && !functions[index].declared) {
+        fail("-function %s used before declaration-\n", name);
+    }
     node *args = NULL;
     node **tail = &args;
+    int count = 0;
     expectSym(LPAR);
     if (sym != RPAR) {
         do {
             node *arg = expr();
             *tail = gen(ARG_LIST, arg, NULL);
             tail = &(*tail)->o2;
+            count++;
             if (sym != COMMA) { break; }
             nextSym();
         } while (1);
     }
     expectSym(RPAR);
+    if (index == BUILTIN_EMIT) {
+        if (count != 1 || args->o1->kind == ARRAY_REF) {
+            fail("-emit expects one scalar argument-");
+        }
+    } else {
+        struct function_s *function = &functions[index];
+        if (count != function->numParameters) {
+            fail("-function %s expects %d argument(s), got %d-\n", name, function->numParameters, count);
+        }
+        node *arg = args;
+        for (int i = 0; i < count; i++, arg = arg->o2) {
+            int isArray = arg->o1->kind == ARRAY_REF;
+            if (isArray != function->parameterIsArray[i]) {
+                fail("-argument %d to %s must be %s-\n", i + 1, name,
+                     function->parameterIsArray[i] ? "an array reference" : "a scalar");
+            }
+            if (isArray && arg->o1->type != function->parameterTypes[i]) {
+                fail("-argument %d to %s must be %s array-\n", i + 1, name,
+                     function->parameterTypes[i] == TYPE_BYTE ? "a byte" : "an int");
+            }
+            if (!isArray && function->parameterTypes[i] == TYPE_BYTE) {
+                arg->o1 = byteConversion(arg->o1);
+            }
+        }
+    }
     node *call = newNode(FUNC_CALL);
     call->val = index;
     call->o1 = args;
-    if (numFunctionCalls >= MAX_NODES) { fail("-too many function calls-"); }
-    functionCalls[numFunctionCalls++] = call;
     return call;
 }
 
-int arrayElementType(const char *name) {
+static int arrayElementType(const char *name) {
     int parameter = parameterIndex(name);
     if (parameter >= 0) {
         return functions[currentFunction].parameterTypes[parameter];
@@ -143,7 +150,7 @@ int arrayElementType(const char *name) {
 
 /* <term> ::= <id> | <id> "(" [ <expr> { "," <expr> } ] ")" | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> */
 /* The scalar variable that ++ or -- changes: a local, a parameter, or a global. */
-node *scalarTarget(const char *name) {
+static node *scalarTarget(const char *name) {
     int local = localIndex(name);
     int parameter = parameterIndex(name);
     node *x;
@@ -163,8 +170,8 @@ node *scalarTarget(const char *name) {
     return x;
 }
 
-node *term() {
-  node *x;
+static node *term() {
+  node *x = NULL;
   if (sym == MINUS) {
       nextSym();
       x = newNode(CST);
@@ -248,7 +255,7 @@ node *term() {
   return x;
 }
 
-int mathop() {
+static int mathop() {
     if (sym==PLUS) { return ADD; }
     else if (sym==MINUS) { return SUB; }
     else if (sym==STAR)  { return MUL; }
@@ -259,7 +266,7 @@ int mathop() {
 
 /* <math> ::= <term> | <math> <math_op> <term> */
 /* <math_op> ::= "+" | "-" | "*" | "/" | "%" */
-node *sum() {
+static node *sum() {
   node *x = term();
   while (mathop()) {
     x=gen(mathop(), x, 0);
@@ -269,8 +276,8 @@ node *sum() {
   return x;
 }
 
-/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math> */
-node *test() {
+/* <expr> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math> */
+node *expr() {
   node *x = sum();
   if (sym == LESS)     { nextSym(); return gen(LT, x, sum()); }
   if (sym == GRT)      { nextSym(); return gen(GT, x, sum()); }
@@ -281,26 +288,23 @@ node *test() {
   return x;
 }
 
-/* <expr> ::= <test> | <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr> */
-node *expr() {
-  node *x;
-  if (sym != ID) { return test(); }
-  x = test();
-  if (((x->kind==VAR) || (x->kind==LOCAL) || (x->kind==ARRAY_GET)) && (sym==EQUAL)) {
-      nextSym();
-      node *value = expr();
-      if (x->type == TYPE_BYTE) { value = byteConversion(value); }
-      if (x->kind == ARRAY_GET) {
-          node *set = gen(ARRAY_SET, x->o1, value);
-          set->val = x->val;
-          set->type = x->type;
-          return set;
-      }
-      node *set = gen(SET, x, value);
-      set->type = x->type;
+/* <assignment> ::= <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr> */
+static node *assignment(node *target) {
+  if (target->kind != VAR && target->kind != LOCAL && target->kind != ARRAY_GET) {
+      fail("-left side of = must be a variable or array element-");
+  }
+  nextSym();
+  node *value = expr();
+  if (target->type == TYPE_BYTE) { value = byteConversion(value); }
+  if (target->kind == ARRAY_GET) {
+      node *set = gen(ARRAY_SET, target->o1, value);
+      set->val = target->val;
+      set->type = target->type;
       return set;
   }
-  return x;
+  node *set = gen(SET, target, value);
+  set->type = target->type;
+  return set;
 }
 
 /* <paren_expr> ::= "(" <expr> ")" */
@@ -312,10 +316,10 @@ node *parenExpr() {
   return x;
 }
 
-node *statement() {
+static node *statement() {
   node *x;
   if ((sym == INT_SYM || sym == BYTE_SYM) && currentFunction >= 0) {
-      int localType = sym == BYTE_SYM ? TYPE_BYTE : TYPE_INT;
+      int localType = keywordType(sym);
       nextSym();
       if (sym != ID) { syntaxError(); }
       x = newNode(EMPTY);
@@ -399,14 +403,16 @@ node *statement() {
         x->o2=statement();
       }
       nextSym();
-  } else { /* <expr> ";" */
-      x = gen(EXPR, expr(), NULL);
+  } else { /* <expr> ";" | <assignment> ";" */
+      node *value = expr();
+      if (sym == EQUAL) { value = assignment(value); }
+      x = gen(EXPR, value, NULL);
       expectSym(SEMI);
   }
   return x;
 }
 
-int returnsOnAllPaths(node *x) {
+static int returnsOnAllPaths(node *x) {
     switch (x->kind) {
         case RETURN_NODE: return 1;
         case SEQ: return returnsOnAllPaths(x->o1) || returnsOnAllPaths(x->o2);
@@ -417,8 +423,7 @@ int returnsOnAllPaths(node *x) {
     }
 }
 
-void parseParameters(int functionIndexValue) {
-    struct function_s *function = &functions[functionIndexValue];
+static void parseParameters(struct function_s *function) {
     expectSym(LPAR);
     if (sym == RPAR) {
         nextSym();
@@ -426,7 +431,7 @@ void parseParameters(int functionIndexValue) {
     }
     while (1) {
         if (sym != INT_SYM && sym != BYTE_SYM) { syntaxError(); }
-        int parameterType = sym == BYTE_SYM ? TYPE_BYTE : TYPE_INT;
+        int parameterType = keywordType(sym);
         nextSym();
         if (sym != ID) { syntaxError(); }
         for (int i = 0; i < function->numParameters; i++) {
@@ -452,7 +457,7 @@ void parseParameters(int functionIndexValue) {
     expectSym(RPAR);
 }
 
-void parseVariableDeclarator(const char *name, int type) {
+static void parseVariableDeclarator(const char *name, int type) {
     int size = 1;
     int isArray = 0;
     int inferredSize = 0;
@@ -503,7 +508,7 @@ void parseVariableDeclarator(const char *name, int type) {
     }
 }
 
-void variableDeclarations(const char *firstName, int type) {
+static void variableDeclarations(const char *firstName, int type) {
     parseVariableDeclarator(firstName, type);
     while (sym == COMMA) {
         nextSym();
@@ -516,18 +521,51 @@ void variableDeclarations(const char *firstName, int type) {
     expectSym(SEMI);
 }
 
-void parseFunctionDefinition(const char *name, int returnType) {
+static int sameSignature(struct function_s *declared, struct function_s *header) {
+    if (declared->returnType != header->returnType ||
+        declared->numParameters != header->numParameters) {
+        return 0;
+    }
+    for (int i = 0; i < header->numParameters; i++) {
+        if (declared->parameterTypes[i] != header->parameterTypes[i] ||
+            declared->parameterIsArray[i] != header->parameterIsArray[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// A header that repeats an earlier declaration must match it.
+static int parseHeader(const char *name, int returnType) {
     if (strcmp(name, "emit") == 0) {
         fail("-emit is a built-in function-");
     }
     int index = functionIndex(name);
+    struct function_s *function = &functions[index];
+    struct function_s previous = *function;
+    function->returnType = returnType;
+    function->returnsValue = returnType != TYPE_VOID;
+    function->numParameters = 0;
+    memset(function->parameterIsArray, 0, sizeof(function->parameterIsArray));
+    parseParameters(function);
+    if (previous.declared && !sameSignature(&previous, function)) {
+        fail("-declaration of %s does not match earlier declaration-\n", name);
+    }
+    function->declared = 1;
+    return index;
+}
+
+// Handles a prototype (ending in ';') or a function definition.
+static void parseFunctionDefinition(const char *name, int returnType) {
+    int index = parseHeader(name, returnType);
+    if (sym == SEMI) {
+        nextSym();
+        return;
+    }
     if (functions[index].defined) {
         fail("-duplicate function %s-\n", name);
     }
     functions[index].defined = 1;
-    functions[index].returnType = returnType;
-    functions[index].returnsValue = returnType != TYPE_VOID;
-    parseParameters(index);
     if (strcmp(name, "main") == 0) {
         if (returnType == TYPE_BYTE) { fail("-main must return int or void-"); }
         if (functions[index].numParameters != 0) { fail("-main must not have parameters-"); }
@@ -550,71 +588,25 @@ void parseFunctionDefinition(const char *name, int returnType) {
     nextSym();
 }
 
-int argumentCount(node *args) {
-    int count = 0;
-    while (args) { count++; args = args->o2; }
-    return count;
-}
-
-void validateCall(node *call) {
-    if (call->val == BUILTIN_EMIT) {
-        if (argumentCount(call->o1) != 1) {
-            fail("-emit expects 1 argument-");
-        }
-        validateExpression(call->o1->o1, 0);
-        return;
-    }
-    struct function_s *function = &functions[call->val];
-    node *arg = call->o1;
-    for (int i = 0; i < function->numParameters; i++) {
-        int isArray = arg && arg->o1 && arg->o1->kind == ARRAY_REF;
-        if (isArray != function->parameterIsArray[i]) {
-            fail("-argument %d to %s must be %s-\n", i + 1, function->name,
-                 function->parameterIsArray[i] ? "an array reference" : "a scalar");
-        }
-        if (isArray && arg->o1->type != function->parameterTypes[i]) {
-            fail("-argument %d to %s must be %s array-\n", i + 1, function->name,
-                 function->parameterTypes[i] == TYPE_BYTE ? "a byte" : "an int");
-        }
-        if (!isArray && function->parameterTypes[i] == TYPE_BYTE) {
-            arg->o1 = byteConversion(arg->o1);
-        }
-        validateExpression(arg->o1, function->parameterIsArray[i]);
-        arg = arg->o2;
-    }
-}
-
-void validateExpression(node *x, int allowArrayRef) {
-    if (!x) { return; }
-    if (x->kind == ARRAY_REF) {
-        if (!allowArrayRef) { fail("-array reference only valid as an array argument-"); }
-        return;
-    }
-    if (x->kind == FUNC_CALL) {
-        validateCall(x);
-        return;
-    }
-    validateExpression(x->o1, 0);
-    validateExpression(x->o2, 0);
-    validateExpression(x->o3, 0);
-}
-
-void validateNode(node *x) {
+// An array reference is valid only as a direct array argument, which callArguments() has already checked.
+static void checkArrayRefs(node *x) {
     if (!x) { return; }
     if (x->kind == ARRAY_REF) {
         fail("-array reference only valid as an array argument-");
     }
     if (x->kind == FUNC_CALL) {
-        validateCall(x);
+        for (node *arg = x->o1; arg; arg = arg->o2) {
+            if (arg->o1->kind != ARRAY_REF) { checkArrayRefs(arg->o1); }
+        }
         return;
     }
-    validateNode(x->o1);
-    validateNode(x->o2);
-    validateNode(x->o3);
+    checkArrayRefs(x->o1);
+    checkArrayRefs(x->o2);
+    checkArrayRefs(x->o3);
 }
 
 /* <defs> ::= { <var_def> | <func_def> }. Globals and functions may appear in any order; main must be defined somewhere. */
-node *defs(node *st) {
+static node *defs(node *st) {
   nextSym();
   while (1) {
     if (sym==EOI) { break; }
@@ -623,8 +615,7 @@ node *defs(node *st) {
         syntaxError();
     }
     if (sym==VOID_SYM || sym==INT_SYM || sym==BYTE_SYM) {
-      int type = sym == VOID_SYM ? TYPE_VOID :
-                 (sym == BYTE_SYM ? TYPE_BYTE : TYPE_INT);
+      int type = keywordType(sym);
       nextSym();
       if (sym != ID) { syntaxError(); }
       char name[sizeof(idName)];
@@ -657,17 +648,7 @@ node *program() {
           fail("-undefined function %s-\n", functions[i].name);
       }
   }
-  for (int i = 0; i < numFunctionCalls; i++) {
-      node *call = functionCalls[i];
-      if (call->val == BUILTIN_EMIT) { continue; }
-      int expected = functions[call->val].numParameters;
-      int actual = argumentCount(call->o1);
-      if (actual != expected) {
-          fail("-function %s expects %d argument(s), got %d-\n",
-               functions[call->val].name, expected, actual);
-      }
-  }
-  for (int i = 0; i < numFunctions; i++) { validateNode(functions[i].body); }
+  for (int i = 0; i < numFunctions; i++) { checkArrayRefs(functions[i].body); }
   prog->o1 = functions[mainFunction].body;
   return prog;
 }

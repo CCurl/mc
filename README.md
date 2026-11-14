@@ -14,8 +14,9 @@
  *  <include> ::= "include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
  *  main is a <func_def> with no parameters and return type "int" or "void"; it must be defined exactly once.
  *  <defs> ::= { <def> }
- *  <def> ::= <func_def> | <var_def>
+ *  <def> ::= <func_def> | <func_proto> | <var_def>
  *  <func_def> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
+ *  <func_proto> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" ";"
  *  <parameter> ::= ("int" | "byte") <id> [ "[" "]" ]
  *  <local_decl> ::= ("int" | "byte") <id> [ "=" <expr> ] { "," <id> [ "=" <expr> ] } ";"
  *  <var_def> ::= ("int" | "byte") <var_decl> { "," <var_decl> } ";"
@@ -28,10 +29,13 @@
  *                  "while" <paren_expr> <statement> |
  *                  "do" <statement> "while" <paren_expr> ";" |
  *                  "{" { <statement> } "}" |
+ *                  <assignment> ";" |
  *                  <expr> ";" |
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
- *  <expr> ::= <test> | <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr>
+ *  <assignment> ::= <lvalue> "=" <expr>   (assignment is a statement only, not an expression)
+ *  <lvalue> ::= <id> | <id> "[" <expr> "]"
+ *  <expr> ::= <test>
  *  <incdec> ::= ("++" | "--") <scalar_id> | <scalar_id> ("++" | "--")   (scalar locals, parameters, and globals only; postfix yields the old value, prefix the new)
  *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math>
  *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)

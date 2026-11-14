@@ -9,7 +9,7 @@ flowchart LR
     C --> D[AST pool: nodes]
     C --> E[Symbol tables: functions, variables]
     C --> K[globals: written during parsing]
-    D --> F[Validation: validateNode in program]
+    D --> F[Array-reference check: checkArrayRefs in program]
     F --> G[Codegen: c]
     E --> G
     G --> H[vm code bytes]
@@ -40,13 +40,13 @@ flowchart LR
 ## 2. Parser: builds an AST, not code
 
 - `defs()` handles top-level globals and functions. `variableDeclarations()` handles global `int` and `byte` scalars and arrays, including string initializers. A global scalar initializer is parsed as an expression, converted for `byte` globals, and folded at parse time by `fold()` in `gen.c`; a non-constant initializer is a compile error.
-- `parseFunctionDefinition()` records each function in `functions[]`, including its return type, parameter types and array flags, locals, and body. A function's index is assigned on first reference, so calls can precede definitions.
+- `parseFunctionDefinition()` records each function in `functions[]`, including its return type, parameter types and array flags, locals, and body. A prototype (a header ending in `;`) records the same signature without a body. A function's index is assigned on first reference, but a call must follow a prototype or definition of that function.
 - Statements and expressions become `node` structs in the fixed pool `nodes[MAX_NODES]`. Each node has a `kind`, up to three children (`o1`, `o2`, `o3`), and a `val`.
 - Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Int and byte globals both live in `globalMem[]`, addressed by byte offset. Int scalars and int array elements take 4 bytes, read and written by `loadInt`/`storeInt`; byte globals and byte array elements take one byte each. The parser records each scalar or array element's `int`/`byte` type for conversions and array argument checks.
 - Local slots follow the parameters in a function frame. Their encoded local index includes the function's parameter count; parameter indexes are relative to the start of the frame.
 - Each `statement()` call builds one node tree, for example `IF1`, `WHILE`, `DO`, `SEQ`, `EXPR`, `RETURN_NODE`, or `VOID_RETURN`.
 - A local declaration with an initializer becomes a `SET` to the local, wrapped in `EXPR` and sequenced with `SEQ`. `byte` locals convert the value first. The initializer runs each time the declaration executes, so it works inside loops.
-- Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. `expr()` accepts assignment only when the left side is `VAR`, `LOCAL`, or `ARRAY_GET`.
+- Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. Assignment is a statement, not an expression: `statement()` parses an expression, and if it is followed by `=`, `assignment()` requires a `VAR`, `LOCAL`, or `ARRAY_GET` target. `a = b = 1;`, `if (a = 1)`, and `emit(a = 1)` are syntax errors.
 - Unary minus is lowered to `0 - term`. Integer literals are never negative.
 - `x++`, `x--`, `++x`, and `--x` apply to scalar locals, parameters, and globals. The parser builds `POST_INC` or `PRE_INC` nodes; postfix yields the old value and prefix the new. Applying them to arrays or literals is an error.
 - Comparison operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) produce `1` when true and `0` when false.
@@ -54,11 +54,12 @@ flowchart LR
 ## 3. Program-level checks (`program()`)
 
 - A `main` must exist, must take no parameters, and must return `int` or `void`.
-- Every called function must be defined.
+- Every declared function must be defined. A call must follow a prototype or definition of its function.
+- A repeated prototype or definition must match the earlier declaration's return type, parameter types, and array flags; parameter names may differ.
 - A global variable and a function may have the same name. `f = ...` assigns the variable and `f(...)` calls the function.
 - Parse errors report the line the lexer has reached, which can be one line past the offending token when that token ends a line. Errors found after parsing (validation and code generation, for example a void call used as a value) report the position where parsing stopped, not the offending line.
-- Call arity is checked against each function's parameter count.
-- `validateNode()` and `validateCall()` check that array references appear only as array arguments, and that array element types match.
+- `callArguments()` checks call arity, argument kinds (scalar or array), and array element types against the callee's declared signature.
+- `checkArrayRefs()` rejects array references anywhere except as direct array arguments.
 - `returnsOnAllPaths()` checks that `int` and `byte` functions return on every path. Only `return`, statement sequences, `if`/`else`, and `do` bodies count; a `while` loop never does, so `while (1) { return 1; }` is rejected.
 - `prog->o1` is set to `main`'s body.
 

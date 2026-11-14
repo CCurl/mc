@@ -4,21 +4,13 @@
 #include "tiny-c.h"
 
 // -------------------------------------------------
-// external references
-extern byte vm[MAX_CODE];
-extern byte globalMem[MAX_GLOBAL_BYTES];
-extern int loadInt(int addr);
-extern void storeInt(int addr, int value);
-extern void fail(char *err);
-
-// -------------------------------------------------
 static int regIndex(byte *a) { return *(unsigned short *)a; }
-int f4(byte *a) { return *(int *)a; }
+static int f4(byte *a) { return *(int *)a; }
 
 // The register named by the 2-byte operand at p, in the current frame.
 #define REG(p) (st[frameBase + regIndex(p)])
 
-void run() {
+int run() {
     /* Each frame's registers start at st[frameBase]. Register 0 of a callee is the caller's CALL register. */
     int st[STACK_SIZE], frameBase = 0, returnSp = 0;
     byte *pc = vm;
@@ -82,8 +74,9 @@ void run() {
                           returnSp--;
                           pc = returnStack[returnSp].pc;
                           frameBase = returnStack[returnSp].frameBase;
-                      } else { return; }
-        ACASE HALT  : return;
+                      } else { return st[0]; }
+        ACASE HALT  : return st[0];
     }
+    return st[0];
 }
 

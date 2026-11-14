@@ -4,12 +4,6 @@
 #include "tiny-c.h"
 
 // -------------------------------------------------
-// external references
-extern int parameterIndex(const char *name);
-extern int localIndex(const char *name);
-extern int currentParameterIsArray(int parameter);
-
-// -------------------------------------------------
 char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", "include", NULL };
 
 int ch = ' ', sym, intVal;
@@ -151,11 +145,11 @@ int arrayReference(const char *name) {
     return variableBases[index];
 }
 
-int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }
-int isNum(int ch) { return BTWI(ch,'0','9'); }
-int isAlphaNum(int ch) { return isAlpha(ch) || isNum(ch); }
+static int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }
+static int isNum(int ch) { return BTWI(ch,'0','9'); }
+static int isAlphaNum(int ch) { return isAlpha(ch) || isNum(ch); }
 
-int escapedCharacter(int ch) {
+static int escapedCharacter(int ch) {
     switch (ch) {
       case 'n': return '\n';
       case 'r': return '\r';
@@ -170,7 +164,7 @@ int escapedCharacter(int ch) {
     return 0;
 }
 
-void nextCh() {
+static void nextCh() {
     if (inputFp) { ch = fgetc(inputFp); }
     else { ch = getchar(); }
     if (ch == '\n') { lineNumber++; }
@@ -184,7 +178,7 @@ void openSource(const char *path) {
     strcpy(includedPaths[numIncludedPaths++], path);
 }
 
-void resolveInclude(const char *name, char *out) {
+static void resolveInclude(const char *name, char *out) {
     int dirLength = 0;
     for (int i = 0; currentPath[i] != '\0'; i++) {
         if (currentPath[i] == '/' || currentPath[i] == '\\') { dirLength = i + 1; }
@@ -193,7 +187,7 @@ void resolveInclude(const char *name, char *out) {
     snprintf(out, MAX_PATH_LENGTH, "%.*s%s", dirLength, currentPath, name);
 }
 
-void includeFile() {
+static void includeFile() {
     char name[MAX_PATH_LENGTH], path[MAX_PATH_LENGTH];
     int length = 0;
     FILE *fp;
@@ -231,7 +225,7 @@ void includeFile() {
     nextCh();
 }
 
-void closeSource() {
+static void closeSource() {
     fclose(inputFp);
     sourceDepth--;
     struct source_s *outer = &sourceStack[sourceDepth];

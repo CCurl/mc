@@ -4,14 +4,6 @@
 #include "tiny-c.h"
 
 // -------------------------------------------------
-// external references
-extern struct function_s functions[MAX_FUNCTIONS];
-extern int numFunctions, mainFunction;
-extern void fail(const char *fmt, ...);
-extern int numGlobalBytes;
-extern byte globalMem[MAX_GLOBAL_BYTES];
-
-// -------------------------------------------------
 struct call_fixup_s callFixups[MAX_CALL_FIXUPS];
 byte vm[MAX_CODE];
 int here;
@@ -20,24 +12,27 @@ int numCallFixups;
 // Register allocation for the function being generated: parameters, then locals, then temporaries.
 int nextReg, maxReg, firstTemp;
 
-void checkSize(int sz) { if (here + sz > MAX_CODE) { fail("-program too large-"); } }
-void g(byte c)   { checkSize(1); vm[here++] = c; }
-void g2(short c) { checkSize(2); *(short *)(vm + here) = c; here += 2; }
-void g4(int c)   { checkSize(4); *(int *)(vm + here) = c; here += 4; }
+#define OPCODE_LENGTH(name, operandBytes) 1 + (operandBytes),
+static const int insnLength[] = { OPCODES(OPCODE_LENGTH) };
 
-int hole() {
+static void checkSize(int sz) { if (here + sz > MAX_CODE) { fail("-program too large-"); } }
+static void g(byte c)   { checkSize(1); vm[here++] = c; }
+static void g2(short c) { checkSize(2); *(short *)(vm + here) = c; here += 2; }
+static void g4(int c)   { checkSize(4); *(int *)(vm + here) = c; here += 4; }
+
+static int hole() {
     checkSize(4);
     int p = here;
     here += 4;
     return p;
 }
-void fix(int src, int dst) {
+static void fix(int src, int dst) {
     *(int *)(vm + src) = dst - src;
 }
 
 // The callee's frame starts at register base of the caller's frame. The operand holds the address,
 // the base register, and the callee's frame size, which patchCalls() fills in.
-void emitCall(int index, int base) {
+static void emitCall(int index, int base) {
     if (numCallFixups >= MAX_CALL_FIXUPS) { fail("-too many function calls-"); }
     g(CALL);
     callFixups[numCallFixups].operand = here;
@@ -48,7 +43,7 @@ void emitCall(int index, int base) {
     g4(0);
 }
 
-void patchCalls() {
+static void patchCalls() {
     for (int i = 0; i < numCallFixups; i++) {
         struct call_fixup_s *f = &callFixups[i];
         *(int *)(vm + f->operand) = functions[f->functionIndex].address;
@@ -57,7 +52,7 @@ void patchCalls() {
 }
 
 // Writes the code, the global data, and the sizes needed to read them back.
-int saveImage(char *fileName) {
+int saveImage(const char *fileName) {
     FILE *fp = fopen(fileName, "wb");
     if (!fp) { fail("-cannot write image %s-\n", fileName); }
     fwrite(&here, sizeof(int), 1, fp);
@@ -86,11 +81,11 @@ int loadImage(const char *fileName) {
     return numGlobalBytes + here + (2*sizeof(int));
 }
 
-void emitLdi(int r, int v) { g(LDI); g2(r); g4(v); }
-void emitMov(int dst, int src) { if (dst != src) { g(MOV); g2(dst); g2(src); } }
-void emitI2b(int dst, int src) { g(I2B); g2(dst); g2(src); }
-void emitIaddi(int dst, int src, int v) { g(IADDI); g2(dst); g2(src); g4(v); }
-void emit3(int op, int dst, int a, int b) { g(op); g2(dst); g2(a); g2(b); }
+static void emitLdi(int r, int v) { g(LDI); g2(r); g4(v); }
+static void emitMov(int dst, int src) { if (dst != src) { g(MOV); g2(dst); g2(src); } }
+static void emitI2b(int dst, int src) { g(I2B); g2(dst); g2(src); }
+static void emitIaddi(int dst, int src, int v) { g(IADDI); g2(dst); g2(src); g4(v); }
+static void emit3(int op, int dst, int a, int b) { g(op); g2(dst); g2(a); g2(b); }
 
 // Returns 1 and sets *out if x is a constant expression that can be folded.
 int fold(node *x, int *out) {
@@ -119,17 +114,17 @@ int fold(node *x, int *out) {
     }
 }
 
-void emitRa(int op, int r, int a) { g(op); g2(r); g4(a); }
-void emitRar(int op, int r, int a, int idx) { g(op); g2(r); g4(a); g2(idx); }
+static void emitRa(int op, int r, int a) { g(op); g2(r); g4(a); }
+static void emitRar(int op, int r, int a, int idx) { g(op); g2(r); g4(a); g2(idx); }
 
 // Emits a conditional jump on register r. Returns the offset of its target field for fix().
-int emitJumpIf(int op, int r) { g(op); g2(r); return hole(); }
+static int emitJumpIf(int op, int r) { g(op); g2(r); return hole(); }
 
 // Variables held in registers: locals, and parameters (which are registers 0..numParameters-1).
-int isRegVar(node *x) { return x->kind == LOCAL || (x->kind == VAR && x->val < 0); }
-int regOf(node *x) { return x->kind == LOCAL ? x->val : -x->val - 1; }
+static int isRegVar(node *x) { return x->kind == LOCAL || (x->kind == VAR && x->val < 0); }
+static int regOf(node *x) { return x->kind == LOCAL ? x->val : -x->val - 1; }
 
-int allocReg() {
+static int allocReg() {
     if (nextReg >= MAX_REGISTERS) { fail("-too many registers-"); }
     int r = nextReg++;
     if (nextReg > maxReg) { maxReg = nextReg; }
@@ -137,21 +132,21 @@ int allocReg() {
 }
 
 // True if evaluating x may assign a variable.
-int hasSideEffect(node *x) {
+static int hasSideEffect(node *x) {
     if (!x) { return 0; }
     if (x->kind == SET || x->kind == PRE_INC || x->kind == POST_INC || x->kind == ARRAY_SET) { return 1; }
     return hasSideEffect(x->o1) || hasSideEffect(x->o2);
 }
 
-void cInto(node *x, int dst);
-int cAny(node *x);
-int cAssign(node *x);
-int cElementStore(node *x);
-void cStmt(node *x);
+static void cInto(node *x, int dst);
+static int cAny(node *x);
+static void cAssign(node *x);
+static void cElementStore(node *x);
+static void cStmt(node *x);
 
 // Returns a register holding the value of x. A variable's own register is returned unless it is
 // copied first, which happens when later may change it.
-int cOperand(node *x, node *later) {
+static int cOperand(node *x, node *later) {
     if (isRegVar(x) && hasSideEffect(later)) {
         int t = allocReg();
         emitMov(t, regOf(x));
@@ -161,7 +156,7 @@ int cOperand(node *x, node *later) {
 }
 
 // Returns a register holding the value of x, which is a variable's register or a new temporary.
-int cAny(node *x) {
+static int cAny(node *x) {
     if (isRegVar(x)) { return regOf(x); }
     int t = allocReg();
     cInto(x, t);
@@ -170,7 +165,7 @@ int cAny(node *x) {
 
 // Loads register r from, or stores r into, element x->o1 of array x. The index is in register idx,
 // or is the constant k when idx is -1. The VM scales int elements by 4.
-void emitElement(node *x, int r, int idx, int k, int isStore) {
+static void emitElement(node *x, int r, int idx, int k, int isStore) {
     int isByte = x->type == TYPE_BYTE;
     if (x->val >= 0) {
         if (idx < 0) {
@@ -184,34 +179,32 @@ void emitElement(node *x, int r, int idx, int k, int isStore) {
     emit3(isByte ? (isStore ? PBASET : PBAGET) : (isStore ? PIASET : PIAGET), r, -x->val - 1, idx);
 }
 
-// Assigns the value of SET node x. Returns the register holding the value.
-int cAssign(node *x) {
+// Assigns the value of SET node x.
+static void cAssign(node *x) {
     node *t = x->o1;
     if (isRegVar(t)) {
         cInto(x->o2, regOf(t));
-        return regOf(t);
+        return;
     }
     int v = cAny(x->o2);
     emitRa(t->type == TYPE_BYTE ? BSET : ISET, v, t->val);
-    return v;
 }
 
-// Stores the value of ARRAY_SET node x. Returns the register holding the value.
-int cElementStore(node *x) {
+// Stores the value of ARRAY_SET node x.
+static void cElementStore(node *x) {
     int k, idx, v;
     if (fold(x->o1, &k)) {
         v = cAny(x->o2);
         emitElement(x, v, -1, k, 1);
-        return v;
+        return;
     }
     idx = cOperand(x->o1, x->o2);
     v = cAny(x->o2);
     emitElement(x, v, idx, 0, 1);
-    return v;
 }
 
 // Steps a variable by x->val. For post-increments the old value goes to dst; dst -1 discards it.
-void cIncrement(node *x, int dst) {
+static void cIncrement(node *x, int dst) {
     node *t = x->o1;
     int isPost = x->kind == POST_INC, isByte = x->type == TYPE_BYTE;
     if (isRegVar(t)) {
@@ -232,7 +225,7 @@ void cIncrement(node *x, int dst) {
 
 // Calls the user function of node x, with the result in dst (-1 discards it). The callee's frame
 // starts at the first argument register. That is dst when dst is the top temporary, so no copy is needed.
-void cCall(node *x, int dst) {
+static void cCall(node *x, int dst) {
     int mark = nextReg, base, i = 0;
     base = (dst >= firstTemp && dst == nextReg - 1) ? dst : nextReg;
     nextReg = base;
@@ -243,14 +236,14 @@ void cCall(node *x, int dst) {
     if (dst >= 0) { emitMov(dst, base); }
 }
 
-void cBinary(node *x, int dst, int op) {
+static void cBinary(node *x, int dst, int op) {
     int lr = cOperand(x->o1, x->o2);
     int rr = cAny(x->o2);
     emit3(op, dst, lr, rr);
 }
 
 // Evaluates x and leaves its value in register dst.
-void cInto(node *x, int dst) {
+static void cInto(node *x, int dst) {
     int k, a;
     if (x->kind == CST) { emitLdi(dst, x->val); return; }
     if (fold(x, &k)) { emitLdi(dst, k); return; }
@@ -267,7 +260,6 @@ void cInto(node *x, int dst) {
             if (fold(x->o1, &k)) { emitElement(x, dst, -1, k, 0); }
             else { a = cAny(x->o1); emitElement(x, dst, a, 0, 0); }
             break;
-        case ARRAY_SET: emitMov(dst, cElementStore(x)); break;
         case BYTE_CONVERT: cInto(x->o1, dst); emitI2b(dst, dst); break;
         case ADD:
             if (fold(x->o2, &k)) { a = cAny(x->o1); emitIaddi(dst, a, k); break; }
@@ -287,7 +279,6 @@ void cInto(node *x, int dst) {
         case GE:  cBinary(x, dst, IGE); break;
         case EQ:  cBinary(x, dst, IEQ); break;
         case NE:  cBinary(x, dst, INE); break;
-        case SET: emitMov(dst, cAssign(x)); break;
         case PRE_INC: case POST_INC: cIncrement(x, dst); break;
         case FUNC_CALL:
             if (x->val == BUILTIN_EMIT) { a = cAny(x->o1->o1); g(EMIT); g2(dst); g2(a); break; }
@@ -302,7 +293,7 @@ void cInto(node *x, int dst) {
 
 // The fused opcode that jumps when comparison x is true (whenTrue) or false, or -1 if x is not a
 // comparison. Negating an int comparison swaps it with its inverse, e.g. not (a < b) is a >= b.
-int condJumpOp(node *x, int whenTrue) {
+static int condJumpOp(node *x, int whenTrue) {
     switch (x->kind) {
         case LT: return whenTrue ? JLT : JGE;
         case GT: return whenTrue ? JGT : JLE;
@@ -315,7 +306,7 @@ int condJumpOp(node *x, int whenTrue) {
 }
 
 // Emits a jump taken when condition x is true (whenTrue) or false. Returns the hole for fix().
-int condJump(node *x, int whenTrue) {
+static int condJump(node *x, int whenTrue) {
     int k, op = condJumpOp(x, whenTrue);
     if (op >= 0 && !fold(x, &k)) {
         int lr = cOperand(x->o1, x->o2);
@@ -327,7 +318,7 @@ int condJump(node *x, int whenTrue) {
 }
 
 // Evaluates x for its side effects only.
-void cEffect(node *x) {
+static void cEffect(node *x) {
     switch (x->kind) {
         case SET: cAssign(x); break;
         case PRE_INC: case POST_INC: cIncrement(x, -1); break;
@@ -340,7 +331,7 @@ void cEffect(node *x) {
     }
 }
 
-void cStmt(node *x) {
+static void cStmt(node *x) {
     int mark = nextReg, p1, p2, r, top;
     if (!x) { return; }
     switch (x->kind) {
@@ -383,6 +374,17 @@ void cStmt(node *x) {
     nextReg = mark;
 }
 
+// Walks the generated code one instruction at a time, using the operand sizes in OPCODES.
+// Fails if an opcode is unknown or the walk does not end exactly where the code ends.
+static void checkCode() {
+    int p = 0;
+    while (p < here) {
+        if (vm[p] >= NUM_OPCODES) { fail("-internal: bad opcode at %d-", p); }
+        p += insnLength[vm[p]];
+    }
+    if (p != here) { fail("-internal: code does not decode cleanly-"); }
+}
+
 // Generates the program from a PROG node: a call to main, HALT, then each function body.
 void c(node *prog) {
     if (prog->kind != PROG) { fail("-program expected-"); }
@@ -398,4 +400,5 @@ void c(node *prog) {
         f->frameSize = maxReg;
     }
     patchCalls();
+    checkCode();
 }

@@ -119,7 +119,8 @@ void testByteTypes() {
     check("byte global assignment narrows", gByte == 2);
     local = 258;
     check("int assignment narrows to byte", local == 2);
-    check("byte assignment yields converted value", (local = 259) == 3);
+    local = 259;
+    check("byte assignment stores converted value", local == 3);
     another = 255;
     check("byte conversion uses unsigned 8-bit values", another == 255);
     check("byte conversion wraps negative int", narrowByte(0 - 1) == 255);
@@ -127,7 +128,8 @@ void testByteTypes() {
     check("byte promotes when passed to int parameter", promoteByte(255) == 255);
     check("byte return converts int result", narrowByte(255) == 255);
     check("byte arithmetic promotes to int", another + 2 == 257);
-    check("byte array stores narrow values", (gBytes[2] = 258) == 2);
+    gBytes[2] = 258;
+    check("byte array stores narrow values", gBytes[2] == 2);
     gBytes[3] = 255;
     check("byte array reads unsigned value", gBytes[3] == 255);
     check("byte array parameter reads elements", arrayByte(gBytes, 3) == 255);
@@ -185,14 +187,17 @@ void testComparisons() {
 }
 
 void testAssignment() {
-    check("assignment yields its value", (gA = 5) == 5);
-    gA = gB = 9;
-    check("chained assignment inner", gB == 9);
-    check("chained assignment outer", gA == 9);
+    gA = 5;
+    check("assignment stores its value", gA == 5);
+    gB = 9;
+    gA = gB;
+    check("assignment copies a variable", gB == 9);
+    check("assignment from a variable", gA == 9);
     gArr[1] = 7;
     check("array element assignment", gArr[1] == 7);
-    gArr[0] = gArr[2] = 3;
-    check("chained array assignment", gArr[0] == 3);
+    gArr[2] = 3;
+    gArr[0] = gArr[2];
+    check("array element copied from element", gArr[0] == 3);
     check("array index expression", gArr[1 + 1] == gArr[2]);
 }
 
@@ -255,7 +260,9 @@ int firstOver(int limit) {
     return 0;
 }
 
-// Calls to a function defined later in the file.
+// Calls to a function defined later in the file, through a prototype.
+int twice(int x);
+int forwardCallee(int x);
 int forwardCaller() { return forwardCallee(4); }
 int forwardCallee(int x) { return x * 10; }
 
@@ -325,6 +332,7 @@ void testEmit() {
 
 int twice(int x) { return x * 2; }
 int seven() { return 7; }
+int seven();  // a matching prototype after the definition is accepted
 int getAt(int arr[], int i) { return arr[i]; }
 int incGlobal() { return ++gCounter; }
 
@@ -354,7 +362,9 @@ int depth(int n) {
     return 1 + depth(n - 1);
 }
 
-// Defined after isEven, so isEven uses a forward reference.
+// Defined after isEven, which calls it through a prototype.
+int isOdd(int n);
+
 int isEven(int n) {
     if (n == 0) { return 1; }
     return isOdd(n - 1);
@@ -595,7 +605,8 @@ void testProgramFlow() {
     backslashCode = '\\';
     localA = strlen(greeting);
     localB = greeting[3];
-    globalInt = anotherGlobal = 7;
+    anotherGlobal = 7;
+    globalInt = anotherGlobal;
 
     nop();
     returnEarly(1);
@@ -687,7 +698,8 @@ void testBenchmark() {
     i = mil(100);
     while (i) { i--; }
     check("100 million iteration while loop completes", i == 0);
-    i = n = 0;
+    i = 0;
+    n = 0;
     do { i = i + (++n); } while (i < 1000);
     check("do while sums to 1000 in 45 passes", n == 45);
 }
@@ -738,5 +750,5 @@ int main() {
     emit('\n');
     if (failures == 0) { print("all checks passed\n"); }
     else { printNum(failures, 10); print(" check(s) failed!\n"); }
-    return 0;
+    return failures != 0;
 }
