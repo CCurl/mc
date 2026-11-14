@@ -12,78 +12,73 @@ extern void storeInt(int addr, int value);
 extern void fail(char *err);
 
 // -------------------------------------------------
-short f2(byte *a) { return *(short *)a; }
+static int regIndex(byte *a) { return *(unsigned short *)a; }
 int f4(byte *a) { return *(int *)a; }
 
+// The register named by the 2-byte operand at p, in the current frame.
+#define REG(p) (st[frameBase + regIndex(p)])
+
 void run() {
-    /* Each frame's parameters and locals sit on st[] starting at frameBase. */
-    int st[STACK_SIZE], sp = 0, frameBase = 1, returnSp = 0;
+    /* Each frame's registers start at st[frameBase]. Register 0 of a callee is the caller's CALL register. */
+    int st[STACK_SIZE], frameBase = 0, returnSp = 0;
     byte *pc = vm;
     struct return_s returnStack[STACK_SIZE];
 
     again:
     switch (*pc++) {
-        case  IFETCH: st[++sp] = loadInt(f4(pc)); pc += 4;
-        ACASE ISTORE: storeInt(f4(pc), st[sp]); pc += 4;
-        ACASE PLOAD : st[++sp] = st[frameBase + f4(pc)]; pc += 4;
-        ACASE PSTORE: st[frameBase + f4(pc)] = st[sp]; pc += 4;
-        ACASE LLOAD : st[++sp] = st[frameBase + f4(pc)]; pc += 4;
-        ACASE LSTORE: st[frameBase + f4(pc)] = st[sp]; pc += 4;
-        ACASE PAFETCH: st[sp] = loadInt(st[frameBase + f4(pc)] + st[sp]); pc += 4;
-        ACASE PASTORE: storeInt(st[frameBase + f4(pc)] + st[sp-1], st[sp]);
-                        st[sp-1] = st[sp]; --sp; pc += 4;
-        ACASE IAFETCH: st[sp] = loadInt(f4(pc) + st[sp]); pc += 4;
-        ACASE IASTORE: storeInt(f4(pc) + st[sp-1], st[sp]);
-                        st[sp-1] = st[sp]; --sp; pc += 4;
-        ACASE IP1   : st[++sp] = *(pc++);
-        ACASE IP2   : st[++sp] = f2(pc); pc += 2;
-        ACASE IP4   : st[++sp] = *(int *)pc; pc += 4;
-        ACASE IDROP : --sp;
-        ACASE IADD  : NOS += TOS; --sp;
-        ACASE ISUB  : NOS -= TOS; --sp;
-        ACASE IMUL  : NOS *= TOS; --sp;
-        ACASE IDIV  : if (TOS == 0) { fail("-divide by zero-"); }
-                      NOS /= TOS; --sp;
-        ACASE IMOD  : if (TOS == 0) { fail("-modulo by zero-"); }
-                      NOS %= TOS; --sp;
-        ACASE ILT   : NOS =  (NOS<TOS)?1:0; --sp;
-        ACASE IGT   : NOS =  (NOS>TOS)?1:0; --sp;
-        ACASE IEQ   : NOS =  (NOS==TOS)?1:0; --sp;
-        ACASE INE   : NOS =  (NOS!=TOS)?1:0; --sp;
-        ACASE SYS   : { int op = *(pc++);
-                        if (op == SYS_EMIT) { TOS = putchar((char)TOS); }
-                        // more here later
-                      }
-        ACASE I2B   : TOS = (byte)TOS;
-        ACASE BGET  : st[++sp] = globalMem[f4(pc)]; pc += 4;
-        ACASE BSET  : globalMem[f4(pc)] = st[sp]; pc += 4;
-        ACASE BAFETCH: st[sp] = globalMem[f4(pc) + st[sp]]; pc += 4;
-        ACASE BASTORE: globalMem[f4(pc) + st[sp-1]] = st[sp];
-                        st[sp-1] = st[sp]; --sp; pc += 4;
-        ACASE PBAFETCH: st[sp] = globalMem[st[frameBase + f4(pc)] + st[sp]]; pc += 4;
-        ACASE PBASTORE: globalMem[st[frameBase + f4(pc)] + st[sp-1]] = st[sp];
-                        st[sp-1] = st[sp]; --sp; pc += 4;
+        case LDI  : REG(pc) = f4(pc + 2); pc += 6;
+        ACASE MOV : REG(pc) = REG(pc + 2); pc += 4;
+        ACASE IGET: REG(pc) = loadInt(f4(pc + 2)); pc += 6;
+        ACASE ISET: storeInt(f4(pc + 2), REG(pc)); pc += 6;
+        ACASE BGET: REG(pc) = globalMem[f4(pc + 2)]; pc += 6;
+        ACASE BSET: globalMem[f4(pc + 2)] = REG(pc); pc += 6;
+        ACASE IAGET : REG(pc) = loadInt(f4(pc + 2) + 4 * REG(pc + 6)); pc += 8;
+        ACASE IASET : storeInt(f4(pc + 2) + 4 * REG(pc + 6), REG(pc)); pc += 8;
+        ACASE BAGET : REG(pc) = globalMem[f4(pc + 2) + REG(pc + 6)]; pc += 8;
+        ACASE BASET : globalMem[f4(pc + 2) + REG(pc + 6)] = REG(pc); pc += 8;
+        ACASE PIAGET: REG(pc) = loadInt(REG(pc + 2) + 4 * REG(pc + 4)); pc += 6;
+        ACASE PIASET: storeInt(REG(pc + 2) + 4 * REG(pc + 4), REG(pc)); pc += 6;
+        ACASE PBAGET: REG(pc) = globalMem[REG(pc + 2) + REG(pc + 4)]; pc += 6;
+        ACASE PBASET: globalMem[REG(pc + 2) + REG(pc + 4)] = REG(pc); pc += 6;
+        ACASE I2B   : REG(pc) = (byte)REG(pc + 2); pc += 4;
+        ACASE IADDI : REG(pc) = REG(pc + 2) + f4(pc + 4); pc += 8;
+        ACASE IADD  : REG(pc) = REG(pc + 2) + REG(pc + 4); pc += 6;
+        ACASE ISUB  : REG(pc) = REG(pc + 2) - REG(pc + 4); pc += 6;
+        ACASE IMUL  : REG(pc) = REG(pc + 2) * REG(pc + 4); pc += 6;
+        ACASE IDIV  : if (REG(pc + 4) == 0) { fail("-divide by zero-"); }
+                      REG(pc) = REG(pc + 2) / REG(pc + 4); pc += 6;
+        ACASE IMOD  : if (REG(pc + 4) == 0) { fail("-modulo by zero-"); }
+                      REG(pc) = REG(pc + 2) % REG(pc + 4); pc += 6;
+        ACASE ILT   : REG(pc) = REG(pc + 2) < REG(pc + 4); pc += 6;
+        ACASE IGT   : REG(pc) = REG(pc + 2) > REG(pc + 4); pc += 6;
+        ACASE ILE   : REG(pc) = REG(pc + 2) <= REG(pc + 4); pc += 6;
+        ACASE IGE   : REG(pc) = REG(pc + 2) >= REG(pc + 4); pc += 6;
+        ACASE IEQ   : REG(pc) = REG(pc + 2) == REG(pc + 4); pc += 6;
+        ACASE INE   : REG(pc) = REG(pc + 2) != REG(pc + 4); pc += 6;
+        ACASE EMIT  : REG(pc) = putchar((char)REG(pc + 2)); pc += 4;
         ACASE JMP   : pc += f4(pc);
-        ACASE JZ    : if (st[sp--] == 0) pc += f4(pc); else pc += 4;
-        ACASE JNZ   : if (st[sp--] != 0) pc += f4(pc); else pc += 4;
-        ACASE LINC  : st[frameBase + f4(pc)]++; pc += 4;
-        ACASE LDEC  : st[frameBase + f4(pc)]--; pc += 4;
-        ACASE GINC  : storeInt(f4(pc), loadInt(f4(pc)) + 1); pc += 4;
-        ACASE GDEC  : storeInt(f4(pc), loadInt(f4(pc)) - 1); pc += 4;
-        ACASE ICALL : { int argc = f4(pc + 4);
-                        int locals = f4(pc + 8);
+        ACASE JZ    : if (REG(pc) == 0) pc += 2 + f4(pc + 2); else pc += 6;
+        ACASE JNZ   : if (REG(pc) != 0) pc += 2 + f4(pc + 2); else pc += 6;
+        ACASE JLT   : if (REG(pc) <  REG(pc + 2)) pc += 4 + f4(pc + 4); else pc += 8;
+        ACASE JGT   : if (REG(pc) >  REG(pc + 2)) pc += 4 + f4(pc + 4); else pc += 8;
+        ACASE JEQ   : if (REG(pc) == REG(pc + 2)) pc += 4 + f4(pc + 4); else pc += 8;
+        ACASE JNE   : if (REG(pc) != REG(pc + 2)) pc += 4 + f4(pc + 4); else pc += 8;
+        ACASE JGE   : if (REG(pc) >= REG(pc + 2)) pc += 4 + f4(pc + 4); else pc += 8;
+        ACASE JLE   : if (REG(pc) <= REG(pc + 2)) pc += 4 + f4(pc + 4); else pc += 8;
+        ACASE CALL  : {
+                        int newBase = frameBase + regIndex(pc + 4);
                         if (returnSp >= STACK_SIZE) { fail("-call stack overflow-"); }
-                        if (sp < argc || sp + locals >= STACK_SIZE) { fail("-call frame overflow-"); }
-                        returnStack[returnSp].pc = pc + 12;
+                        if (newBase + f4(pc + 6) > STACK_SIZE) { fail("-call frame overflow-"); }
+                        returnStack[returnSp].pc = pc + 10;
                         returnStack[returnSp].frameBase = frameBase;
                         returnSp++;
-                        frameBase = sp - argc + 1;
-                        sp += locals;
+                        frameBase = newBase;
                         pc = vm + f4(pc);
                       }
-        ACASE IRET : if (returnSp) {
-                          st[frameBase] = TOS;
-                          sp = frameBase;
+        ACASE RET   : st[frameBase] = REG(pc); goto doReturn;
+        ACASE RET0  : st[frameBase] = 0;
+        doReturn:
+                      if (returnSp) {
                           returnSp--;
                           pc = returnStack[returnSp].pc;
                           frameBase = returnStack[returnSp].frameBase;
@@ -91,3 +86,4 @@ void run() {
         ACASE HALT  : return;
     }
 }
+

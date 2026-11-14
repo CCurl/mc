@@ -269,11 +269,13 @@ node *sum() {
   return x;
 }
 
-/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "==" <math> | <math> "!=" <math> */
+/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math> */
 node *test() {
   node *x = sum();
-  if (sym == LESS) { nextSym(); return gen(LT, x, sum()); }
-  if (sym == GRT)  { nextSym(); return gen(GT, x, sum()); }
+  if (sym == LESS)     { nextSym(); return gen(LT, x, sum()); }
+  if (sym == GRT)      { nextSym(); return gen(GT, x, sum()); }
+  if (sym == LESS_EQ)  { nextSym(); return gen(LE, x, sum()); }
+  if (sym == GRT_EQ)   { nextSym(); return gen(GE, x, sum()); }
   if (sym == EQ_SYM)   { nextSym(); return gen(EQ, x, sum()); }
   if (sym == NE_SYM)   { nextSym(); return gen(NE, x, sum()); }
   return x;

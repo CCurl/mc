@@ -49,7 +49,7 @@ flowchart LR
 - Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. `expr()` accepts assignment only when the left side is `VAR`, `LOCAL`, or `ARRAY_GET`.
 - Unary minus is lowered to `0 - term`. Integer literals are never negative.
 - `x++`, `x--`, `++x`, and `--x` apply to scalar locals, parameters, and globals. The parser builds `POST_INC` or `PRE_INC` nodes; postfix yields the old value and prefix the new. Applying them to arrays or literals is an error.
-- Comparison operators (`<`, `>`, `==`, `!=`) produce `1` when true and `0` when false.
+- Comparison operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) produce `1` when true and `0` when false.
 
 ## 3. Program-level checks (`program()`)
 
@@ -67,89 +67,93 @@ String literals are permitted only as array arguments or global array initialize
 
 ## 4. Code generation (`c()` walks the AST)
 
-The output is a flat byte array `vm[MAX_CODE]` (65536 bytes). Opcodes are one byte, followed by fixed-size operands:
+The output is a flat byte array `vm[MAX_CODE]` (65536 bytes) of register instructions. Each opcode is one byte, followed by operands in the order given by the layout comment in `tiny-c.h`:
+
+- `r`: a 2-byte unsigned register number, relative to the current frame.
+- `a`: a 4-byte address or immediate.
+- `t`: a 4-byte jump offset, counted from the offset field itself.
 
 | Construct | Emitted code |
 |---|---|
-| Global read/write | `IFETCH` / `ISTORE` + 4-byte address |
-| Local read/write | `LLOAD` / `LSTORE` + 4-byte frame slot |
-| Parameter read/write | `PLOAD` / `PSTORE` + 4-byte index |
-| Int array element | `IAFETCH`/`IASTORE` (global base) or `PAFETCH`/`PASTORE` (base taken from a parameter); the code generator scales the index to a byte offset (4 per element) |
-| Byte global / byte array element | `BGET`/`BSET`, `BAFETCH`/`BASTORE` (global base) or `PBAFETCH`/`PBASTORE` (base from a parameter); these address `globalMem[]` |
-| Constants | `IP1` (0 to 127), `IP2` (128 to 32767), `IP4` (other `int` values) |
-| Arithmetic and comparison | `IADD` to `INE` (operands already on the stack) |
-| Control flow | `JZ`, `JNZ`, `JMP` with 4-byte signed relative offsets, patched via `hole()` and `fix()` |
-| Call | `ICALL` + 4-byte address + 4-byte argc + 4-byte locals count (13 bytes total) |
-| Return | `IRET` |
-| Built-in `emit` | `SYS` + `SYS_EMIT` |
-| Fused increment | `LINC`, `LDEC` (local or parameter slot) and `GINC`, `GDEC` (global address) each take only a 4-byte operand and add or subtract one. They are used for `++` and `--` on `int` variables in statements and in expressions: postfix loads the old value first, then steps, and prefix steps first, then loads. `byte` variables use load, add, narrow (`I2B`), and store. |
-| Byte conversion | `I2B` narrows the stack value to unsigned 8-bit `byte` (0 to 255) |
+| Constant | `LDI r, a` |
+| Local or parameter | No instruction for a read: the value stays in its register. Parameters are registers `0..numParameters-1`, locals follow them, and temporaries follow the locals. `MOV r, r` copies when a value must move. |
+| Global `int` read/write | `IGET` / `ISET` (`r, a`) |
+| Global `byte` read/write | `BGET` / `BSET` (`r, a`) |
+| Int array element, global base | `IAGET` / `IASET` (`r, a, index`); the VM scales the index by 4. A constant index folds into the address. |
+| Byte array element, global base | `BAGET` / `BASET` (`r, a, index`); unscaled |
+| Array element, base from a parameter | `PIAGET` / `PIASET` / `PBAGET` / `PBASET` (`r, base, index`), where the base register holds an address |
+| Arithmetic and comparison | `IADD`, `ISUB`, `IMUL`, `IDIV`, `IMOD`, `ILT`, `IGT`, `ILE`, `IGE`, `IEQ`, `INE` (`r, r, r`). `IADDI` (`r, r, a`) covers `+` and `-` with a constant operand. |
+| Byte conversion | `I2B` (`r, r`) narrows to unsigned 8-bit `byte` (0 to 255) |
+| Control flow | `JMP t`, `JZ r, t`, `JNZ r, t`, patched via `hole()` and `fix()`. A comparison used as a condition becomes one fused branch: `JLT`, `JGT`, `JEQ`, `JNE`, `JGE`, `JLE` (`r, r, t`), which compare two registers and jump in one dispatch. |
+| Call | `CALL a, r, frameSize` (10 bytes). The callee's frame starts at the caller's register `r`. |
+| Return | `RET r` returns a register; `RET0` returns 0 |
+| Built-in `emit` | `EMIT r, s` (`r` receives `putchar`'s result) |
+| Program end | `HALT`, after the call to `main` |
 
 Notable generation details:
 
+- Registers are allocated per statement. Named variables use fixed registers, and temporaries are reset at the end of each statement, so they are reused.
+- A callee's parameters are evaluated directly into the caller's registers starting at the `CALL` base, so arguments are not copied. The result comes back in that base register.
+- When the right operand of a binary operator has side effects (assignment, `++`/`--`, or an array store), a register-resident left operand is first copied to a temporary, which keeps left-to-right evaluation.
 - Forward jumps are emitted as holes and patched once the target address is known. `WHILE` and `DO` back-jumps are emitted directly.
 - Constant-only arithmetic and comparisons are folded at compile time by `fold()`. Division and modulo by zero are not folded, so they still fail at runtime.
-- Call targets are unknown when the call is emitted, so each call is recorded in `callFixups[]`. `patchCalls()` fills in the addresses after all functions are generated.
-- Every function leaves exactly one value on the operand stack when it returns. An explicit `return;` in a `void` function and the implicit fall-through return both produce `0`. Calls used as statements discard the returned value with `IDROP`.
-- Program layout: `PROG` emits a call to `main`, then `IDROP`, then `HALT`, then each function body in index order, each ending with `IRET`.
-- `IP2` immediates are 16-bit `short` values, used only for constants from 128 to 32767. Slot, base, jump, and call operands, and `IP4` immediates, are 4-byte native C `int` values. The configured Linux build uses `-m32`; the Visual Studio project supports Win32 and x64. These targets use 32-bit `int`, and the bytecode representation assumes that width and the target's native byte order.
+- Call targets are unknown when the call is emitted, so each call is recorded in `callFixups[]`. `patchCalls()` fills in each call's address and the callee's frame size after all functions are generated.
+- A `return;` in a `void` function emits `RET0`, and falling off the end of a function also emits `RET0`, so both return `0`. Calls used as statements discard the returned value.
+- Program layout: `CALL main` at base register 0, then `HALT`, then each function body in index order, each ending with `RET0`.
+- Immediates and operands are 2-byte registers, 4-byte addresses, immediates, and jump offsets, in native byte order. The bytecode assumes a 32-bit `int`.
 
 ## 5. The "VM image" in memory
 
 - `vm[]`: the code bytes, starting with the call to `main`.
 - `globalMem[]`: all global `int` and `byte` storage, addressed by byte offset. The C runtime zero-initializes this static array. Parsing writes string and scalar initializer data into it.
 - `numGlobalBytes`: the number of bytes in use in `globalMem[]`.
-- VM values use C `int` (32 bits on the configured Linux and Visual Studio targets), and global `int` values are 4 bytes in `globalMem[]`. `byte` values are unsigned 8-bit values (0 to 255). Global `byte` storage is byte-sized in `globalMem[]`; `byte` locals and parameters use int stack slots. Generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts are not supported. Scalar initializers are supported: global ones are folded at parse time, and local ones compile to assignments at the declaration point.
+- VM values use C `int` (32 bits on the configured Linux and Visual Studio targets), and global `int` values are 4 bytes in `globalMem[]`. `byte` values are unsigned 8-bit values (0 to 255). Global `byte` storage is byte-sized in `globalMem[]`; `byte` locals and parameters are held in `int` registers. Generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts are not supported. Scalar initializers are supported: global ones are folded at parse time, and local ones compile to assignments at the declaration point.
 
 `run()` in `vm.c` starts the interpreter by:
 
-1. Setting `pc = vm` and `sp = 0`.
-2. Running the dispatch loop until `HALT`, or until `IRET` with an empty return stack.
+1. Setting `pc = vm`, `frameBase = 0`, and `returnSp = 0`.
+2. Running the dispatch loop until `HALT`, or until `RET`/`RET0` with an empty return stack.
 
-Each call frame lives on the operand stack. Arguments are already pushed in order, so the frame starts at the first argument; local slots follow the arguments. These local slots are reserved by advancing `sp`, but are not initialized. A return-state struct records the return `pc` and the caller's `frameBase`.
+Each call frame is a window of registers in `st[]` that starts at `frameBase`. The caller computes arguments directly into its registers at the `CALL` base, so the callee's parameters are already in place. Locals and temporaries follow them in the same frame. The return-state struct records the return `pc` and the caller's `frameBase`.
 
 ## 6. How the VM runs
 
-The VM is a stack machine implemented by `run()` in `vm.c`. It has no separate loader or relocation step. The code it executes is the `vm[]` array produced by the compiler.
+The VM is a register machine implemented by `run()` in `vm.c`. It has no separate loader or relocation step. The code it executes is the `vm[]` array produced by the compiler.
 
 ### Machine state
 
 | State | Declaration | Purpose |
 |---|---|---|
-| Operand stack | `int st[STACK_SIZE]` (1024), index `sp` | Holds intermediate values, call frames, and locals. `TOS` is `st[sp]`, `NOS` is `st[sp-1]`. |
+| Registers | `int st[STACK_SIZE]` (4096) | Holds every active frame's registers. Register `n` of the current frame is `st[frameBase + n]`. |
 | Globals | `globalMem[]` | Program-wide `int` variables and arrays, 4 bytes per element; static storage starts at zero. |
 | Byte globals | `globalMem[]` | Program-wide `byte` variables and arrays, one byte per element; string initializers are written by the compiler. |
-| Frame base | `frameBase` | Index in `st[]` of the current frame's first parameter or local. |
-| Return stack | `struct return_s returnStack[STACK_SIZE]` (1024), `returnSp` | Saved return `pc` and caller `frameBase` for each active call. |
+| Frame base | `frameBase` | Index in `st[]` of the current frame's register 0. |
+| Return stack | `struct return_s returnStack[STACK_SIZE]` (4096), `returnSp` | Saved return `pc` and caller `frameBase` for each active call. |
 
 ### Dispatch loop
 
-When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0`. The first instruction calls `main`.
-
 - `run()` reads one opcode at `*pc++` and jumps to its case in a `switch`.
 - `ACASE` is `goto again; case`, so each case ends by jumping back to the top of the loop.
-- Operands follow the opcode inline. Slot, base, jump, and call operands are decoded with `f4(pc)` (`*(int*)pc`), `IP2` immediates with `f2(pc)` (`*(short*)pc`), and `IP4` immediates with `*(int*)pc`.
-- Jumps are relative. `JMP`, `JZ`, and `JNZ` read a 4-byte offset (using f4(pc)) and add it to the operand address.
-- `JZ` (JMP if zero) and `JNZ` (JMP if not zero) pop the condition from the stack. Zero means FALSE, non-zero means TRUE.
+- Operands follow the opcode inline. Register operands are read with `regIndex()` (a 2-byte unsigned value) and used through the `REG(p)` macro. Addresses and immediates are read with `f4(pc)` (`*(int*)pc`).
+- Jumps are relative to the offset field. `JMP` reads a 4-byte offset and adds it to the field's address. `JZ r, t` and `JNZ r, t` test register `r` and jump when it is zero (or non-zero). The fused branches take two register operands and a jump offset, and jump when their comparison holds. `if`, `while`, and `do` use the inverse of the condition for the jump past the body, so `a < b` branches with `JGE` when false.
 
 ### Calls and returns
 
-- `ICALL` reads the target address, argument count, and local count. It checks the call/operand stack limits, saves the return `pc` (`pc + 12`) and caller's `frameBase`, then sets `frameBase` to the first argument's slot (or the next free slot for a call with no arguments). The arguments are not copied: they remain in place on `st[]`. It reserves the local slots by advancing `sp`; **it does not zero them**. A local must be assigned before it is read; reading an uninitialized local has undefined behavior.
-- `IRET` takes the function result from `TOS`, writes it to `st[frameBase]`, and sets `sp` to `frameBase`. This discards the frame's remaining arguments and locals while leaving the result in place as the call expression's value. It then restores the caller's `pc` and `frameBase`. This same return convention is used for integer results and the zero returned by void functions.
-- A `return;` in a void function emits zero followed by `IRET`. If execution reaches the end of any function body, generated code likewise emits zero followed by `IRET`. Integer functions are checked by the parser for a return on all paths.
-- `HALT` returns from `run()` directly.
+- `CALL a, r, frameSize` computes `newBase = frameBase + r` and checks that the return stack has room and that `newBase + frameSize` fits in `st[]`. It saves the return `pc` (the instruction after the 10-byte `CALL`) and the caller's `frameBase`, then sets `frameBase = newBase` and jumps to `a`. No arguments are copied: they are already in the callee's first registers.
+- `RET r` stores register `r` into `st[frameBase]`, which is the callee's register 0 and the caller's register `r`. It then restores the caller's `pc` and `frameBase`. `RET0` does the same with `0`. Registers above the callee's frame are not cleared, and a local must be assigned before it is read; reading an unassigned local has undefined behavior.
+- `HALT` returns from `run()`.
 
 ### Built-in services
 
-`SYS` followed by `SYS_EMIT` passes the top-of-stack value to `putchar` as a character. The stack value is replaced with `putchar`'s return value, so `emit` is an expression.
+`EMIT r, s` passes register `s` to `putchar` as a character and stores its return value in register `r`, so `emit` is an expression.
 
 ### Runtime checks
 
-- Return-stack overflow (`STACK_SIZE`, 1024 entries) and call-frame overflow stop with an error at `ICALL`. Operand-stack pushes inside an expression are not checked, so a sufficiently deep expression writes past the 1024-entry array.
+- Call-stack overflow (more than `STACK_SIZE` nested calls) and call-frame overflow (a frame that would extend past `STACK_SIZE` slots) stop with an error at `CALL`.
 - `IDIV` and `IMOD` stop on a zero divisor.
-- `SYS_EMIT` expects one value on the stack.
 - Array indexes are not checked at runtime, so a bad index reads or writes an arbitrary `globalMem[]` byte.
-- Stack underflow is not checked for most opcodes.
+- Register operands are not range-checked at runtime; the code generator keeps them within the frame.
+
 
 ## 7. Limitations
 
@@ -167,6 +171,7 @@ When `run()` is called from `tiny-c.c`'s `main()`, it sets `pc = vm` and `sp = 0
   - `MAX_PATH_LENGTH` is 64 chars.
   - `MAX_INCLUDE_DEPTH` is 16.
   - `MAX_INCLUDED_FILES` is 128.
-  - `STACK_SIZE` is 1024 entries. The size of the VM operand and return stacks.
+  - `STACK_SIZE` is 4096 slots. All active frames' registers share this array, and the return stack has 4096 entries. Each call uses `frameSize` slots, so the usable recursion depth depends on how many registers each function needs.
+  - `MAX_REGISTERS` is 65535 registers per function frame, the limit of a 2-byte register operand.
 
 - **Local variables.** Locals are scalars only. Local arrays are not supported.

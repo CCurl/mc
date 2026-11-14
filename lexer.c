@@ -264,8 +264,8 @@ void nextSym() {
         sym = SLASH;
         break;
       case '%': nextCh(); sym = MODULO; break;
-      case '<': nextCh(); sym = LESS;  break;
-      case '>': nextCh(); sym = GRT;   break;
+      case '<': nextCh(); if (ch == '=') { nextCh(); sym = LESS_EQ; } else { sym = LESS; } break;
+      case '>': nextCh(); if (ch == '=') { nextCh(); sym = GRT_EQ; } else { sym = GRT; } break;
       case '!':
         nextCh();
         if (ch != '=') { syntaxError(); }

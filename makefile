@@ -3,7 +3,7 @@ app := tc
 .PHONY: all clean unit-tests invalid-tests
 
 CXX := clang
-CXXFLAGS := -m32 -O3 -D IS_LINUX
+CXXFLAGS := -m64 -Ofast -D IS_LINUX
 
 srcfiles := $(shell find . -name "*.c")
 incfiles := $(shell find . -name "*.h")

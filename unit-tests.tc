@@ -152,16 +152,36 @@ void testArithmetic() {
 }
 
 void testComparisons() {
+    int x, y, hits, count;
     check("less than true", 3 < 4);
     check("less than false", (4 < 3) == 0);
     check("greater than true", 4 > 3);
     check("greater than false", (3 > 4) == 0);
+    check("less or equal true", 3 <= 4);
+    check("less or equal at equal", 4 <= 4);
+    check("less or equal false", (5 <= 4) == 0);
+    check("greater or equal true", 4 >= 3);
+    check("greater or equal at equal", 4 >= 4);
+    check("greater or equal false", (3 >= 4) == 0);
     check("equal true", 5 == 5);
     check("equal false", (5 == 6) == 0);
     check("not equal true", 5 != 6);
     check("not equal false", (5 != 5) == 0);
     check("comparison results are 0 or 1", (1 < 2) + (2 < 3) == 2);
     check("comparison of sums", 1 + 1 < 2 + 1);
+    x = 4; y = 4; hits = 0;
+    if (x <= y) { hits = hits + 1; }
+    if (x >= y) { hits = hits + 1; }
+    if (x <= y - 1) { hits = hits + 10; }
+    if (x >= y + 1) { hits = hits + 10; }
+    check("runtime <= and >= in if", hits == 2);
+    count = 0;
+    while (count <= 3) { count = count + 1; }
+    check("while with <=", count == 4);
+    count = 9;
+    do { count = count - 1; } while (count >= 5);
+    check("do with >=", count == 4);
+    check("runtime <= and >= as values", ((x <= y) + (x >= y) + (x <= y - 1)) == 2);
 }
 
 void testAssignment() {
@@ -497,7 +517,6 @@ void setGlobal() { globalInt = 42; }
 int getGlobal() { return globalInt; }
 void writeSecond(int value, int items[]) { items[1] = value; }
 int identity(int x) { return x; }
-void cr() { emit('\n'); }
 
 int mul(int left, int right) { return left * right; }
 int div(int left, int right) { return left / right; }

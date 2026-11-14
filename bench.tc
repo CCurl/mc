@@ -6,6 +6,7 @@ int mil(int x) { return x * 1000 * 1000; }
 
 void whileBench(int sz) {
     int i = mil(sz);
+    print("while ("); printNum(i, 10); print(") ...");
     while (i) { i--; }
 }
 
@@ -20,10 +21,8 @@ int fact(int n) {
 }
 
 int main() {
-    print("while ...");
-    whileBench(100);
-    print("\nfib(30): "); printNum(fib(30), 10);
-    print("\nfact(15): "); printNum(fact(15), 10);
-    print("\n");
+    whileBench(200); cr();
+    print("fib(30): "); printNum(fib(30), 10); cr();
+    print("fact(14): "); printNum(fact(14), 10); cr();
     return 0;
 }
