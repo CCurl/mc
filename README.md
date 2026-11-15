@@ -11,7 +11,7 @@
  * The grammar of Tiny-C in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
- *  <include> ::= "include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
+ *  <include> ::= "#include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
  *  main is a <func_def> with no parameters and return type "int" or "void"; it must be defined exactly once.
  *  <defs> ::= { <def> }
  *  <def> ::= <func_def> | <func_proto> | <var_def>
@@ -50,7 +50,7 @@
  *  emit(int value) is a built-in VM service that writes the low byte and
  *  returns the written byte.
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
- *  Reserved words: do, else, if, while, void, int, byte, emit, return, include. "emit" is the built-in function, so it cannot name a variable, parameter, local, or function.
+ *  Reserved words: do, else, if, while, void, int, byte, emit, return. "emit" is the built-in function, so it cannot name a variable, parameter, local, or function.
  *  A local or parameter may shadow a global or function name.
  *  int and byte functions must return on every path. A while loop does not count as returning, so "while (1) { return 1; }" is rejected.
  *  <int> ::= <a_decimal_integer>  (no sign; use unary minus. Overflow is not detected)

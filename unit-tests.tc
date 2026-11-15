@@ -1,7 +1,7 @@
 // Unit tests for the Tiny-C compiler and VM.
 // Each check prints "name: ok" or "name: FAIL"; the last line prints the failure count.
 
-include "lib/util.tc";
+#include "lib/util.tc";
 
 int failures, passes;
 int gZero, gA, gB;

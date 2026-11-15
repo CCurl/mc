@@ -1,6 +1,6 @@
 // Benchmarks
 
-include "lib/util.tc";
+#include "lib/util.tc";
 
 int mil(int x) { return x * 1000 * 1000; }
 
@@ -22,7 +22,7 @@ int fact(int n) {
 
 int main() {
     whileBench(200); cr();
-    //print("fib(30): ");  printNum(fib(30), 10); cr();
-    //print("fact(14): "); printNum(fact(14), 10); cr();
+    print("fib(30): ");  printNum(fib(30), 10); cr();
+    print("fact(14): "); printNum(fact(14), 10); cr();
     return 0;
 }

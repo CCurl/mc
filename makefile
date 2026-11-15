@@ -35,11 +35,8 @@ invalid-tests: $(app)
 		echo "$$test: rejected (as expected)"; \
 	done
 
-tc-listing: $(srcfiles) $(incfiles)
-	$(CXX) $(CXXFLAGS) -D LISTING -o tc-listing $(srcfiles) $(LDLIBS)
-
-listing-test: tc-listing
-	-./tc-listing listing-expected.tc
+listing-test: tc
+	-./tc -l listing-expected.tc
 	diff listing-expected.txt listing.txt
 
 bin: $(app)
