@@ -34,13 +34,13 @@
 // ---------------------------------------------------------------------------
 // For the lexer and the parser ...
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-    BYTE_SYM, EMIT_SYM, RETURN_SYM, INCLUDE_SYM,                //  6 ->  9
-    LBRA, RBRA, LPAR, RPAR, PLUS,                               // 10 -> 14
-    MINUS, STAR, SLASH, MODULO,                                 // 15 -> 18
-    LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 19 -> 24
-    INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 25 -> 30
-	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS,       // 31 -> 34
-    LESS_EQ, GRT_EQ                                             // 35 -> 36
+    BYTE_SYM, EMIT_SYM, RETURN_SYM,                             //  6 ->  8
+    LBRA, RBRA, LPAR, RPAR, PLUS,                               //  9 -> 13
+    MINUS, STAR, SLASH, MODULO,                                 // 14 -> 17
+    LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 18 -> 23
+    INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 24 -> 29
+	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS,       // 30 -> 33
+    LESS_EQ, GRT_EQ                                             // 34 -> 35
 };
 
 enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
@@ -158,10 +158,10 @@ extern byte vm[MAX_CODE];
 extern struct function_s functions[MAX_FUNCTIONS];
 extern int numFunctions, mainFunction;
 
+int openSource(const char *path);
 void fail(const char *fmt, ...);
 void syntaxError(void);
 void nextSym(void);
-void openSource(const char *path);
 int loadInt(int addr);
 void storeInt(int addr, int value);
 int findVariable(const char *name);
@@ -181,6 +181,7 @@ node *program(void);
 void c(node *x);
 int run(void);
 int saveImage(const char *fileName);
+int loadImage(const char *fileName);
 extern const char *const opcodeNames[NUM_OPCODES];
 extern const char *const opcodeKinds[NUM_OPCODES];
 int opcodeLength(int op);

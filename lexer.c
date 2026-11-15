@@ -4,7 +4,7 @@
 #include "tiny-c.h"
 
 // -------------------------------------------------
-char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", "include", NULL };
+char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", NULL };
 
 int ch = ' ', sym, intVal;
 char idName[ID_NAME_LENGTH];
@@ -170,12 +170,13 @@ static void nextCh() {
     if (ch == '\n') { lineNumber++; }
 }
 
-void openSource(const char *path) {
+int openSource(const char *path) {
     if (strlen(path) >= MAX_PATH_LENGTH) { fail("-path too long-"); }
     inputFp = fopen(path, "rt");
     if (!inputFp) { fail("-cannot open %s-\n", path); }
     strcpy(currentPath, path);
     strcpy(includedPaths[numIncludedPaths++], path);
+    return 1;
 }
 
 static void resolveInclude(const char *name, char *out) {
@@ -258,6 +259,19 @@ void nextSym() {
         sym = SLASH;
         break;
       case '%': nextCh(); sym = MODULO; break;
+      case '#': {
+          int i = 0;
+          nextCh();
+          while (isAlphaNum(ch)) {
+              if (i >= (int)sizeof(idName) - 1) { fail("-directive too long-"); }
+              idName[i++] = ch;
+              nextCh();
+          }
+          idName[i] = '\0';
+          if (strcmp(idName, "include") != 0) { fail("-unknown directive-"); }
+          includeFile();
+          goto again;
+      }
       case '<': nextCh(); if (ch == '=') { nextCh(); sym = LESS_EQ; } else { sym = LESS; } break;
       case '>': nextCh(); if (ch == '=') { nextCh(); sym = GRT_EQ; } else { sym = GRT; } break;
       case '!':
@@ -334,12 +348,7 @@ void nextSym() {
             idName[i] = '\0';
             sym = 0;
             while (reservedWords[sym] != NULL && strcmp(reservedWords[sym], idName) != 0) { sym++; }
-            if (reservedWords[sym] == NULL) {
-                sym = ID;
-            } else if (sym == INCLUDE_SYM) {
-                includeFile();
-                goto again;
-            }
+            if (reservedWords[sym] == NULL) { sym = ID; }
         } else { fail("-ch-\n"); }
         break;
     }

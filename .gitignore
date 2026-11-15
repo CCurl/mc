@@ -60,9 +60,8 @@ dkms.conf
 # Personal
 mc
 tc
-tc-listing
 listing.txt
 /tc.vcxproj
 /tc.vcxproj.user
 .vscode/settings.json
-out.img
+a.img

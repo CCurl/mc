@@ -1,10 +1,7 @@
 //---------------------------------------------------------------------------
-// Listing of the generated code. Compiled only when LISTING is defined
-// (make LISTING=1). Writes a listing of the code to listing.txt.
+// Listing of the generated code. Writes a listing of the code to listing.txt when tc is run with -l.
 
 #include "tiny-c.h"
-
-#ifdef LISTING
 
 static int readReg(int p) { return *(unsigned short *)(vm + p); }
 static int readInt(int p) { return *(int *)(vm + p); }
@@ -50,5 +47,3 @@ void listing() {
     }
     fclose(fp);
 }
-
-#endif

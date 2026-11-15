@@ -6,12 +6,12 @@
 
 /*
  * This is a compiler for Tiny-C, a stripped down version of C.
- * The compiler reads the program from the file named on the command line
- * (default unit-tests.tc), then runs it in the built-in VM. Output comes only from emit().
+ * The compiler reads the program from the file named on the command line,
+ * then runs it in the built-in VM. Output comes only from emit().
  * The grammar of Tiny-C in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
- *  <include> ::= "include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
+ *  <include> ::= "#include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
  *  main is a <func_def> with no parameters and return type "int" or "void"; it must be defined exactly once.
  *  <defs> ::= { <def> }
  *  <def> ::= <func_def> | <func_proto> | <var_def>
@@ -50,7 +50,7 @@
  *  emit(int value) is a built-in VM service that writes the low byte and
  *  returns the written byte.
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
- *  Reserved words: do, else, if, while, void, int, byte, emit, return, include. "emit" is the built-in function, so it cannot name a variable, parameter, local, or function.
+ *  Reserved words: do, else, if, while, void, int, byte, emit, return. "emit" is the built-in function, so it cannot name a variable, parameter, local, or function.
  *  A local or parameter may shadow a global or function name.
  *  int and byte functions must return on every path. A while loop does not count as returning, so "while (1) { return 1; }" is rejected.
  *  <int> ::= <a_decimal_integer>  (no sign; use unary minus. Overflow is not detected)
@@ -82,7 +82,19 @@
 
 ## Building and Testing
 
-- `make` builds `tc` with clang and `-m32`.
+- `make` builds `tc` with clang and `-m64`.
 - `make bin` copies `tc` to `~/bin/`.
-- `make unit-tests` runs `unit-tests.tc`, which holds the program-level checks, and prints `passed: N, failed: M`.
+- `make test` runs `unit-tests.tc`, which holds the program-level checks, and prints `passed: N, failed: M`.
 - `make invalid-tests` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.
+- `make listing-test` writes a listing of `listing-expected.tc` to `listing.txt` and diffs it against `listing-expected.txt`.
+
+## Command line
+
+    tc [-l] [-o] [-r] [-?] <file>
+
+- `-l`: write a listing of the generated code to `listing.txt`.
+- `-o`: save the compiled image to `a.img`.
+- `-r`: run the program (on by default).
+- `-?`: show the usage message.
+
+A source file is required. Without one, `tc` prints the usage message and exits.
