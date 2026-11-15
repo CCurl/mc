@@ -168,7 +168,6 @@ int findVariable(const char *name);
 int declareVariable(const char *name, int size, int isArray, int type);
 int variableIndex(const char *name);
 int arrayIndex(const char *name);
-int arrayReference(const char *name);
 int allocateStringLiteral(void);
 void storeStringBytes(int base);
 int parameterIndex(const char *name);

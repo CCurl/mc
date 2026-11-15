@@ -42,25 +42,18 @@ static int functionIndex(const char *name) {
         if (strcmp(functions[i].name, name) == 0) { return i; }
     }
     if (numFunctions >= MAX_FUNCTIONS) { fail("-too many functions-"); }
-    strcpy(functions[numFunctions].name, name);
-    functions[numFunctions].body = NULL;
-    functions[numFunctions].address = 0;
-    functions[numFunctions].declared = 0;
-    functions[numFunctions].defined = 0;
-    functions[numFunctions].returnsValue = 0;
-    functions[numFunctions].returnType = TYPE_VOID;
-    functions[numFunctions].numParameters = 0;
-    functions[numFunctions].numLocals = 0;
+    struct function_s *function = &functions[numFunctions];
+    memset(function, 0, sizeof(*function));
+    strcpy(function->name, name);
+    function->returnType = TYPE_VOID;
     return numFunctions++;
 }
 
 static node *newNode(int k) {
     if (MAX_NODES <= numNodes) { fail("-too many syntax nodes-"); }
     node *x = &nodes[numNodes++];
+    memset(x, 0, sizeof(*x));
     x->kind = k;
-    x->o1 = x->o2 = x->o3 = NULL;
-    x->val = 0;
-    x->type = TYPE_INT;
     return x;
 }
 
@@ -113,6 +106,13 @@ static void expectSym(int exp) {
     if (sym != exp) {
         fail("-expected symbol[%d],not[%d]-\n", exp, sym);
     }
+    nextSym();
+}
+
+// Consumes an identifier and copies its name into name.
+static void expectName(char *name) {
+    if (sym != ID) { syntaxError(); }
+    strcpy(name, idName);
     nextSym();
 }
 
@@ -175,46 +175,58 @@ static int arrayElementType(const char *name) {
     return variableTypes[findVariable(name)];
 }
 
-/* <term> ::= <id> | <id> "(" [ <expr> { "," <expr> } ] ")" | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> */
-/* The scalar variable that ++ or -- changes: a local, a parameter, or a global. */
-static node *scalarTarget(const char *name) {
+// The LOCAL, VAR, or ARRAY_REF node for a bare name.
+static node *nameNode(const char *name) {
     int local = localIndex(name);
     int parameter = parameterIndex(name);
+    int variable = findVariable(name);
     node *x;
     if (local >= 0) {
         x = newNode(LOCAL);
         x->val = functions[currentFunction].numParameters + local;
         x->type = functions[currentFunction].localTypes[local];
+    } else if (parameter >= 0 && functions[currentFunction].parameterIsArray[parameter]) {
+        x = newNode(ARRAY_REF);
+        x->val = arrayIndex(name);
+        x->type = functions[currentFunction].parameterTypes[parameter];
     } else if (parameter >= 0) {
         x = newNode(VAR);
         x->val = variableIndex(name);
         x->type = functions[currentFunction].parameterTypes[parameter];
+    } else if (variable >= 0 && variableIsArray[variable]) {
+        x = newNode(ARRAY_REF);
+        x->val = variableBases[variable];
+        x->type = variableTypes[variable];
     } else {
         x = newNode(VAR);
         x->val = variableIndex(name);
-        x->type = variableTypes[findVariable(name)];
+        x->type = variableTypes[variable];
     }
     return x;
 }
 
+// A prefix or postfix ++ or -- applied to a scalar variable.
+static node *increment(int kind, node *target, int delta) {
+    if (target->kind != VAR && target->kind != LOCAL) { fail("-++ and -- need a scalar variable-"); }
+    node *x = newNode(kind);
+    x->o1 = target;
+    x->val = delta;
+    x->type = target->type;
+    return x;
+}
+
+/* <term> ::= <id> | <id> "(" [ <expr> { "," <expr> } ] ")" | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> */
 static node *term() {
   node *x = NULL;
   if (sym == MINUS) {
       nextSym();
-      x = newNode(CST);
-      x->val = 0;
-      return gen(SUB, x, term());
+      return gen(SUB, constant(0), term());
   } else if (sym == PLUS_PLUS || sym == MINUS_MINUS) {
       int delta = sym == PLUS_PLUS ? 1 : -1;
       nextSym();
-      if (sym != ID) { syntaxError(); }
       char name[sizeof(idName)];
-      strcpy(name, idName);
-      nextSym();
-      x = newNode(PRE_INC);
-      x->o1 = scalarTarget(name);
-      x->val = delta;
-      x->type = x->o1->type;
+      expectName(name);
+      x = increment(PRE_INC, nameNode(name), delta);
   } else if (sym == ID || sym == EMIT_SYM) {
       char name[sizeof(idName)];
       strcpy(name, idName);
@@ -233,44 +245,14 @@ static node *term() {
           x->val = base;
           x->type = arrayElementType(name);
       } else {
-          int variable = findVariable(name);
-          int parameter = parameterIndex(name);
-          int local = localIndex(name);
-          if (local >= 0) {
-              x = newNode(LOCAL);
-              x->val = functions[currentFunction].numParameters + local;
-              x->type = functions[currentFunction].localTypes[local];
-          } else if (parameter >= 0 &&
-                     functions[currentFunction].parameterIsArray[parameter]) {
-            x = newNode(ARRAY_REF);
-            x->val = arrayReference(name);
-            x->type = functions[currentFunction].parameterTypes[parameter];
-          } else if (parameter >= 0) {
-            x = newNode(VAR);
-            x->val = -parameter - 1;
-            x->type = functions[currentFunction].parameterTypes[parameter];
-          } else if (variable >= 0 && variableIsArray[variable]) {
-            x = newNode(ARRAY_REF);
-            x->val = variableBases[variable];
-            x->type = variableTypes[variable];
-          } else {
-            x=newNode(VAR);
-            x->val=variableIndex(name);
-            x->type = variableTypes[variable];
-          }
+          x = nameNode(name);
           if (sym == PLUS_PLUS || sym == MINUS_MINUS) {
-              if (x->kind != VAR && x->kind != LOCAL) { fail("-++ and -- need a scalar variable-"); }
-              node *post = newNode(POST_INC);
-              post->o1 = x;
-              post->val = sym == PLUS_PLUS ? 1 : -1;
-              post->type = x->type;
+              x = increment(POST_INC, x, sym == PLUS_PLUS ? 1 : -1);
               nextSym();
-              x = post;
           }
       }
   } else if (sym == INT || sym == CHAR_LITERAL) {
-      x=newNode(CST);
-      x->val=intVal;
+      x = constant(intVal);
       nextSym();
   } else if (sym == STRING_LITERAL) {
       int base = allocateStringLiteral();
@@ -295,8 +277,8 @@ static int mathop() {
 /* <math_op> ::= "+" | "-" | "*" | "/" | "%" */
 static node *sum() {
   node *x = term();
-  while (mathop()) {
-    int op = mathop();
+  int op;
+  while ((op = mathop())) {
     nextSym();
     x = gen(op, x, term());
   }
@@ -343,16 +325,17 @@ node *parenExpr() {
   return x;
 }
 
+static node *block(node *x);
+
 static node *statement() {
   node *x;
   if ((sym == INT_SYM || sym == BYTE_SYM) && currentFunction >= 0) {
       int localType = keywordType(sym);
       nextSym();
-      if (sym != ID) { syntaxError(); }
       x = newNode(EMPTY);
       while (1) {
           char name[sizeof(idName)];
-          strcpy(name, idName);
+          expectName(name);
           if (parameterIndex(name) >= 0 || localIndex(name) >= 0) {
               fail("-duplicate local variable %s-\n", name);
           }
@@ -361,7 +344,6 @@ static node *statement() {
           int local = function->numLocals;
           strcpy(function->localNames[local], name);
           function->localTypes[function->numLocals++] = localType;
-          nextSym();
           if (sym == EQUAL) {
               nextSym();
               node *value = expr();
@@ -376,7 +358,6 @@ static node *statement() {
           }
           if (sym != COMMA) { break; }
           nextSym();
-          if (sym != ID) { syntaxError(); }
       }
       expectSym(SEMI);
   } else if (sym == RETURN_SYM) {
@@ -423,13 +404,8 @@ static node *statement() {
       x = newNode(EMPTY);
       nextSym();
   } else if (sym == LBRA) { /* "{" <statement> "}" */
-      x = newNode(EMPTY);
       nextSym();
-      while (sym != RBRA) {
-        x =gen(SEQ, x, 0);
-        x->o2=statement();
-      }
-      nextSym();
+      x = block(newNode(EMPTY));
   } else { /* <expr> ";" | <assignment> ";" */
       node *value = expr();
       if (sym == EQUAL) { value = assignment(value); }
@@ -437,6 +413,17 @@ static node *statement() {
       expectSym(SEMI);
   }
   return x;
+}
+
+// Parses statements up to and including the closing "}"; the opening "{" has already been consumed.
+static node *block(node *x) {
+    while (sym != RBRA) {
+        if (sym == EOI) { syntaxError(); }
+        x = gen(SEQ, x, NULL);
+        x->o2 = statement();
+    }
+    nextSym();
+    return x;
 }
 
 static int returnsOnAllPaths(node *x) {
@@ -500,16 +487,13 @@ static void parseVariableDeclarator(const char *name, int type) {
         }
         expectSym(RBRACKET);
     }
-    int hasScalarInitializer = 0;
-    int scalarValue = 0;
+    node *scalar = NULL;
     int hasStringInitializer = 0;
     if (sym == EQUAL && !isArray) {
         nextSym();
-        node *value = expr();
-        if (type == TYPE_BYTE) { value = byteConversion(value); }
-        if (value->kind != CST) { fail("-global initializer must be constant-"); }
-        scalarValue = value->val;
-        hasScalarInitializer = 1;
+        scalar = expr();
+        if (type == TYPE_BYTE) { scalar = byteConversion(scalar); }
+        if (scalar->kind != CST) { fail("-global initializer must be constant-"); }
     } else if (sym == EQUAL) {
         nextSym();
         if (type != TYPE_BYTE || sym != STRING_LITERAL) {
@@ -524,14 +508,13 @@ static void parseVariableDeclarator(const char *name, int type) {
     } else if (inferredSize) {
         fail("-array size required unless initialized by a string-");
     }
-    int variable = declareVariable(name, size, isArray, type);
-    if (hasScalarInitializer) {
-        int base = variableBases[variable];
-        if (type == TYPE_BYTE) { globalMem[base] = scalarValue; }
-        else { storeInt(base, scalarValue); }
+    int base = variableBases[declareVariable(name, size, isArray, type)];
+    if (scalar) {
+        if (type == TYPE_BYTE) { globalMem[base] = scalar->val; }
+        else { storeInt(base, scalar->val); }
     }
     if (hasStringInitializer) {
-        storeStringBytes(variableBases[variable]);
+        storeStringBytes(base);
         nextSym();
     }
 }
@@ -540,25 +523,18 @@ static void variableDeclarations(const char *firstName, int type) {
     parseVariableDeclarator(firstName, type);
     while (sym == COMMA) {
         nextSym();
-        if (sym != ID) { syntaxError(); }
         char name[sizeof(idName)];
-        strcpy(name, idName);
-        nextSym();
+        expectName(name);
         parseVariableDeclarator(name, type);
     }
     expectSym(SEMI);
 }
 
 static int sameSignature(struct function_s *declared, struct function_s *header) {
-    if (declared->returnType != header->returnType ||
-        declared->numParameters != header->numParameters) {
-        return 0;
-    }
+    if (declared->returnType != header->returnType || declared->numParameters != header->numParameters) { return 0; }
     for (int i = 0; i < header->numParameters; i++) {
         if (declared->parameterTypes[i] != header->parameterTypes[i] ||
-            declared->parameterIsArray[i] != header->parameterIsArray[i]) {
-            return 0;
-        }
+            declared->parameterIsArray[i] != header->parameterIsArray[i]) { return 0; }
     }
     return 1;
 }
@@ -602,18 +578,11 @@ static void parseFunctionDefinition(const char *name, int returnType) {
     expectSym(LBRA);
     int previousFunction = currentFunction;
     currentFunction = index;
-    node *body = newNode(EMPTY);
-    while (sym != RBRA) {
-        if (sym == EOI) { syntaxError(); }
-        body = gen(SEQ, body, NULL);
-        body->o2 = statement();
-    }
-    functions[index].body = body;
+    functions[index].body = block(newNode(EMPTY));
     currentFunction = previousFunction;
-    if (returnType != TYPE_VOID && !returnsOnAllPaths(body)) {
+    if (returnType != TYPE_VOID && !returnsOnAllPaths(functions[index].body)) {
         fail("-non-void function %s does not return on all paths-\n", name);
     }
-    nextSym();
 }
 
 // An array reference is valid only as a direct array argument, which callArguments() has already checked.
@@ -645,17 +614,11 @@ static node *defs(node *st) {
     if (sym==VOID_SYM || sym==INT_SYM || sym==BYTE_SYM) {
       int type = keywordType(sym);
       nextSym();
-      if (sym != ID) { syntaxError(); }
       char name[sizeof(idName)];
-      strcpy(name, idName);
-      nextSym();
-      if (sym == LPAR) {
-          parseFunctionDefinition(name, type);
-      } else if (type != TYPE_VOID) {
-          variableDeclarations(name, type);
-      } else {
-          syntaxError();
-      }
+      expectName(name);
+      if (sym == LPAR) { parseFunctionDefinition(name, type); }
+      else if (type != TYPE_VOID) { variableDeclarations(name, type); }
+      else { syntaxError(); }
       continue;
     }
     fail("-def?-\n");

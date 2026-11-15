@@ -124,41 +124,15 @@ int arrayIndex(const char *name) {
     return variableBases[index];
 }
 
-int arrayReference(const char *name) {
-    if (localIndex(name) >= 0) {
-        fail("-local variable %s is not an array-\n", name);
-    }
-    int parameter = parameterIndex(name);
-    if (parameter >= 0) {
-        if (currentParameterIsArray(parameter)) {
-            return -parameter - 1;
-        }
-        fail("-parameter %s is not an array-\n", name);
-    }
-    int index = findVariable(name);
-    if (index < 0) {
-        fail("-undeclared variable %s-\n", name);
-    }
-    if (!variableIsArray[index]) {
-        fail("-variable %s is not an array-\n", name);
-    }
-    return variableBases[index];
-}
-
 static int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }
 static int isNum(int ch) { return BTWI(ch,'0','9'); }
 static int isAlphaNum(int ch) { return isAlpha(ch) || isNum(ch); }
 
 static int escapedCharacter(int ch) {
     switch (ch) {
-      case 'n': return '\n';
-      case 'r': return '\r';
-      case 't': return '\t';
-      case '0': return '\0';
-      case 'e': return 27;
-      case '\\': return '\\';
-      case '\'': return '\'';
-      case '"': return '"';
+      case 'n': return '\n';  case 'r': return '\r';  case 't': return '\t';
+      case '0': return '\0';  case 'e': return 27;
+      case '\\': return '\\'; case '\'': return '\'';  case '"': return '"';
       default: fail("-invalid character escape-");
     }
     return 0;
@@ -168,6 +142,35 @@ static void nextCh() {
     if (inputFp) { ch = fgetc(inputFp); }
     else { ch = getchar(); }
     if (ch == '\n') { lineNumber++; }
+}
+
+// Reads one character inside a character or string literal, decoding a backslash escape.
+static int literalCharacter() {
+    int value = ch;
+    if (ch == '\\') {
+        nextCh();
+        value = escapedCharacter(ch);
+    }
+    nextCh();
+    return value;
+}
+
+// Called after the first character of a one- or two-character symbol has been read.
+static int symbolPair(int second, int twoCharSym, int oneCharSym) {
+    if (ch != second) { return oneCharSym; }
+    nextCh();
+    return twoCharSym;
+}
+
+// Reads an identifier or directive name into idName.
+static void readName(const char *tooLongMessage) {
+    int i = 0;
+    while (isAlphaNum(ch)) {
+        if (i >= (int)sizeof(idName) - 1) { fail(tooLongMessage); }
+        idName[i++] = ch;
+        nextCh();
+    }
+    idName[i] = '\0';
 }
 
 int openSource(const char *path) {
@@ -247,8 +250,8 @@ void nextSym() {
       case '}': nextCh(); sym = RBRA;  break;
       case '(': nextCh(); sym = LPAR;  break;
       case ')': nextCh(); sym = RPAR;  break;
-      case '+': nextCh(); if (ch == '+') { nextCh(); sym = PLUS_PLUS; } else { sym = PLUS; } break;
-      case '-': nextCh(); if (ch == '-') { nextCh(); sym = MINUS_MINUS; } else { sym = MINUS; } break;
+      case '+': nextCh(); sym = symbolPair('+', PLUS_PLUS, PLUS); break;
+      case '-': nextCh(); sym = symbolPair('-', MINUS_MINUS, MINUS); break;
       case '*': nextCh(); sym = STAR;  break;
       case '/':
         nextCh();
@@ -259,37 +262,17 @@ void nextSym() {
         sym = SLASH;
         break;
       case '%': nextCh(); sym = MODULO; break;
-      case '#': {
-          int i = 0;
+      case '#':
           nextCh();
-          while (isAlphaNum(ch)) {
-              if (i >= (int)sizeof(idName) - 1) { fail("-directive too long-"); }
-              idName[i++] = ch;
-              nextCh();
-          }
-          idName[i] = '\0';
+          readName("-directive too long-");
           if (strcmp(idName, "include") != 0) { fail("-unknown directive-"); }
           includeFile();
           goto again;
-      }
-      case '<': nextCh(); if (ch == '=') { nextCh(); sym = LESS_EQ; } else { sym = LESS; } break;
-      case '>': nextCh(); if (ch == '=') { nextCh(); sym = GRT_EQ; } else { sym = GRT; } break;
-      case '!':
-        nextCh();
-        if (ch != '=') { syntaxError(); }
-        nextCh();
-        sym = NE_SYM;
-        break;
+      case '<': nextCh(); sym = symbolPair('=', LESS_EQ, LESS); break;
+      case '>': nextCh(); sym = symbolPair('=', GRT_EQ, GRT); break;
+      case '!': nextCh(); if (ch != '=') { syntaxError(); } nextCh(); sym = NE_SYM; break;
       case ';': nextCh(); sym = SEMI;  break;
-      case '=':
-        nextCh();
-        if (ch == '=') {
-            nextCh();
-            sym = EQ_SYM;
-        } else {
-            sym = EQUAL;
-        }
-        break;
+      case '=': nextCh(); sym = symbolPair('=', EQ_SYM, EQUAL); break;
       case '[': nextCh(); sym = LBRACKET; break;
       case ']': nextCh(); sym = RBRACKET; break;
       case ',': nextCh(); sym = COMMA; break;
@@ -298,13 +281,7 @@ void nextSym() {
         if (ch == EOF || ch == '\n' || ch == '\r' || ch == '\'') {
             fail("-invalid character literal-");
         }
-        if (ch == '\\') {
-            nextCh();
-            intVal = escapedCharacter(ch);
-        } else {
-            intVal = ch;
-        }
-        nextCh();
+        intVal = literalCharacter();
         if (ch != '\'') { fail("-character literal must contain one character-"); }
         nextCh();
         sym = CHAR_LITERAL;
@@ -316,19 +293,12 @@ void nextSym() {
             if (ch == EOF || ch == '\n' || ch == '\r') {
                 fail("-unterminated string literal-");
             }
-            int value;
-            if (ch == '\\') {
-                nextCh();
-                value = escapedCharacter(ch);
-            } else {
-                value = ch;
-            }
+            int value = literalCharacter();
             if (value > 127) { fail("-string literals must contain ASCII characters-"); }
             if (stringLength >= MAX_STRING_LENGTH) {
                 fail("-string literal too long-");
             }
             stringValues[stringLength++] = value;
-            nextCh();
         }
         nextCh();
         sym = STRING_LITERAL;
@@ -339,13 +309,7 @@ void nextSym() {
             while (isNum(ch)) { intVal = intVal*10 + (ch - '0'); nextCh(); }
             sym = INT;
         } else if (isAlpha(ch)) {
-            int i = 0;
-            while (isAlphaNum(ch)) {
-                if (i >= (int)sizeof(idName) - 1) { fail("-identifier too long-"); }
-                idName[i++]=ch;
-                nextCh();
-            }
-            idName[i] = '\0';
+            readName("-identifier too long-");
             sym = 0;
             while (reservedWords[sym] != NULL && strcmp(reservedWords[sym], idName) != 0) { sym++; }
             if (reservedWords[sym] == NULL) { sym = ID; }
