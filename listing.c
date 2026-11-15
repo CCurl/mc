@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------------
 // Listing of the generated code. Writes a listing of the code to listing.txt when tc is run with -l.
 
-#include "tiny-c.h"
+#include "min-c.h"
 
 static int readReg(int p) { return *(unsigned short *)(vm + p); }
 static int readInt(int p) { return *(int *)(vm + p); }

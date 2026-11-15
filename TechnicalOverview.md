@@ -19,20 +19,20 @@ flowchart LR
 
 ## Source layout
 
-- `tiny-c.c`: defines the `main()` function.
-- `tiny-c.h`: shared types, structures, sizes, and defines
+- `min-c.c`: defines the `main()` function.
+- `min-c.h`: shared types, structures, sizes, and defines
 - `lexer.c`: tokenization, global variable storage, the source/include stack, and error reporting.
 - `parser.c`: AST nodes, function and variable tables, and program checks.
 - `gen.c`: bytecode generation, constant folding, and call patching.
 - `vm.c`: the `run()` interpreter.
 - `listing.c`: the code listing. Option `-l` writes a listing of the generated code to `listing.txt`. `make listing-test` checks that listing against `listing-expected.txt`.
-- `lib/*.tc`: Tiny-C source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
+- `lib/*.tc`: min-c source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
 
 ## 1. Lexer
 
 - `nextCh()` reads from `inputFp`, or stdin if it is null, and counts newlines in `lineNumber`.
 - `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, `PLUS_PLUS`, and `RETURN_SYM`. `++` and `--` are single tokens, so `a--b` is a syntax error; write `a - -b`.
-- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `tiny-c.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, and `return`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
+- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `min-c.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, and `return`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
 - `#include "path";` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
 - `fail()` prints `path:line:` before every compile error.
 - The input file is a required command-line argument; see the command line section of `README.md`.
@@ -68,7 +68,7 @@ String literals are permitted only as array arguments or global array initialize
 
 ## 4. Code generation (`c()` walks the AST)
 
-The output is a flat byte array `vm[MAX_CODE]` (65536 bytes) of register instructions. Each opcode is one byte, followed by operands in the order given by the layout comment in `tiny-c.h`:
+The output is a flat byte array `vm[MAX_CODE]` (65536 bytes) of register instructions. Each opcode is one byte, followed by operands in the order given by the layout comment in `min-c.h`:
 
 - `r`: a 2-byte unsigned register number, relative to the current frame.
 - `a`: a 4-byte address or immediate.

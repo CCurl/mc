@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
-// Lexer for tiny-c
+// Lexer for min-c
 
-#include "tiny-c.h"
+#include "min-c.h"
 
 // -------------------------------------------------
 char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", NULL };

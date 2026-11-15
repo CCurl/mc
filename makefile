@@ -1,4 +1,4 @@
-app := tc
+app := mc
 
 .PHONY: all clean test bench bin invalid-tests listing-test
 
@@ -31,9 +31,9 @@ invalid-tests: $(app)
 		echo "$$test: rejected (as expected)"; \
 	done
 
-listing-test: tc
-	-./tc -l listing-expected.tc
+listing-test: $(app)
+	-./$(app) -l listing-expected.tc
 	diff listing-expected.txt listing.txt
 
 bin: $(app)
-	cp -u -p $(app) ~/bin/
+	cp -u -p $(app) ~/bin/$(app)

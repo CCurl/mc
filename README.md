@@ -5,10 +5,10 @@
 /* Heavily modified by Chris Curl to add more C-like support */
 
 /*
- * This is a compiler for Tiny-C, a stripped down version of C.
+ * This is a compiler for min-c, a stripped down version of C.
  * The compiler reads the program from the file named on the command line,
  * then runs it in the built-in VM. Output comes only from emit().
- * The grammar of Tiny-C in EBNF is:
+ * The grammar of min-c in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
  *  <include> ::= "#include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)

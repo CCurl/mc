@@ -1,7 +1,7 @@
 /*---------------------------------------------------------------------------*/
-/* Virtual machine for tiny-c. */
+/* Virtual machine for min-c. */
 
-#include "tiny-c.h"
+#include "min-c.h"
 
 // -------------------------------------------------
 static int regIndex(byte *a) { return *(unsigned short *)a; }
