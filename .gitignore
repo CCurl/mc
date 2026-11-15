@@ -65,3 +65,4 @@ listing.txt
 /tc.vcxproj.user
 .vscode/settings.json
 a.img
+out.img
