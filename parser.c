@@ -185,13 +185,10 @@ static node *nameNode(const char *name) {
         x = newNode(LOCAL);
         x->val = functions[currentFunction].numParameters + local;
         x->type = functions[currentFunction].localTypes[local];
-    } else if (parameter >= 0 && functions[currentFunction].parameterIsArray[parameter]) {
-        x = newNode(ARRAY_REF);
-        x->val = arrayIndex(name);
-        x->type = functions[currentFunction].parameterTypes[parameter];
     } else if (parameter >= 0) {
-        x = newNode(VAR);
-        x->val = variableIndex(name);
+        int isArray = functions[currentFunction].parameterIsArray[parameter];
+        x = newNode(isArray ? ARRAY_REF : VAR);
+        x->val = isArray ? arrayIndex(name) : variableIndex(name);
         x->type = functions[currentFunction].parameterTypes[parameter];
     } else if (variable >= 0 && variableIsArray[variable]) {
         x = newNode(ARRAY_REF);
@@ -430,8 +427,7 @@ static int returnsOnAllPaths(node *x) {
     switch (x->kind) {
         case RETURN_NODE: return 1;
         case SEQ: return returnsOnAllPaths(x->o1) || returnsOnAllPaths(x->o2);
-        case IF2:
-            return returnsOnAllPaths(x->o2) && returnsOnAllPaths(x->o3);
+        case IF2: return returnsOnAllPaths(x->o2) && returnsOnAllPaths(x->o3);
         case DO: return returnsOnAllPaths(x->o1);
         default: return 0;
     }
@@ -439,34 +435,32 @@ static int returnsOnAllPaths(node *x) {
 
 static void parseParameters(struct function_s *function) {
     expectSym(LPAR);
-    if (sym == RPAR) {
-        nextSym();
-        return;
-    }
-    while (1) {
-        if (sym != INT_SYM && sym != BYTE_SYM) { syntaxError(); }
-        int parameterType = keywordType(sym);
-        nextSym();
-        if (sym != ID) { syntaxError(); }
-        for (int i = 0; i < function->numParameters; i++) {
-            if (strcmp(function->parameterNames[i], idName) == 0) {
-                fail("-duplicate parameter %s-\n", idName);
-            }
-        }
-        if (function->numParameters >= MAX_PARAMETERS) {
-            fail("-too many parameters-");
-        }
-        strcpy(function->parameterNames[function->numParameters++], idName);
-        int parameter = function->numParameters - 1;
-        function->parameterTypes[parameter] = parameterType;
-        nextSym();
-        if (sym == LBRACKET) {
+    if (sym != RPAR) {
+        while (1) {
+            if (sym != INT_SYM && sym != BYTE_SYM) { syntaxError(); }
+            int parameterType = keywordType(sym);
             nextSym();
-            expectSym(RBRACKET);
-            function->parameterIsArray[parameter] = 1;
+            if (sym != ID) { syntaxError(); }
+            for (int i = 0; i < function->numParameters; i++) {
+                if (strcmp(function->parameterNames[i], idName) == 0) {
+                    fail("-duplicate parameter %s-\n", idName);
+                }
+            }
+            if (function->numParameters >= MAX_PARAMETERS) {
+                fail("-too many parameters-");
+            }
+            strcpy(function->parameterNames[function->numParameters++], idName);
+            int parameter = function->numParameters - 1;
+            function->parameterTypes[parameter] = parameterType;
+            nextSym();
+            if (sym == LBRACKET) {
+                nextSym();
+                expectSym(RBRACKET);
+                function->parameterIsArray[parameter] = 1;
+            }
+            if (sym != COMMA) { break; }
+            nextSym();
         }
-        if (sym != COMMA) { break; }
-        nextSym();
     }
     expectSym(RPAR);
 }
@@ -605,23 +599,19 @@ static void checkArrayRefs(node *x) {
 /* <defs> ::= { <var_def> | <func_def> }. Globals and functions may appear in any order; main must be defined somewhere. */
 static node *defs(node *st) {
   nextSym();
-  while (1) {
-    if (sym==EOI) { break; }
-    if (sym==LBRA) {
+  while (sym != EOI) {
+    if (sym == LBRA) {
         if (mainFunction < 0) { fail("-program must define main()-"); }
         syntaxError();
     }
-    if (sym==VOID_SYM || sym==INT_SYM || sym==BYTE_SYM) {
-      int type = keywordType(sym);
-      nextSym();
-      char name[sizeof(idName)];
-      expectName(name);
-      if (sym == LPAR) { parseFunctionDefinition(name, type); }
-      else if (type != TYPE_VOID) { variableDeclarations(name, type); }
-      else { syntaxError(); }
-      continue;
-    }
-    fail("-def?-\n");
+    if (sym != VOID_SYM && sym != INT_SYM && sym != BYTE_SYM) { fail("-def?-\n"); }
+    int type = keywordType(sym);
+    nextSym();
+    char name[sizeof(idName)];
+    expectName(name);
+    if (sym == LPAR) { parseFunctionDefinition(name, type); }
+    else if (type != TYPE_VOID) { variableDeclarations(name, type); }
+    else { syntaxError(); }
   }
   return st;
 }
