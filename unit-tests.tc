@@ -7,8 +7,7 @@ int failures, passes;
 int gZero, gA, gB;
 int gInit = 7, gInitNeg = -3, gInitExpr = 2 * 3 + 1;
 byte gByteInit = 258, gByteNeg = -1;
-byte gByte;
-byte gBytes[] = "abc";
+byte gByte, gBytes[] = "abc";
 int gArr[4];
 byte gStr[] = "abc";
 byte gPad[10] = "hi";
@@ -31,6 +30,10 @@ int gBigPad[40000];
 int gAfterBig = 9;
 byte gBigBytes[40000];
 byte gAfterBytes = 3;
+int gWide = 70000;
+int gBefore[2];
+byte gBetween[3];
+int gAfter[2];
 
 void check(byte name[], int ok) {
     print(name);
@@ -74,13 +77,20 @@ void testGlobals() {
     check("byte global initializer narrows", gByteInit == 2);
     check("negative byte global initializer wraps", gByteNeg == 255);
     gBigPad[39999] = 4;
-    check("int global above slot 32767 is addressable", gBigPad[39999] == 4);
-    check("int global above slot 32767 does not alias lower slots", gBigPad[14463] == 0);
-    check("int global above slot 32767 keeps its value", gAfterBig == 9);
+    check("int global far into global memory is addressable", gBigPad[39999] == 4);
+    check("int global far into global memory does not alias lower ones", gBigPad[14463] == 0);
+    check("int global far into global memory keeps its value", gAfterBig == 9);
     gBigBytes[39999] = 200;
     check("byte global above byte 32767 is addressable", gBigBytes[39999] == 200);
     check("byte global above byte 32767 does not alias lower bytes", gBigBytes[14463] == 0);
     check("byte global above byte 32767 keeps its value", gAfterBytes == 3);
+    check("int global holds a value above 16 bits", gWide == 70000);
+    gBefore[1] = 111;
+    gBetween[2] = 7;
+    gAfter[0] = 222;
+    check("byte write does not clobber preceding int array", gBefore[1] == 111);
+    check("int write does not clobber following int array", gAfter[0] == 222);
+    check("byte element between int arrays keeps its value", gBetween[2] == 7);
 }
 
 // Integer and character literals, unary minus.
@@ -109,7 +119,8 @@ void testByteTypes() {
     check("byte global assignment narrows", gByte == 2);
     local = 258;
     check("int assignment narrows to byte", local == 2);
-    check("byte assignment yields converted value", (local = 259) == 3);
+    local = 259;
+    check("byte assignment stores converted value", local == 3);
     another = 255;
     check("byte conversion uses unsigned 8-bit values", another == 255);
     check("byte conversion wraps negative int", narrowByte(0 - 1) == 255);
@@ -117,7 +128,8 @@ void testByteTypes() {
     check("byte promotes when passed to int parameter", promoteByte(255) == 255);
     check("byte return converts int result", narrowByte(255) == 255);
     check("byte arithmetic promotes to int", another + 2 == 257);
-    check("byte array stores narrow values", (gBytes[2] = 258) == 2);
+    gBytes[2] = 258;
+    check("byte array stores narrow values", gBytes[2] == 2);
     gBytes[3] = 255;
     check("byte array reads unsigned value", gBytes[3] == 255);
     check("byte array parameter reads elements", arrayByte(gBytes, 3) == 255);
@@ -142,33 +154,55 @@ void testArithmetic() {
 }
 
 void testComparisons() {
+    int x, y, hits, count;
     check("less than true", 3 < 4);
     check("less than false", (4 < 3) == 0);
     check("greater than true", 4 > 3);
     check("greater than false", (3 > 4) == 0);
+    check("less or equal true", 3 <= 4);
+    check("less or equal at equal", 4 <= 4);
+    check("less or equal false", (5 <= 4) == 0);
+    check("greater or equal true", 4 >= 3);
+    check("greater or equal at equal", 4 >= 4);
+    check("greater or equal false", (3 >= 4) == 0);
     check("equal true", 5 == 5);
     check("equal false", (5 == 6) == 0);
     check("not equal true", 5 != 6);
     check("not equal false", (5 != 5) == 0);
     check("comparison results are 0 or 1", (1 < 2) + (2 < 3) == 2);
     check("comparison of sums", 1 + 1 < 2 + 1);
+    x = 4; y = 4; hits = 0;
+    if (x <= y) { hits = hits + 1; }
+    if (x >= y) { hits = hits + 1; }
+    if (x <= y - 1) { hits = hits + 10; }
+    if (x >= y + 1) { hits = hits + 10; }
+    check("runtime <= and >= in if", hits == 2);
+    count = 0;
+    while (count <= 3) { count = count + 1; }
+    check("while with <=", count == 4);
+    count = 9;
+    do { count = count - 1; } while (count >= 5);
+    check("do with >=", count == 4);
+    check("runtime <= and >= as values", ((x <= y) + (x >= y) + (x <= y - 1)) == 2);
 }
 
 void testAssignment() {
-    check("assignment yields its value", (gA = 5) == 5);
-    gA = gB = 9;
-    check("chained assignment inner", gB == 9);
-    check("chained assignment outer", gA == 9);
+    gA = 5;
+    check("assignment stores its value", gA == 5);
+    gB = 9;
+    gA = gB;
+    check("assignment copies a variable", gB == 9);
+    check("assignment from a variable", gA == 9);
     gArr[1] = 7;
     check("array element assignment", gArr[1] == 7);
-    gArr[0] = gArr[2] = 3;
-    check("chained array assignment", gArr[0] == 3);
+    gArr[2] = 3;
+    gArr[0] = gArr[2];
+    check("array element copied from element", gArr[0] == 3);
     check("array index expression", gArr[1 + 1] == gArr[2]);
 }
 
 void testControlFlow() {
-    int i, n, r, a, b;
-    r = 0;
+    int i, n, r = 0, a, b;
     if (1) r = 1;
     check("if true", r == 1);
     r = 0;
@@ -182,20 +216,19 @@ void testControlFlow() {
     r = 0;
     if (1) ; else r = 9;
     check("empty statement", r == 0);
-    r = 0;
     { { r = 3; } }
     check("nested blocks", r == 3);
     i = 0; n = 0;
-    while (i < 10) { i = i + 1; n = n + i; }
+    while (i < 10) { n = n + (++i); }
     check("while loop sums 1 to 10", n == 55);
     n = 0;
     while (0) n = 1;
     check("while with false condition", n == 0);
     n = 0;
-    do n = n + 1; while (0);
+    do n++; while (0);
     check("do while runs once", n == 1);
     i = 0; n = 0;
-    do { i = i + 1; n = n + i; } while (i < 3);
+    do { n = n + (++i); } while (i < 3);
     check("do while loop", n == 6);
 }
 
@@ -208,14 +241,11 @@ void maybeSet(int value) {
 }
 
 int countAndReturn() {
-    gCounter = gCounter + 1;
+    gCounter++;
     return 7;
 }
 
-int bump(int x) {
-    x = x + 1;
-    return x;
-}
+int bump(int x) { return ++x; }
 
 int fact(int n) {
     if (n < 2) { return 1; }
@@ -223,16 +253,16 @@ int fact(int n) {
 }
 
 int firstOver(int limit) {
-    int i;
-    i = 0;
+    int i = 0;
     while (i < 100) {
-        i = i + 1;
-        if (i > limit) { return i; }
+        if (++i > limit) { return i; }
     }
     return 0;
 }
 
-// Calls to a function defined later in the file.
+// Calls to a function defined later in the file, through a prototype.
+int twice(int x);
+int forwardCallee(int x);
 int forwardCaller() { return forwardCallee(4); }
 int forwardCallee(int x) { return x * 10; }
 
@@ -262,17 +292,15 @@ void testFunctions() {
     check("global declared after functions", gLate == 3);
 }
 
+
 void fill(int arr[], int count) {
-    int i;
-    i = 0;
-    while (i < count) { arr[i] = i * 2; i = i + 1; }
+    int i = 0;
+    while (i < count) { arr[i] = twice(i++); }
 }
 
 int sum(int arr[], int count) {
-    int i, total;
-    total = 0;
-    i = 0;
-    while (i < count) { total = total + arr[i]; i = i + 1; }
+    int i = 0, total = 0;
+    while (i < count) { total = total + arr[i++]; }
     return total;
 }
 
@@ -304,11 +332,9 @@ void testEmit() {
 
 int twice(int x) { return x * 2; }
 int seven() { return 7; }
+int seven();  // a matching prototype after the definition is accepted
 int getAt(int arr[], int i) { return arr[i]; }
-int incGlobal() {
-    gCounter = gCounter + 1;
-    return gCounter;
-}
+int incGlobal() { return ++gCounter; }
 
 int ordered(int a, int b, int c, int d, int e, int f, int g, int h) {
     return a + (b * 10) + (c * 100) + (d * 1000) + (e * 10000) + (f * 100000) + (g * 1000000) + (h * 10000000);
@@ -328,12 +354,7 @@ int lateDecl(int x) {
     return y;
 }
 
-int shadowLocal(int x) {
-    int gA;
-    gA = x;
-    return gA;
-}
-
+int shadowLocal(int x) { int gA = x; return gA; }
 int shadowParam(int gB) { return gB + 1; }
 
 int depth(int n) {
@@ -341,7 +362,9 @@ int depth(int n) {
     return 1 + depth(n - 1);
 }
 
-// Defined after isEven, so isEven uses a forward reference.
+// Defined after isEven, which calls it through a prototype.
+int isOdd(int n);
+
 int isEven(int n) {
     if (n == 0) { return 1; }
     return isOdd(n - 1);
@@ -392,10 +415,7 @@ int localInits(int x) {
     return a + b + c;
 }
 
-int byteLocalFromParam(int x) {
-    byte b = x;
-    return b;
-}
+int byteLocalFromParam(int x) { byte b = x; return b; }
 
 int initInLoop(int n) {
     int total = 0, i = 0;
@@ -494,16 +514,8 @@ void returnEarly(int shouldReturn) {
     globalInt = globalInt + 100;
 }
 
-void setGlobal() { globalInt = 42; }
-int getGlobal() { return globalInt; }
-
-void writeSecond(int value, int items[]) {
-    items[1] = value;
-}
-
 void statementForms(int limit) {
-    int i;
-    i = 0;
+    int i = 0;
     ;
     while (i < limit) i = i + 1;
     do i = i - 1; while (i > 0);
@@ -511,8 +523,10 @@ void statementForms(int limit) {
     if (i > 0) ; else globalInt = globalInt + 1;
 }
 
+void setGlobal() { globalInt = 42; }
+int getGlobal() { return globalInt; }
+void writeSecond(int value, int items[]) { items[1] = value; }
 int identity(int x) { return x; }
-void cr() { emit('\n'); }
 
 int mul(int left, int right) { return left * right; }
 int div(int left, int right) { return left / right; }
@@ -591,7 +605,8 @@ void testProgramFlow() {
     backslashCode = '\\';
     localA = strlen(greeting);
     localB = greeting[3];
-    globalInt = anotherGlobal = 7;
+    anotherGlobal = 7;
+    globalInt = anotherGlobal;
 
     nop();
     returnEarly(1);
@@ -683,7 +698,8 @@ void testBenchmark() {
     i = mil(100);
     while (i) { i--; }
     check("100 million iteration while loop completes", i == 0);
-    i = n = 0;
+    i = 0;
+    n = 0;
     do { i = i + (++n); } while (i < 1000);
     check("do while sums to 1000 in 45 passes", n == 45);
 }
@@ -734,5 +750,5 @@ int main() {
     emit('\n');
     if (failures == 0) { print("all checks passed\n"); }
     else { printNum(failures, 10); print(" check(s) failed!\n"); }
-    return 0;
+    return failures != 0;
 }
