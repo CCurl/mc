@@ -60,8 +60,8 @@ int run() {
         ACASE INE   : REG(pc) = REG(pc+SZ16) != REG(pc+SZ32); pc += SZ48;
         ACASE EMIT  : REG(pc) = putchar((char)REG(pc+SZ16)) ; pc += SZ32;
         ACASE JMP   : pc += f4(pc);
-        ACASE JZ    : if (REG(pc) == 0) pc += 2 + f4(pc+SZ16); else pc += SZ48;
-        ACASE JNZ   : if (REG(pc) != 0) pc += 2 + f4(pc+SZ16); else pc += SZ48;
+        ACASE JZ    : if (REG(pc) == 0) pc += SZ16 + f4(pc+SZ16); else pc += SZ48;
+        ACASE JNZ   : if (REG(pc) != 0) pc += SZ16 + f4(pc+SZ16); else pc += SZ48;
         ACASE JLT   : if (REG(pc) <  REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
         ACASE JGT   : if (REG(pc) >  REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
         ACASE JEQ   : if (REG(pc) == REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
