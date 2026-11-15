@@ -9,12 +9,16 @@
 
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-    if (argc > 1) { openSource(argv[1]); }
-    else { openSource("unit-tests.tc"); }
+    const char *source = NULL;
+    int dSpec = 0, oSpec = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-d") == 0) { dSpec = 1; }
+        else if (strcmp(argv[i], "-o") == 0) { oSpec = 1; }
+        else { source = argv[i]; }
+    }
+    openSource(source ? source : "unit-tests.tc");
     c(program()); // The compiler
-    // saveImage("out.img"); // will be used later
-#ifdef LISTING
-    listing();
-#endif
+    if (dSpec) { listing(); }
+    if (oSpec) { saveImage("a.img"); }
     return run();
 }

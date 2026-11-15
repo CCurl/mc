@@ -60,9 +60,6 @@ static void patchCalls() {
     }
 }
 
-/*
-// These 2 functions are for a later stage when we want to save and 
-// load the generated code and global data.
 
 // Writes the code, the global data, and the sizes needed to read them back.
 int saveImage(const char *fileName) {
@@ -75,7 +72,10 @@ int saveImage(const char *fileName) {
     fclose(fp);
     return numGlobalBytes + here + (2*sizeof(int));
 }
-
+    
+/*
+// This function is for a later stage when we want to save and
+// load the generated code and global data.
 void badImage(const char *fileName) { fail("-bad image %s-\n", fileName); }
 
 // Reads an image written by saveImage() and returns the bytes read

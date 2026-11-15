@@ -181,6 +181,7 @@ node *program(void);
 void c(node *x);
 int run(void);
 int saveImage(const char *fileName);
+int loadImage(const char *fileName);
 extern const char *const opcodeNames[NUM_OPCODES];
 extern const char *const opcodeKinds[NUM_OPCODES];
 int opcodeLength(int op);

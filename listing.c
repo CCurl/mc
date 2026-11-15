@@ -4,8 +4,6 @@
 
 #include "tiny-c.h"
 
-#ifdef LISTING
-
 static int readReg(int p) { return *(unsigned short *)(vm + p); }
 static int readInt(int p) { return *(int *)(vm + p); }
 
@@ -50,5 +48,3 @@ void listing() {
     }
     fclose(fp);
 }
-
-#endif
