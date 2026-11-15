@@ -1,30 +1,26 @@
 app := tc
 
-.PHONY: all clean unit-tests invalid-tests listing-test
+.PHONY: all clean tests invalid-tests listing-test
 
 CXX := clang
 CXXFLAGS := -m64 -Ofast -D IS_LINUX
-ifdef LISTING
-CXXFLAGS += -D LISTING
-endif
 
 srcfiles := $(shell find . -name "*.c")
 incfiles := $(shell find . -name "*.h")
-LDLIBS   := -lm
 
 all: $(app)
 
 $(app): $(srcfiles) $(incfiles)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) $(srcfiles) $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(app) $(srcfiles)
 	ls -l $(app)
 
 clean:
-	rm -f $(app) tc-listing
+	rm -f $(app)
 
 bench: $(app)
 	./$(app) bench.tc
 
-unit-tests: $(app)
+test: $(app)
 	./$(app) unit-tests.tc
 
 invalid-tests: $(app)

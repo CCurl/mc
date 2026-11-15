@@ -1,6 +1,5 @@
 //---------------------------------------------------------------------------
-// Listing of the generated code. Compiled only when LISTING is defined
-// (make LISTING=1). Writes a listing of the code to listing.txt.
+// Listing of the generated code. Writes a listing of the code to listing.txt when tc is run with -l.
 
 #include "tiny-c.h"
 

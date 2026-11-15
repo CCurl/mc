@@ -6,8 +6,8 @@
 
 /*
  * This is a compiler for Tiny-C, a stripped down version of C.
- * The compiler reads the program from the file named on the command line
- * (default unit-tests.tc), then runs it in the built-in VM. Output comes only from emit().
+ * The compiler reads the program from the file named on the command line,
+ * then runs it in the built-in VM. Output comes only from emit().
  * The grammar of Tiny-C in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
@@ -82,7 +82,19 @@
 
 ## Building and Testing
 
-- `make` builds `tc` with clang and `-m32`.
+- `make` builds `tc` with clang and `-m64`.
 - `make bin` copies `tc` to `~/bin/`.
-- `make unit-tests` runs `unit-tests.tc`, which holds the program-level checks, and prints `passed: N, failed: M`.
+- `make test` runs `unit-tests.tc`, which holds the program-level checks, and prints `passed: N, failed: M`.
 - `make invalid-tests` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.
+- `make listing-test` writes a listing of `listing-expected.tc` to `listing.txt` and diffs it against `listing-expected.txt`.
+
+## Command line
+
+    tc [-l] [-o] [-r] [-?] <file>
+
+- `-l`: write a listing of the generated code to `listing.txt`.
+- `-o`: save the compiled image to `a.img`.
+- `-r`: run the program (on by default).
+- `-?`: show the usage message.
+
+A source file is required. Without one, `tc` prints the usage message and exits.

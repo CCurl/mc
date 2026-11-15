@@ -25,7 +25,7 @@ flowchart LR
 - `parser.c`: AST nodes, function and variable tables, and program checks.
 - `gen.c`: bytecode generation, constant folding, and call patching.
 - `vm.c`: the `run()` interpreter.
-- `listing.c`: the code listing. It is compiled only with `make LISTING=1`, and writes a listing of the generated code to `listing.txt`. `make listing-test` checks that listing against `listing-expected.txt`.
+- `listing.c`: the code listing. Option `-l` writes a listing of the generated code to `listing.txt`. `make listing-test` checks that listing against `listing-expected.txt`.
 - `lib/*.tc`: Tiny-C source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
 
 ## 1. Lexer
@@ -35,7 +35,7 @@ flowchart LR
 - Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `tiny-c.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, and `return`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
 - `#include "path";` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
 - `fail()` prints `path:line:` before every compile error.
-- The default input opened by `main()` is `unit-tests.tc`; a command-line path selects another input file.
+- The input file is a required command-line argument; see the command line section of `README.md`.
 
 ## 2. Parser: builds an AST, not code
 
