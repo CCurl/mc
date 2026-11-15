@@ -1,6 +1,6 @@
 app := tc
 
-.PHONY: all clean tests invalid-tests listing-test
+.PHONY: all clean test bench bin invalid-tests listing-test
 
 CXX := clang
 CXXFLAGS := -m64 -Ofast -D IS_LINUX
