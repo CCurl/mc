@@ -23,7 +23,7 @@ flowchart LR
 - `min-c.h`: shared types, structures, sizes, and defines
 - `lexer.c`: tokenization, global variable storage, the source/include stack, and error reporting.
 - `parser.c`: AST nodes, function and variable tables, and program checks.
-- `gen.c`: bytecode generation, constant folding, and call patching.
+- `gen.c`: bytecode generation and call patching.
 - `vm.c`: the `run()` interpreter.
 - `listing.c`: the code listing. Option `-l` writes a listing of the generated code to `listing.txt`. `make listing-test` checks that listing against `listing-expected.txt`.
 - `lib/*.tc`: min-c source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
@@ -39,7 +39,7 @@ flowchart LR
 
 ## 2. Parser: builds an AST, not code
 
-- `defs()` handles top-level globals and functions. `variableDeclarations()` handles global `int` and `byte` scalars and arrays, including string initializers. A global scalar initializer is parsed as an expression, converted for `byte` globals, and folded at parse time by `fold()` in `gen.c`; a non-constant initializer is a compile error.
+- `defs()` handles top-level globals and functions. `variableDeclarations()` handles global `int` and `byte` scalars and arrays, including string initializers. A global scalar initializer is parsed as an expression, converted for `byte` globals, and must fold to a constant at parse time; a non-constant initializer is a compile error.
 - `parseFunctionDefinition()` records each function in `functions[]`, including its return type, parameter types and array flags, locals, and body. A prototype (a header ending in `;`) records the same signature without a body. A function's index is assigned on first reference, but a call must follow a prototype or definition of that function.
 - Statements and expressions become `node` structs in the fixed pool `nodes[MAX_NODES]`. Each node has a `kind`, up to three children (`o1`, `o2`, `o3`), and a `val`.
 - Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Int and byte globals both live in `globalMem[]`, addressed by byte offset. Int scalars and int array elements take 4 bytes, read and written by `loadInt`/`storeInt`; byte globals and byte array elements take one byte each. The parser records each scalar or array element's `int`/`byte` type for conversions and array argument checks.
@@ -99,7 +99,7 @@ Notable generation details:
 - A callee's parameters are evaluated directly into the caller's registers starting at the `CALL` base, so arguments are not copied. The result comes back in that base register.
 - When the right operand of a binary operator has side effects (assignment, `++`/`--`, or an array store), a register-resident left operand is first copied to a temporary, which keeps left-to-right evaluation.
 - Forward jumps are emitted as holes and patched once the target address is known. `WHILE` and `DO` back-jumps are emitted directly.
-- Constant-only arithmetic and comparisons are folded at compile time by `fold()`. Division and modulo by zero are not folded, so they still fail at runtime.
+- Constant-only arithmetic and comparisons are folded at compile time by the parser's `gen()`. Division and modulo by zero are not folded, so they still fail at runtime.
 - Call targets are unknown when the call is emitted, so each call is recorded in `callFixups[]`. `patchCalls()` fills in each call's address and the callee's frame size after all functions are generated.
 - A `return;` in a `void` function emits `RET0`, and falling off the end of a function also emits `RET0`, so both return `0`. Calls used as statements discard the returned value.
 - Program layout: `CALL main` at base register 0, then `HALT`, then each function body in index order, each ending with `RET0`.

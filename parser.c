@@ -64,10 +64,37 @@ static node *newNode(int k) {
     return x;
 }
 
+static node *constant(int value) {
+    node *x = newNode(CST);
+    x->val = value;
+    return x;
+}
+
+// Replaces an operator node whose operands are all constants with the constant result.
+static node *foldNode(node *x) {
+    node *a = x->o1, *b = x->o2;
+    if (x->kind == BYTE_CONVERT) { return a->kind == CST ? constant((byte)a->val) : x; }
+    if (!a || !b || a->kind != CST || b->kind != CST) { return x; }
+    switch (x->kind) {
+        case ADD: return constant(a->val + b->val);
+        case SUB: return constant(a->val - b->val);
+        case MUL: return constant(a->val * b->val);
+        case DIV: return b->val == 0 ? x : constant(a->val / b->val);
+        case MOD: return b->val == 0 ? x : constant(a->val % b->val);
+        case LT:  return constant(a->val < b->val);
+        case GT:  return constant(a->val > b->val);
+        case LE:  return constant(a->val <= b->val);
+        case GE:  return constant(a->val >= b->val);
+        case EQ:  return constant(a->val == b->val);
+        case NE:  return constant(a->val != b->val);
+        default: return x;
+    }
+}
+
 static node *gen(int k, node *o1, node *o2) {
     node *x=newNode(k);
     x->o1=o1; x->o2=o2;
-    return x;
+    return foldNode(x);
 }
 
 static node *byteConversion(node *value) {
@@ -269,9 +296,9 @@ static int mathop() {
 static node *sum() {
   node *x = term();
   while (mathop()) {
-    x=gen(mathop(), x, 0);
+    int op = mathop();
     nextSym();
-    x->o2=term();
+    x = gen(op, x, term());
   }
   return x;
 }
@@ -480,7 +507,8 @@ static void parseVariableDeclarator(const char *name, int type) {
         nextSym();
         node *value = expr();
         if (type == TYPE_BYTE) { value = byteConversion(value); }
-        if (!fold(value, &scalarValue)) { fail("-global initializer must be constant-"); }
+        if (value->kind != CST) { fail("-global initializer must be constant-"); }
+        scalarValue = value->val;
         hasScalarInitializer = 1;
     } else if (sym == EQUAL) {
         nextSym();

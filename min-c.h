@@ -171,7 +171,6 @@ int arrayIndex(const char *name);
 int arrayReference(const char *name);
 int allocateStringLiteral(void);
 void storeStringBytes(int base);
-int fold(node *x, int *out);
 int parameterIndex(const char *name);
 int localIndex(const char *name);
 int currentParameterIsArray(int parameter);

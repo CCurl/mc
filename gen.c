@@ -102,33 +102,6 @@ static void emitI2b(int dst, int src) { g(I2B); g2(dst); g2(src); }
 static void emitIaddi(int dst, int src, int v) { g(IADDI); g2(dst); g2(src); g4(v); }
 static void emit3(int op, int dst, int a, int b) { g(op); g2(dst); g2(a); g2(b); }
 
-// Returns 1 and sets *out if x is a constant expression that can be folded.
-int fold(node *x, int *out) {
-    int a, b;
-    if (!x) { return 0; }
-    if (x->kind == CST) { *out = x->val; return 1; }
-    if (x->kind == BYTE_CONVERT) {
-        if (!fold(x->o1, &a)) { return 0; }
-        *out = (byte)a;
-        return 1;
-    }
-    if (!fold(x->o1, &a) || !fold(x->o2, &b)) { return 0; }
-    switch (x->kind) {
-        case ADD: *out = a + b; return 1;
-        case SUB: *out = a - b; return 1;
-        case MUL: *out = a * b; return 1;
-        case DIV: if (b == 0) { return 0; } *out = a / b; return 1;
-        case MOD: if (b == 0) { return 0; } *out = a % b; return 1;
-        case LT:  *out = a < b;  return 1;
-        case GT:  *out = a > b;  return 1;
-        case LE:  *out = a <= b; return 1;
-        case GE:  *out = a >= b; return 1;
-        case EQ:  *out = a == b; return 1;
-        case NE:  *out = a != b; return 1;
-        default: return 0;
-    }
-}
-
 static void emitRa(int op, int r, int a) { g(op); g2(r); g4(a); }
 static void emitRar(int op, int r, int a, int idx) { g(op); g2(r); g4(a); g2(idx); }
 static void emitRaa(int op, int r, int a, int b) { g(op); g2(r); g4(a); g4(b); }
@@ -208,10 +181,10 @@ static void cAssign(node *x) {
 
 // Stores the value of ARRAY_SET node x.
 static void cElementStore(node *x) {
-    int k, idx, v;
-    if (fold(x->o1, &k)) {
+    int idx, v;
+    if (x->o1->kind == CST) {
         v = cAny(x->o2);
-        emitElement(x, v, -1, k, 1);
+        emitElement(x, v, -1, x->o1->val, 1);
         return;
     }
     idx = cOperand(x->o1, x->o2);
@@ -261,9 +234,8 @@ static void cBinary(node *x, int dst, int op) {
 
 // Evaluates x and leaves its value in register dst.
 static void cInto(node *x, int dst) {
-    int k, a;
+    int a;
     if (x->kind == CST) { emitLdi(dst, x->val); return; }
-    if (fold(x, &k)) { emitLdi(dst, k); return; }
     switch (x->kind) {
         case VAR:
             if (isRegVar(x)) { emitMov(dst, regOf(x)); }
@@ -274,17 +246,17 @@ static void cInto(node *x, int dst) {
             if (x->val < 0) { emitMov(dst, -x->val - 1); } else { emitLdi(dst, x->val); }
             break;
         case ARRAY_GET:
-            if (fold(x->o1, &k)) { emitElement(x, dst, -1, k, 0); }
+            if (x->o1->kind == CST) { emitElement(x, dst, -1, x->o1->val, 0); }
             else { a = cAny(x->o1); emitElement(x, dst, a, 0, 0); }
             break;
         case BYTE_CONVERT: cInto(x->o1, dst); emitI2b(dst, dst); break;
         case ADD:
-            if (fold(x->o2, &k)) { a = cAny(x->o1); emitIaddi(dst, a, k); break; }
-            if (fold(x->o1, &k)) { a = cAny(x->o2); emitIaddi(dst, a, k); break; }
+            if (x->o2->kind == CST) { a = cAny(x->o1); emitIaddi(dst, a, x->o2->val); break; }
+            if (x->o1->kind == CST) { a = cAny(x->o2); emitIaddi(dst, a, x->o1->val); break; }
             cBinary(x, dst, IADD);
             break;
         case SUB:
-            if (fold(x->o2, &k)) { a = cAny(x->o1); emitIaddi(dst, a, (int)(0u - (unsigned)k)); break; }
+            if (x->o2->kind == CST) { a = cAny(x->o1); emitIaddi(dst, a, (int)(0u - (unsigned)x->o2->val)); break; }
             cBinary(x, dst, ISUB);
             break;
         case MUL: cBinary(x, dst, IMUL); break;
@@ -324,8 +296,8 @@ static int condJumpOp(node *x, int whenTrue) {
 
 // Emits a jump taken when condition x is true (whenTrue) or false. Returns the hole for fix().
 static int condJump(node *x, int whenTrue) {
-    int k, op = condJumpOp(x, whenTrue);
-    if (op >= 0 && !fold(x, &k)) {
+    int op = condJumpOp(x, whenTrue);
+    if (op >= 0) {
         int lr = cOperand(x->o1, x->o2);
         int rr = cAny(x->o2);
         g(op); g2(lr); g2(rr);
