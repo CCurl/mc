@@ -2,12 +2,14 @@
 // Each check prints "name: ok" or "name: FAIL"; the last line prints the failure count.
 
 #include "lib/util.tc";
+#include "lib/util.tc"; // a file included twice is read once
 
 int failures, passes;
 int gZero, gA, gB;
 int gInit = 7, gInitNeg = -3, gInitExpr = 2 * 3 + 1;
 byte gByteInit = 258, gByteNeg = -1;
 byte gByte, gBytes[] = "abc";
+byte gByteCount = 255;
 int gArr[4];
 byte gStr[] = "abc";
 byte gPad[10] = "hi";
@@ -46,6 +48,9 @@ int promoteByte(byte value) { return value; }
 byte narrowByte(int value) { return value; }
 byte arrayByte(byte values[], int index) { return values[index]; }
 void updateByteArray(byte values[]) { values[2] = 'Z'; }
+byte prototypedByte(int value);
+byte prototypedByte(int value) { return value; }
+byte setByteGlobal() { gByte = 9; return 3; }
 
 // Global storage and string initializers.
 void testGlobals() {
@@ -137,6 +142,9 @@ void testByteTypes() {
     check("byte array parameter writes elements", gBytes[2] == 'Z');
     check("string literal passed to byte array parameter",
           arrayByte("abc", 2) == 'a');
+    check("byte prototype with int argument", prototypedByte(258) == 2);
+    setByteGlobal();
+    check("byte function call as statement", gByte == 9);
 }
 
 void testArithmetic() {
@@ -356,6 +364,8 @@ int lateDecl(int x) {
 
 int shadowLocal(int x) { int gA = x; return gA; }
 int shadowParam(int gB) { return gB + 1; }
+int shadowFuncParam(int twice) { return twice; }
+int shadowFuncLocal() { int add = 4; return add; }
 
 int depth(int n) {
     if (n < 1) { return 0; }
@@ -403,6 +413,8 @@ void testCalls() {
     check("zero-argument call as value", seven() + seven() == 14);
     seven();
     check("zero-argument call as statement", seven() == 7);
+    1 + 2;
+    check("arithmetic expression statement", 1 + 2 == 3);
     gCounter = 0;
     while (incGlobal() < 3) { }
     check("call in loop condition", gCounter == 3);
@@ -438,6 +450,8 @@ void testLocals() {
     check("local shadows global", shadowLocal(5) == 5);
     check("global unchanged by shadowing local", gA == 77);
     check("parameter shadows global", shadowParam(4) == 5);
+    check("parameter shadows function", shadowFuncParam(6) == 6);
+    check("local shadows function", shadowFuncLocal() == 4);
 }
 
 void testRecursion() {
@@ -723,6 +737,9 @@ void testIncDec() {
     check("increment on parameter", incParam(4) == 5);
     check("byte increment wraps", incByte() == 0);
     check("byte decrement wraps", decByte() == 255);
+    gByteCount++;
+    check("byte global increment wraps", gByteCount == 0);
+    check("byte global prefix decrement wraps", (--gByteCount) == 255);
 }
 
 int main() {
