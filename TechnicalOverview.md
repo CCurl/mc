@@ -30,10 +30,10 @@ flowchart LR
 
 ## 1. Lexer
 
-- `nextCh()` reads from `inputFp`, or stdin if it is null, and counts newlines in `lineNumber`.
+- `nextCh()` reads from `inputFp` and counts newlines in `lineNumber`.
 - `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, `PLUS_PLUS`, and `RETURN_SYM`. `++` and `--` are single tokens, so `a--b` is a syntax error; write `a - -b`.
 - Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `mc.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, and `return`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
-- `#include "path";` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
+- `#include "path"` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
 - `fail()` prints `path:line:` before every compile error.
 - The input file is a required command-line argument; see the command line section of `README.md`.
 

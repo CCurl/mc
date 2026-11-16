@@ -6,10 +6,9 @@
 // -------------------------------------------------
 char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", NULL };
 
+FILE *inputFp = NULL;
 int ch = ' ', sym, intVal;
 char idName[ID_NAME_LENGTH];
-
-FILE *inputFp = NULL;
 char currentPath[MAX_PATH_LENGTH] = "";
 int lineNumber = 1;
 struct source_s { FILE *fp; char path[MAX_PATH_LENGTH]; int line; int savedCh; };
@@ -17,9 +16,7 @@ struct source_s sourceStack[MAX_INCLUDE_DEPTH];
 int sourceDepth = 0;
 char includedPaths[MAX_INCLUDED_FILES][MAX_PATH_LENGTH];
 int numIncludedPaths = 0;
-
 int stringValues[MAX_STRING_LENGTH], stringLength;
-
 
 void fail(const char *fmt, ...) {
     va_list args;
@@ -36,28 +33,25 @@ static int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=
 static int isNum(int ch) { return BTWI(ch,'0','9'); }
 static int isAlphaNum(int ch) { return isAlpha(ch) || isNum(ch); }
 
-static int escapedCharacter(int ch) {
-    switch (ch) {
-      case 'n': return '\n';  case 'r': return '\r';  case 't': return '\t';
-      case '0': return '\0';  case 'e': return 27;
-      case '\\': return '\\'; case '\'': return '\'';  case '"': return '"';
-      default: fail("-invalid character escape-");
-    }
-    return 0;
-}
-
-static void nextCh() {
+static int nextCh() {
     if (inputFp) { ch = fgetc(inputFp); }
     else { ch = getchar(); }
     if (ch == '\n') { lineNumber++; }
+    return ch;
 }
 
 // Reads one character inside a character or string literal, decoding a backslash escape.
 static int literalCharacter() {
     int value = ch;
     if (ch == '\\') {
-        nextCh();
-        value = escapedCharacter(ch);
+        switch (nextCh()) {
+            case 'n': value = '\n'; break;
+            case 'r': value = '\r'; break;
+            case 't': value = '\t'; break;
+            case '0': value = '\0'; break;
+            case 'e': value =  27;  break;
+            default:  value =  ch;  break;
+        }
     }
     nextCh();
     return value;
@@ -90,17 +84,8 @@ int openSource(const char *path) {
     return 1;
 }
 
-static void resolveInclude(const char *name, char *out) {
-    int dirLength = 0;
-    for (int i = 0; currentPath[i] != '\0'; i++) {
-        if (currentPath[i] == '/' || currentPath[i] == '\\') { dirLength = i + 1; }
-    }
-    if (dirLength + strlen(name) >= MAX_PATH_LENGTH) { fail("-include path too long-"); }
-    snprintf(out, MAX_PATH_LENGTH, "%.*s%s", dirLength, currentPath, name);
-}
-
 static void includeFile() {
-    char name[MAX_PATH_LENGTH], path[MAX_PATH_LENGTH];
+    char path[MAX_PATH_LENGTH];
     int length = 0;
     FILE *fp;
     while (ch == ' ' || ch == 9) { nextCh(); }
@@ -109,15 +94,11 @@ static void includeFile() {
     while (ch != '"') {
         if (ch == EOF || ch == '\n' || ch == '\r') { fail("-unterminated include file name-"); }
         if (length >= MAX_PATH_LENGTH - 1) { fail("-include file name too long-"); }
-        name[length++] = ch;
+        path[length++] = ch;
         nextCh();
     }
-    name[length] = '\0';
+    path[length] = '\0';
     nextCh();
-    while (ch == ' ' || ch == 9) { nextCh(); }
-    if (ch != ';') { fail("-include must end with ';'-"); }
-    nextCh();
-    resolveInclude(name, path);
     for (int i = 0; i < numIncludedPaths; i++) {
         if (strcmp(includedPaths[i], path) == 0) { return; }
     }

@@ -11,7 +11,7 @@
  * The grammar of min-c in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
- *  <include> ::= "#include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
+ *  <include> ::= "#include" '"' <file_name> '"'  (splices the file in place; each file is read once)
  *  main is a <func_def> with no parameters and return type "int" or "void"; it must be defined exactly once.
  *  <defs> ::= { <def> }
  *  <def> ::= <func_def> | <func_proto> | <var_def>
