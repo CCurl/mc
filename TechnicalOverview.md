@@ -1,6 +1,6 @@
 # Technical overview: compilation and VM execution
 
-The compiler does not write an image file. It builds a bytecode array `vm[]` and fills `globalMem[]` in memory, then `run()` in `vm.c` executes that array directly. The pipeline is:
+The compiler does not write an image file. It builds a bytecode array `vm[]` and fills `globalMem[]` in memory, then `run()` in `mc-vm.c` executes that array directly. The pipeline is:
 
 ```mermaid
 flowchart LR
@@ -19,27 +19,27 @@ flowchart LR
 
 ## Source layout
 
-- `tiny-c.c`: defines the `main()` function.
-- `tiny-c.h`: shared types, structures, sizes, and defines
-- `lexer.c`: tokenization, global variable storage, the source/include stack, and error reporting.
-- `parser.c`: AST nodes, function and variable tables, and program checks.
-- `gen.c`: bytecode generation, constant folding, and call patching.
-- `vm.c`: the `run()` interpreter.
-- `listing.c`: the code listing. Option `-l` writes a listing of the generated code to `listing.txt`. `make listing-test` checks that listing against `listing-expected.txt`.
-- `lib/*.tc`: Tiny-C source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
+- `mc-main.c`: defines the `main()` function.
+- `mc.h`: shared types, structures, sizes, and defines
+- `mc-lex.c`: tokenization, the source/include stack, and error reporting.
+- `mc-parse.c`: AST nodes, function and variable tables, global variable storage, and program checks.
+- `mc-gen.c`: bytecode generation and call patching.
+- `mc-vm.c`: the `run()` interpreter and `globalMem[]`, with `loadInt()` and `storeInt()`.
+- `mc-list.c`: the code listing. Option `-l` writes a listing of the generated code to `listing.txt`. `make test-listing` checks that listing against `listing-expected.txt`.
+- `lib/*.mc`: min-c source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
 
 ## 1. Lexer
 
 - `nextCh()` reads from `inputFp`, or stdin if it is null, and counts newlines in `lineNumber`.
 - `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, `PLUS_PLUS`, and `RETURN_SYM`. `++` and `--` are single tokens, so `a--b` is a syntax error; write `a - -b`.
-- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `tiny-c.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, and `return`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
+- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `mc.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, and `return`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
 - `#include "path";` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
 - `fail()` prints `path:line:` before every compile error.
 - The input file is a required command-line argument; see the command line section of `README.md`.
 
 ## 2. Parser: builds an AST, not code
 
-- `defs()` handles top-level globals and functions. `variableDeclarations()` handles global `int` and `byte` scalars and arrays, including string initializers. A global scalar initializer is parsed as an expression, converted for `byte` globals, and folded at parse time by `fold()` in `gen.c`; a non-constant initializer is a compile error.
+- `defs()` handles top-level globals and functions. `variableDeclarations()` handles global `int` and `byte` scalars and arrays, including string initializers. A global scalar initializer is parsed as an expression, converted for `byte` globals, and must fold to a constant at parse time; a non-constant initializer is a compile error.
 - `parseFunctionDefinition()` records each function in `functions[]`, including its return type, parameter types and array flags, locals, and body. A prototype (a header ending in `;`) records the same signature without a body. A function's index is assigned on first reference, but a call must follow a prototype or definition of that function.
 - Statements and expressions become `node` structs in the fixed pool `nodes[MAX_NODES]`. Each node has a `kind`, up to three children (`o1`, `o2`, `o3`), and a `val`.
 - Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Int and byte globals both live in `globalMem[]`, addressed by byte offset. Int scalars and int array elements take 4 bytes, read and written by `loadInt`/`storeInt`; byte globals and byte array elements take one byte each. The parser records each scalar or array element's `int`/`byte` type for conversions and array argument checks.
@@ -60,7 +60,6 @@ flowchart LR
 - Parse errors report the line the lexer has reached, which can be one line past the offending token when that token ends a line. Errors found after parsing (validation and code generation, for example a void call used as a value) report the position where parsing stopped, not the offending line.
 - `callArguments()` checks call arity, argument kinds (scalar or array), and array element types against the callee's declared signature.
 - `checkArrayRefs()` rejects array references anywhere except as direct array arguments.
-- `returnsOnAllPaths()` checks that `int` and `byte` functions return on every path. Only `return`, statement sequences, `if`/`else`, and `do` bodies count; a `while` loop never does, so `while (1) { return 1; }` is rejected.
 - `prog->o1` is set to `main`'s body.
 
 Strings are lexed into `stringValues[]`, then materialized during parsing. `allocateStringLiteral()` reserves anonymous global byte storage laid out as `[length low byte, length high byte, chars..., 0]` and writes it directly into `globalMem[]`.
@@ -68,7 +67,7 @@ String literals are permitted only as array arguments or global array initialize
 
 ## 4. Code generation (`c()` walks the AST)
 
-The output is a flat byte array `vm[MAX_CODE]` (65536 bytes) of register instructions. Each opcode is one byte, followed by operands in the order given by the layout comment in `tiny-c.h`:
+The output is a flat byte array `vm[MAX_CODE]` (65536 bytes) of register instructions. Each opcode is one byte, followed by operands in the order given by the layout comment in `mc.h`:
 
 - `r`: a 2-byte unsigned register number, relative to the current frame.
 - `a`: a 4-byte address or immediate.
@@ -99,7 +98,7 @@ Notable generation details:
 - A callee's parameters are evaluated directly into the caller's registers starting at the `CALL` base, so arguments are not copied. The result comes back in that base register.
 - When the right operand of a binary operator has side effects (assignment, `++`/`--`, or an array store), a register-resident left operand is first copied to a temporary, which keeps left-to-right evaluation.
 - Forward jumps are emitted as holes and patched once the target address is known. `WHILE` and `DO` back-jumps are emitted directly.
-- Constant-only arithmetic and comparisons are folded at compile time by `fold()`. Division and modulo by zero are not folded, so they still fail at runtime.
+- Constant-only arithmetic and comparisons are folded at compile time by the parser's `gen()`. Division and modulo by zero are not folded, so they still fail at runtime.
 - Call targets are unknown when the call is emitted, so each call is recorded in `callFixups[]`. `patchCalls()` fills in each call's address and the callee's frame size after all functions are generated.
 - A `return;` in a `void` function emits `RET0`, and falling off the end of a function also emits `RET0`, so both return `0`. Calls used as statements discard the returned value.
 - Program layout: `CALL main` at base register 0, then `HALT`, then each function body in index order, each ending with `RET0`.
@@ -112,7 +111,7 @@ Notable generation details:
 - `numGlobalBytes`: the number of bytes in use in `globalMem[]`.
 - VM values use C `int` (32 bits on the configured Linux and Visual Studio targets), and global `int` values are 4 bytes in `globalMem[]`. `byte` values are unsigned 8-bit values (0 to 255). Global `byte` storage is byte-sized in `globalMem[]`; `byte` locals and parameters are held in `int` registers. Generated conversions narrow on assignment, parameter passing, return, and array stores, while reads promote back to `int`. Character literals remain int-valued, and casts are not supported. Scalar initializers are supported: global ones are folded at parse time, and local ones compile to assignments at the declaration point.
 
-`run()` in `vm.c` starts the interpreter by:
+`run()` in `mc-vm.c` starts the interpreter by:
 
 1. Setting `pc = vm`, `frameBase = 0`, and `returnSp = 0`.
 2. Running the dispatch loop until `HALT`, or until `RET`/`RET0` with an empty return stack.
@@ -121,7 +120,7 @@ Each call frame is a window of registers in `st[]` that starts at `frameBase`. T
 
 ## 6. How the VM runs
 
-The VM is a register machine implemented by `run()` in `vm.c`. It has no separate loader or relocation step. The code it executes is the `vm[]` array produced by the compiler.
+The VM is a register machine implemented by `run()` in `mc-vm.c`. It has no separate loader or relocation step. The code it executes is the `vm[]` array produced by the compiler.
 
 ### Machine state
 

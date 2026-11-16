@@ -56,12 +56,13 @@ dkms.conf
 /Debug
 /mc.vcxproj.user
 /x64
+/*.vcxproj
+/*.vcxproj.user
 
 # Personal
 mc
-tc
 listing.txt
-/tc.vcxproj
-/tc.vcxproj.user
 .vscode/settings.json
 a.img
+out.img
+tmp.mc

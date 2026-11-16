@@ -1,6 +1,6 @@
-app := tc
+app := mc
 
-.PHONY: all clean test bench bin invalid-tests listing-test
+.PHONY: all clean bench bin test test-invalid test-listing
 
 CXX := clang
 CXXFLAGS := -m64 -Ofast -D IS_LINUX
@@ -18,22 +18,22 @@ clean:
 	rm -f $(app)
 
 bench: $(app)
-	./$(app) bench.tc
+	./$(app) bench.mc
 
 test: $(app)
-	./$(app) unit-tests.tc
+	./$(app) unit-tests.mc
 
-invalid-tests: $(app)
-	@set -e; for test in invalid-tests/*.tc; do \
+test-invalid: $(app)
+	@set -e; for test in invalid-tests/*.mc; do \
 		if ./$(app) "$$test" >/dev/null 2>&1; then \
 			echo "expected $$test to fail"; exit 1; \
 		fi; \
 		echo "$$test: rejected (as expected)"; \
 	done
 
-listing-test: tc
-	-./tc -l listing-expected.tc
+test-listing: $(app)
+	-./$(app) -l listing-expected.mc
 	diff listing-expected.txt listing.txt
 
 bin: $(app)
-	cp -u -p $(app) ~/bin/
+	cp -u -p $(app) ~/bin/$(app)

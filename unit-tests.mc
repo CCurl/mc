@@ -1,8 +1,8 @@
-// Unit tests for the Tiny-C compiler and VM.
+// Unit tests for the min-c compiler and VM.
 // Each check prints "name: ok" or "name: FAIL"; the last line prints the failure count.
 
-#include "lib/util.tc";
-#include "lib/util.tc"; // a file included twice is read once
+#include "lib/util.mc";
+#include "lib/util.mc"; // a file included twice is read once
 
 int failures, passes;
 int gZero, gA, gB;

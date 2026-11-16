@@ -1,4 +1,4 @@
-// tiny-c.h
+// mc.h
 
 #ifndef _TINY_C_H_
 #define _TINY_C_H_
@@ -150,6 +150,7 @@ enum { OPCODES(OPCODE_ENUM) NUM_OPCODES };
 extern int sym, intVal;
 extern char idName[ID_NAME_LENGTH];
 extern int variableTypes[MAX_GLOBAL_NAMES], variableBases[MAX_GLOBAL_NAMES], variableIsArray[MAX_GLOBAL_NAMES];
+extern int stringValues[MAX_STRING_LENGTH];
 extern int stringLength;
 extern byte globalMem[MAX_GLOBAL_BYTES];
 extern int numGlobalBytes;
@@ -168,10 +169,8 @@ int findVariable(const char *name);
 int declareVariable(const char *name, int size, int isArray, int type);
 int variableIndex(const char *name);
 int arrayIndex(const char *name);
-int arrayReference(const char *name);
 int allocateStringLiteral(void);
 void storeStringBytes(int base);
-int fold(node *x, int *out);
 int parameterIndex(const char *name);
 int localIndex(const char *name);
 int currentParameterIsArray(int parameter);

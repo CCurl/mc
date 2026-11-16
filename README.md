@@ -1,14 +1,14 @@
 # mc - a minimalistic compiler
 ```
-/* Contains code from Marc Feeley's tinyc.c, with permission. */
+/* Based on code from Marc Feeley's tinyc.c, with permission. */
 /* http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c */
-/* Heavily modified by Chris Curl to add more C-like support */
+/* Heavily modified by Chris Curl, MIT license (2026) */
 
 /*
- * This is a compiler for Tiny-C, a stripped down version of C.
+ * This is a compiler for min-c, a stripped down version of C.
  * The compiler reads the program from the file named on the command line,
  * then runs it in the built-in VM. Output comes only from emit().
- * The grammar of Tiny-C in EBNF is:
+ * The grammar of min-c in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
  *  <include> ::= "#include" '"' <file_name> '"' ";"   (splices the file in place; each file is read once)
@@ -46,34 +46,20 @@
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
  *  <array_arg> ::= <array_ref> | <string>   (a string literal is valid only as an array argument or a global array initializer)
  *  <int_func_id> and <byte_func_id> are IDs of functions returning a value;
- *  void calls are statements, not terms.
- *  emit(int value) is a built-in VM service that writes the low byte and
- *  returns the written byte.
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
- *  Reserved words: do, else, if, while, void, int, byte, emit, return. "emit" is the built-in function, so it cannot name a variable, parameter, local, or function.
- *  A local or parameter may shadow a global or function name.
- *  int and byte functions must return on every path. A while loop does not count as returning, so "while (1) { return 1; }" is rejected.
- *  <int> ::= <a_decimal_integer>  (no sign; use unary minus. Overflow is not detected)
- *  <char> ::= "'" <single_character_or_escape> "'"
- *  <string> ::= '"' { <string_character_or_escape> } '"'
- *  Comments start with "//" and run to the end of the line; /* */ comments are not supported.
- *  Character literals are int-valued and represent the numeric value of one byte; supported escapes
- * are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
- *  Byte objects use unsigned 8-bit values (0 to 255) stored as bytes for globals and arrays, and in the VM's int slots for locals and parameters. Assignments,
- *  byte parameters, returns, and byte array stores narrow to this range; byte values
- *  promote to int in expressions. Conversions are implicit; casts are not supported.
- *  Scalar initializers are supported. Global initializers must be constant expressions
- *  and are folded at parse time; local initializers are assignments run at the declaration.
- *  String initializers are global byte arrays laid out as [length low byte, length high byte, ASCII values..., 0].
- * The length excludes the final zero; an omitted array size is inferred, and an
- * explicit size must fit the length and terminator. Non-ASCII characters are
- * rejected outside comments and character literals. String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
- *  String literals used as array arguments get anonymous global storage. They must be
- *  passed to byte[] parameters; other array arguments must match their element type.
- * String literals are valid only as array arguments or global array initializers.
- * Array parameters pass global-array base addresses by reference.
- * Array indexes are unchecked at runtime.
- * The VM service instruction is encoded as SYS followed by a one-byte service ID.
+ *
+ * Reserved words: do, else, if, while, void, int, byte, emit, return.
+ * * "emit" is a built-in function, so it cannot name a variable, parameter, local, or function.
+ * * emit(int value) is a built-in VM service that writes the low byte to stdout.
+ * void calls are statements, not terms.
+ * A function that reaches its end without a return returns 0.
+ * A local or parameter may shadow a global or function name.
+ * Comments start with "//" and run to the end of the line; /* */ comments are not supported.
+ * <int> ::= <a_decimal_integer> (Overflow is not detected)
+ * <string> ::= '"' { <string_character_or_escape> } '"'
+ * <char> ::= "'" <single_character_or_escape> "'"
+ * Character literals are int-valued and represent the numeric value of one byte.
+ * Supported escapes are: '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
  *
  * The compiler does a minimal amount of error checking to help
  * highlight the structure of the compiler.
@@ -82,19 +68,46 @@
 
 ## Building and Testing
 
-- `make` builds `tc` with clang and `-m64`.
-- `make bin` copies `tc` to `~/bin/`.
-- `make test` runs `unit-tests.tc`, which holds the program-level checks, and prints `passed: N, failed: M`.
+- `make` builds `mc` with clang and `-m64`.
+- `make bin` copies `mc` to `~/bin/`.
+- `make test` runs `unit-tests.mc`, which holds the program-level checks, and prints `passed: N, failed: M`.
 - `make invalid-tests` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.
-- `make listing-test` writes a listing of `listing-expected.tc` to `listing.txt` and diffs it against `listing-expected.txt`.
+- `make test-listing` writes a listing of `listing-expected.mc` to `listing.txt` and diffs it against `listing-expected.txt`.
 
 ## Command line
 
-    tc [-l] [-o] [-r] [-?] <file>
+    mc [-l] [-o] [-r] [-?] <source>
 
-- `-l`: write a listing of the generated code to `listing.txt`.
-- `-o`: save the compiled image to `a.img`.
-- `-r`: run the program (on by default).
-- `-?`: show the usage message.
+```
+usage: mc [-l] [-o] [-r] [-?] <source>
+  compiles the specified source file
+  -l: create 'listing.txt' file
+  -o: output compiled image to 'a.img'
+  -r: run after compile (default on)
+  -?: show this help message
+  defaults: -l: off, -o: off, -r: on
+```
+A source file is required. Without one, `mc` prints the usage message and exits.
 
-A source file is required. Without one, `tc` prints the usage message and exits.
+
+## Notes
+
+There is no operator precedence - strictly left-to-right.<br/>
+Use parentheses to control order. EG:
+- 2 + 3 * 4  = 20 (not 14)
+- 2 +(3 * 4) = 14
+- 3 * 4 + 2  = 14
+
+Byte objects use unsigned 8-bit values (0 to 255) stored as bytes for globals and arrays, and in the<br/>
+VM's int slots for locals and parameters.  Assignments, byte parameters, returns, and byte array stores<br/>
+narrow to this range; byte values promote to int in expressions.  Conversions are implicit; casts are<br/>
+not supported. Scalar initializers are supported. Global initializers must be constant expressions and<br/>
+are folded at parse time; local initializers are assignments run at the declaration. String initializers<br/>
+are global byte arrays laid out as [length low byte, length high byte, ASCII values..., 0]. The length excludes <br/>
+the final zero; an omitted array size is inferred, and an explicit size must fit the length and terminator<br/>
+Non-ASCII characters are rejected outside comments and character literals.<br/>
+String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'. String literals used as array arguments<br/>
+get anonymous global storage. They must be passed to byte[] parameters; other array arguments must match their<br/>
+element type. String literals are valid only as array arguments or global array initializers. Array parameters<br/>
+pass global-array base addresses by reference. Array indexes are unchecked at runtime. The VM service instruction<br/>
+is encoded as `SYS` followed by a one-byte service ID.
