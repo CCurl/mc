@@ -27,6 +27,17 @@ void fail(const char *fmt, ...) {
     exit(1);
 }
 
+void qFail(int condition, const char *fmt, ...) {
+    if (condition) {
+        va_list args;
+        printf("%s:%d: ", currentPath, lineNumber);
+        va_start(args, fmt);
+        vprintf(fmt, args);
+        va_end(args);
+        exit(1);
+    }
+}
+
 void syntaxError() { fail("-syntax error-"); }
 
 static int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }

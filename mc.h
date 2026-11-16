@@ -161,6 +161,7 @@ extern int numFunctions, mainFunction;
 
 int openSource(const char *path);
 void fail(const char *fmt, ...);
+void qFail(int condition, const char *fmt, ...);
 void syntaxError(void);
 void nextSym(void);
 int loadInt(int addr);

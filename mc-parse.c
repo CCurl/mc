@@ -53,14 +53,11 @@ int findVariable(const char *name) {
 
 int declareVariable(const char *name, int size, int isArray, int type) {
     int index = findVariable(name);
-    if (index >= 0) {
-        fail("-duplicate variable %s-\n", name);
-    }
-    if (size <= 0) { fail("-array size must be positive-"); }
+    qFail(index >= 0, "-duplicate variable %s-\n", name);
+    qFail((size <= 0), "-array size must be positive-");
     int elementSize = type == TYPE_BYTE ? 1 : 4;
-    if (numVariables >= MAX_GLOBAL_NAMES || size > (MAX_GLOBAL_BYTES - numGlobalBytes) / elementSize) {
-        fail("-too many variables-");
-    }
+    qFail(numVariables >= MAX_GLOBAL_NAMES, "-too many variables-");
+    qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes) / elementSize, "-too many variables-");
     strcpy(variableNames[numVariables], name);
     variableBases[numVariables] = numGlobalBytes;
     variableIsArray[numVariables] = isArray;
@@ -79,9 +76,7 @@ void storeStringBytes(int base) {
 
 int allocateStringLiteral() {
     int size = stringLength + STRING_OVERHEAD;
-    if (size > MAX_GLOBAL_BYTES - numGlobalBytes) {
-        fail("-too much global storage-");
-    }
+    qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes), "-too much global storage-");
     int base = numGlobalBytes;
     numGlobalBytes += size;
     storeStringBytes(base);
@@ -91,39 +86,25 @@ int allocateStringLiteral() {
 int variableIndex(const char *name) {
     int parameter = parameterIndex(name);
     if (parameter >= 0) {
-        if (currentParameterIsArray(parameter)) {
-            fail("-array parameter %s requires an index-\n", name);
-        }
+        qFail(currentParameterIsArray(parameter), "-array parameter %s requires an index-\n", name);
         return -parameter - 1;
     }
     int index = findVariable(name);
-    if (index < 0) {
-        fail("-undeclared variable %s-\n", name);
-    }
-    if (variableIsArray[index]) {
-        fail("-array %s requires an index-\n", name);
-    }
+    qFail(index < 0, "-undeclared variable %s-\n", name);
+    qFail(variableIsArray[index], "-array %s requires an index-\n", name);
     return variableBases[index];
 }
 
 int arrayIndex(const char *name) {
-    if (localIndex(name) >= 0) {
-        fail("-local variable %s is not an array-\n", name);
-    }
+    qFail(localIndex(name) >= 0, "-local variable %s is not an array-\n", name);
     int parameter = parameterIndex(name);
     if (parameter >= 0) {
-        if (!currentParameterIsArray(parameter)) {
-            fail("-parameter %s is not an array-\n", name);
-        }
+        qFail(!currentParameterIsArray(parameter), "-parameter %s is not an array-\n", name);
         return -parameter - 1;
     }
     int index = findVariable(name);
-    if (index < 0) {
-        fail("-undeclared variable %s-\n", name);
-    }
-    if (!variableIsArray[index]) {
-        fail("-variable %s is not an array-\n", name);
-    }
+        qFail((index < 0), "-undeclared variable %s-\n", name);
+    qFail(!variableIsArray[index], "-variable %s is not an array-\n", name);
     return variableBases[index];
 }
 
@@ -193,15 +174,13 @@ static int keywordType(int keyword) {
 }
 
 static void expectSym(int exp) {
-    if (sym != exp) {
-        fail("-expected symbol[%d],not[%d]-\n", exp, sym);
-    }
+    qFail((sym != exp), "-expected symbol[%d],not[%d]-\n", exp, sym);
     nextSym();
 }
 
 // Consumes an identifier and copies its name into name.
 static void expectName(char *name) {
-    if (sym != ID) { syntaxError(); }
+    qFail((sym != ID), "-expected identifier, not[%d]-\n", sym);
     strcpy(name, idName);
     nextSym();
 }
@@ -227,9 +206,7 @@ static node *callArguments(const char *name) {
     }
     expectSym(RPAR);
     if (index == BUILTIN_EMIT) {
-        if (count != 1 || args->o1->kind == ARRAY_REF) {
-            fail("-emit expects one scalar argument-");
-        }
+        qFail((count != 1 || args->o1->kind == ARRAY_REF), "-emit expects one scalar argument-");
     } else {
         struct function_s *function = &functions[index];
         if (count != function->numParameters) {
