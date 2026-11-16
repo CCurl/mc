@@ -1,8 +1,8 @@
 # mc - a minimalistic compiler
 ```
-/* Contains code from Marc Feeley's tinyc.c, with permission. */
+/* Based on code from Marc Feeley's tinyc.c, with permission. */
 /* http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c */
-/* Heavily modified by Chris Curl to add more C-like support */
+/* Heavily modified by Chris Curl, MIT license (2026) */
 
 /*
  * This is a compiler for min-c, a stripped down version of C.
@@ -46,19 +46,20 @@
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
  *  <array_arg> ::= <array_ref> | <string>   (a string literal is valid only as an array argument or a global array initializer)
  *  <int_func_id> and <byte_func_id> are IDs of functions returning a value;
- *  void calls are statements, not terms.
- *  emit(int value) is a built-in VM service that writes the low byte and
- *  returns the written byte.
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
- *  Reserved words: do, else, if, while, void, int, byte, emit, return. "emit" is the built-in function, so it cannot name a variable, parameter, local, or function.
- *  A local or parameter may shadow a global or function name.
- *  int and byte functions must return on every path. A while loop does not count as returning, so "while (1) { return 1; }" is rejected.
- *  <int> ::= <a_decimal_integer>  (no sign; use unary minus. Overflow is not detected)
- *  <char> ::= "'" <single_character_or_escape> "'"
- *  <string> ::= '"' { <string_character_or_escape> } '"'
- *  Comments start with "//" and run to the end of the line; /* */ comments are not supported.
- *  Character literals are int-valued and represent the numeric value of one byte; supported escapes
- * are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
+ *
+ * Reserved words: do, else, if, while, void, int, byte, emit, return.
+ * * "emit" is a built-in function, so it cannot name a variable, parameter, local, or function.
+ * * emit(int value) is a built-in VM service that writes the low byte to stdout.
+ * void calls are statements, not terms.
+ * A function that reaches its end without a return returns 0.
+ * A local or parameter may shadow a global or function name.
+ * Comments start with "//" and run to the end of the line; /* */ comments are not supported.
+ * <int> ::= <a_decimal_integer> (Overflow is not detected)
+ * <string> ::= '"' { <string_character_or_escape> } '"'
+ * <char> ::= "'" <single_character_or_escape> "'"
+ * Character literals are int-valued and represent the numeric value of one byte.
+ * Supported escapes are: '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
  *
  * The compiler does a minimal amount of error checking to help
  * highlight the structure of the compiler.

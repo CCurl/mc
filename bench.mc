@@ -20,9 +20,21 @@ int fact(int n) {
     return n * fact(n - 1);
 }
 
+int whileRet() {
+    int x = 50;
+    while (x--) {
+        if (x == 33) {
+            print("x==33, returning\n");
+            return x+1;
+        }
+    }
+    print("x==0, returning 0\n");
+}
+
 int main() {
     whileBench(200); cr();
     print("fib(30): ");  printNum(fib(30), 10); cr();
     print("fact(14): "); printNum(fact(14), 10); cr();
+    // whileRet();
     return 0;
 }

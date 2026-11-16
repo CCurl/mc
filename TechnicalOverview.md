@@ -60,7 +60,6 @@ flowchart LR
 - Parse errors report the line the lexer has reached, which can be one line past the offending token when that token ends a line. Errors found after parsing (validation and code generation, for example a void call used as a value) report the position where parsing stopped, not the offending line.
 - `callArguments()` checks call arity, argument kinds (scalar or array), and array element types against the callee's declared signature.
 - `checkArrayRefs()` rejects array references anywhere except as direct array arguments.
-- `returnsOnAllPaths()` checks that `int` and `byte` functions return on every path. Only `return`, statement sequences, `if`/`else`, and `do` bodies count; a `while` loop never does, so `while (1) { return 1; }` is rejected.
 - `prog->o1` is set to `main`'s body.
 
 Strings are lexed into `stringValues[]`, then materialized during parsing. `allocateStringLiteral()` reserves anonymous global byte storage laid out as `[length low byte, length high byte, chars..., 0]` and writes it directly into `globalMem[]`.

@@ -513,16 +513,6 @@ static node *block(node *x) {
     return x;
 }
 
-static int returnsOnAllPaths(node *x) {
-    switch (x->kind) {
-        case RETURN_NODE: return 1;
-        case SEQ: return returnsOnAllPaths(x->o1) || returnsOnAllPaths(x->o2);
-        case IF2: return returnsOnAllPaths(x->o2) && returnsOnAllPaths(x->o3);
-        case DO: return returnsOnAllPaths(x->o1);
-        default: return 0;
-    }
-}
-
 static void parseParameters(struct function_s *function) {
     expectSym(LPAR);
     if (sym != RPAR) {
@@ -664,9 +654,6 @@ static void parseFunctionDefinition(const char *name, int returnType) {
     currentFunction = index;
     functions[index].body = block(newNode(EMPTY));
     currentFunction = previousFunction;
-    if (returnType != TYPE_VOID && !returnsOnAllPaths(functions[index].body)) {
-        fail("-non-void function %s does not return on all paths-\n", name);
-    }
 }
 
 // An array reference is valid only as a direct array argument, which callArguments() has already checked.
