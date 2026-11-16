@@ -2,7 +2,9 @@ MIT License
 
 Copyright (c) 2026 Chris Curl
 
-NOTE: This project is based on code from Marc Feeley’s Tiny-C implementation, used with permission granted explicitly in an email where Marc stated that the code is in the public domain. Attribution is included as a courtesy per Marc's request.
+NOTE: This project is based on code from Marc Feeley’s Tiny-C implementation,
+used with permission granted explicitly in an email where Marc stated that the
+code is in the public domain. Attribution is included as a courtesy per Marc's request.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
