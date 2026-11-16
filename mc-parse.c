@@ -103,7 +103,7 @@ int arrayIndex(const char *name) {
         return -parameter - 1;
     }
     int index = findVariable(name);
-        qFail((index < 0), "-undeclared variable %s-\n", name);
+    qFail((index < 0), "-undeclared variable %s-\n", name);
     qFail(!variableIsArray[index], "-variable %s is not an array-\n", name);
     return variableBases[index];
 }
@@ -112,7 +112,7 @@ static int functionIndex(const char *name) {
     for (int i = 0; i < numFunctions; i++) {
         if (strcmp(functions[i].name, name) == 0) { return i; }
     }
-    if (numFunctions >= MAX_FUNCTIONS) { fail("-too many functions-"); }
+    qFail((numFunctions >= MAX_FUNCTIONS), "-too many functions-");
     struct function_s *function = &functions[numFunctions];
     memset(function, 0, sizeof(*function));
     strcpy(function->name, name);
@@ -121,7 +121,7 @@ static int functionIndex(const char *name) {
 }
 
 static node *newNode(int k) {
-    if (MAX_NODES <= numNodes) { fail("-too many syntax nodes-"); }
+    qFail((MAX_NODES <= numNodes), "-too many syntax nodes-");
     node *x = &nodes[numNodes++];
     memset(x, 0, sizeof(*x));
     x->kind = k;
@@ -503,9 +503,7 @@ static void parseParameters(struct function_s *function) {
                     fail("-duplicate parameter %s-\n", idName);
                 }
             }
-            if (function->numParameters >= MAX_PARAMETERS) {
-                fail("-too many parameters-");
-            }
+            qFail((function->numParameters >= MAX_PARAMETERS), "-too many parameters-");
             strcpy(function->parameterNames[function->numParameters++], idName);
             int parameter = function->numParameters - 1;
             function->parameterTypes[parameter] = parameterType;
@@ -592,9 +590,7 @@ static int sameSignature(struct function_s *declared, struct function_s *header)
 
 // A header that repeats an earlier declaration must match it.
 static int parseHeader(const char *name, int returnType) {
-    if (strcmp(name, "emit") == 0) {
-        fail("-emit is a built-in function-");
-    }
+    qFail((strcmp(name, "emit") == 0), "-emit is a built-in function-");
     int index = functionIndex(name);
     struct function_s *function = &functions[index];
     struct function_s previous = *function;
@@ -654,10 +650,6 @@ static void checkArrayRefs(node *x) {
 static node *defs(node *st) {
   nextSym();
   while (sym != EOI) {
-    if (sym == LBRA) {
-        if (mainFunction < 0) { fail("-program must define main()-"); }
-        syntaxError();
-    }
     if (sym != VOID_SYM && sym != INT_SYM && sym != BYTE_SYM) { fail("-def?-\n"); }
     int type = keywordType(sym);
     nextSym();
@@ -674,14 +666,10 @@ static node *defs(node *st) {
 node *program() {
   node *prog = gen(PROG, NULL, NULL);
   defs(prog);
-  if (mainFunction < 0) {
-      fail("-program must define main()-");
-  }
+  qFail((mainFunction < 0), "-program must define main()-");
   if (sym != EOI) { syntaxError(); }
   for (int i = 0; i < numFunctions; i++) {
-      if (!functions[i].defined) {
-          fail("-undefined function %s-\n", functions[i].name);
-      }
+      qFail((!functions[i].defined), "-undefined function %s-\n", functions[i].name);
   }
   for (int i = 0; i < numFunctions; i++) { checkArrayRefs(functions[i].body); }
   prog->o1 = functions[mainFunction].body;

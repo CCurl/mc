@@ -79,7 +79,7 @@ static int symbolPair(int second, int twoCharSym, int oneCharSym) {
 static void readName(const char *tooLongMessage) {
     int i = 0;
     while (isAlphaNum(ch)) {
-        if (i >= (int)sizeof(idName) - 1) { fail(tooLongMessage); }
+        qFail((i >= (int)sizeof(idName) - 1), tooLongMessage);
         idName[i++] = ch;
         nextCh();
     }
@@ -87,9 +87,9 @@ static void readName(const char *tooLongMessage) {
 }
 
 int openSource(const char *path) {
-    if (strlen(path) >= MAX_PATH_LENGTH) { fail("-path too long-"); }
+    qFail((strlen(path) >= MAX_PATH_LENGTH), "-path too long-");
     inputFp = fopen(path, "rt");
-    if (!inputFp) { fail("-cannot open %s-\n", path); }
+    qFail((!inputFp), "-cannot open %s-\n", path);
     strcpy(currentPath, path);
     strcpy(includedPaths[numIncludedPaths++], path);
     return 1;
@@ -113,10 +113,10 @@ static void includeFile() {
     for (int i = 0; i < numIncludedPaths; i++) {
         if (strcmp(includedPaths[i], path) == 0) { return; }
     }
-    if (numIncludedPaths >= MAX_INCLUDED_FILES) { fail("-too many included files-"); }
-    if (sourceDepth >= MAX_INCLUDE_DEPTH) { fail("-includes nested too deeply-"); }
+    qFail((numIncludedPaths >= MAX_INCLUDED_FILES), "-too many included files-");
+    qFail((sourceDepth >= MAX_INCLUDE_DEPTH), "-includes nested too deeply-");
     fp = fopen(path, "rt");
-    if (!fp) { fail("-cannot open include file %s-\n", path); }
+    qFail((!fp), "-cannot open include file %s-\n", path);
     strcpy(includedPaths[numIncludedPaths++], path);
     struct source_s *outer = &sourceStack[sourceDepth++];
     outer->fp = inputFp;
@@ -178,11 +178,9 @@ void nextSym() {
       case ',': nextCh(); sym = COMMA; break;
       case '\'':
         nextCh();
-        if (ch == EOF || ch == '\n' || ch == '\r' || ch == '\'') {
-            fail("-invalid character literal-");
-        }
+        qFail((ch == EOF || ch == '\n' || ch == '\r' || ch == '\''), "-invalid character literal-");
         intVal = literalCharacter();
-        if (ch != '\'') { fail("-character literal must contain one character-"); }
+        qFail((ch != '\''), "-character literal must contain one character-");
         nextCh();
         sym = CHAR_LITERAL;
         break;
@@ -190,14 +188,10 @@ void nextSym() {
         stringLength = 0;
         nextCh();
         while (ch != '"') {
-            if (ch == EOF || ch == '\n' || ch == '\r') {
-                fail("-unterminated string literal-");
-            }
+            qFail((ch == EOF || ch == '\n' || ch == '\r'), "-unterminated string literal-");
             int value = literalCharacter();
-            if (value > 127) { fail("-string literals must contain ASCII characters-"); }
-            if (stringLength >= MAX_STRING_LENGTH) {
-                fail("-string literal too long-");
-            }
+            qFail((value > 127), "-string literals must contain ASCII characters-");
+            qFail((stringLength >= MAX_STRING_LENGTH), "-string literal too long-");
             stringValues[stringLength++] = value;
         }
         nextCh();
