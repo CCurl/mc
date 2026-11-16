@@ -187,9 +187,7 @@ static void expectName(char *name) {
 
 static node *callArguments(const char *name) {
     int index = strcmp(name, "emit") == 0 ? BUILTIN_EMIT : functionIndex(name);
-    if (index != BUILTIN_EMIT && !functions[index].declared) {
-        fail("-function %s used before declaration-\n", name);
-    }
+    qFail(index != BUILTIN_EMIT && !functions[index].declared, "-function %s used before declaration-\n", name);
     node *args = NULL;
     node **tail = &args;
     int count = 0;
@@ -209,20 +207,14 @@ static node *callArguments(const char *name) {
         qFail((count != 1 || args->o1->kind == ARRAY_REF), "-emit expects one scalar argument-");
     } else {
         struct function_s *function = &functions[index];
-        if (count != function->numParameters) {
-            fail("-function %s expects %d argument(s), got %d-\n", name, function->numParameters, count);
-        }
+        qFail(count != function->numParameters, "-function %s expects %d argument(s), got %d-\n", name, function->numParameters, count);
         node *arg = args;
         for (int i = 0; i < count; i++, arg = arg->o2) {
             int isArray = arg->o1->kind == ARRAY_REF;
-            if (isArray != function->parameterIsArray[i]) {
-                fail("-argument %d to %s must be %s-\n", i + 1, name,
-                     function->parameterIsArray[i] ? "an array reference" : "a scalar");
-            }
-            if (isArray && arg->o1->type != function->parameterTypes[i]) {
-                fail("-argument %d to %s must be %s array-\n", i + 1, name,
-                     function->parameterTypes[i] == TYPE_BYTE ? "a byte" : "an int");
-            }
+            qFail(isArray != function->parameterIsArray[i], "-argument %d to %s must be %s-\n", i + 1, name,
+                  function->parameterIsArray[i] ? "an array reference" : "a scalar");
+            qFail(isArray && arg->o1->type != function->parameterTypes[i], "-argument %d to %s must be %s array-\n", i + 1, name,
+                  function->parameterTypes[i] == TYPE_BYTE ? "a byte" : "an int");
             if (!isArray && function->parameterTypes[i] == TYPE_BYTE) {
                 arg->o1 = byteConversion(arg->o1);
             }
@@ -271,7 +263,7 @@ static node *nameNode(const char *name) {
 
 // A prefix or postfix ++ or -- applied to a scalar variable.
 static node *increment(int kind, node *target, int delta) {
-    if (target->kind != VAR && target->kind != LOCAL) { fail("-++ and -- need a scalar variable-"); }
+    qFail(target->kind != VAR && target->kind != LOCAL, "-++ and -- need a scalar variable-");
     node *x = newNode(kind);
     x->o1 = target;
     x->val = delta;
@@ -363,9 +355,7 @@ node *expr() {
 
 /* <assignment> ::= <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr> */
 static node *assignment(node *target) {
-  if (target->kind != VAR && target->kind != LOCAL && target->kind != ARRAY_GET) {
-      fail("-left side of = must be a variable or array element-");
-  }
+  qFail(target->kind != VAR && target->kind != LOCAL && target->kind != ARRAY_GET, "-left side of = must be a variable or array element-");
   nextSym();
   node *value = expr();
   if (target->type == TYPE_BYTE) { value = byteConversion(value); }
@@ -400,11 +390,9 @@ static node *statement() {
       while (1) {
           char name[sizeof(idName)];
           expectName(name);
-          if (parameterIndex(name) >= 0 || localIndex(name) >= 0) {
-              fail("-duplicate local variable %s-\n", name);
-          }
+          qFail(parameterIndex(name) >= 0 || localIndex(name) >= 0, "-duplicate local variable %s-\n", name);
           struct function_s *function = &functions[currentFunction];
-          if (function->numLocals >= MAX_LOCALS) { fail("-too many local variables-"); }
+          qFail(function->numLocals >= MAX_LOCALS, "-too many local variables-");
           int local = function->numLocals;
           strcpy(function->localNames[local], name);
           function->localTypes[function->numLocals++] = localType;
@@ -427,14 +415,10 @@ static node *statement() {
   } else if (sym == RETURN_SYM) {
       nextSym();
       if (sym == SEMI) {
-          if (currentFunction < 0 || functions[currentFunction].returnsValue) {
-              fail("-return without a value requires a void function-");
-          }
+          qFail(currentFunction < 0 || functions[currentFunction].returnsValue, "-return without a value requires a void function-");
           x = newNode(VOID_RETURN);
       } else {
-          if (currentFunction < 0 || !functions[currentFunction].returnsValue) {
-              fail("-return value requires a non-void function-");
-          }
+          qFail(currentFunction < 0 || !functions[currentFunction].returnsValue, "-return value requires a non-void function-");
           node *value = expr();
           if (functions[currentFunction].returnType == TYPE_BYTE) {
               value = byteConversion(value);
@@ -499,9 +483,7 @@ static void parseParameters(struct function_s *function) {
             nextSym();
             if (sym != ID) { syntaxError(); }
             for (int i = 0; i < function->numParameters; i++) {
-                if (strcmp(function->parameterNames[i], idName) == 0) {
-                    fail("-duplicate parameter %s-\n", idName);
-                }
+                qFail(strcmp(function->parameterNames[i], idName) == 0, "-duplicate parameter %s-\n", idName);
             }
             qFail((function->numParameters >= MAX_PARAMETERS), "-too many parameters-");
             strcpy(function->parameterNames[function->numParameters++], idName);
@@ -542,16 +524,12 @@ static void parseVariableDeclarator(const char *name, int type) {
         nextSym();
         scalar = expr();
         if (type == TYPE_BYTE) { scalar = byteConversion(scalar); }
-        if (scalar->kind != CST) { fail("-global initializer must be constant-"); }
+        qFail(scalar->kind != CST, "-global initializer must be constant-");
     } else if (sym == EQUAL) {
         nextSym();
-        if (type != TYPE_BYTE || sym != STRING_LITERAL) {
-            fail("-string initializer requires a byte array-");
-        }
+        qFail(type != TYPE_BYTE || sym != STRING_LITERAL, "-string initializer requires a byte array-");
         int requiredSize = stringLength + STRING_OVERHEAD;
-        if (!inferredSize && size < requiredSize) {
-            fail("-array is too small for string initializer-");
-        }
+        qFail(!inferredSize && size < requiredSize, "-array is too small for string initializer-");
         if (inferredSize) { size = requiredSize; }
         hasStringInitializer = 1;
     } else if (inferredSize) {
@@ -599,9 +577,7 @@ static int parseHeader(const char *name, int returnType) {
     function->numParameters = 0;
     memset(function->parameterIsArray, 0, sizeof(function->parameterIsArray));
     parseParameters(function);
-    if (previous.declared && !sameSignature(&previous, function)) {
-        fail("-declaration of %s does not match earlier declaration-\n", name);
-    }
+    qFail(previous.declared && !sameSignature(&previous, function), "-declaration of %s does not match earlier declaration-\n", name);
     function->declared = 1;
     return index;
 }
@@ -613,13 +589,11 @@ static void parseFunctionDefinition(const char *name, int returnType) {
         nextSym();
         return;
     }
-    if (functions[index].defined) {
-        fail("-duplicate function %s-\n", name);
-    }
+    qFail(functions[index].defined, "-duplicate function %s-\n", name);
     functions[index].defined = 1;
     if (strcmp(name, "main") == 0) {
-        if (returnType == TYPE_BYTE) { fail("-main must return int or void-"); }
-        if (functions[index].numParameters != 0) { fail("-main must not have parameters-"); }
+        qFail(returnType == TYPE_BYTE, "-main must return int or void-");
+        qFail(functions[index].numParameters != 0, "-main must not have parameters-");
         mainFunction = index;
     }
     expectSym(LBRA);
@@ -632,9 +606,7 @@ static void parseFunctionDefinition(const char *name, int returnType) {
 // An array reference is valid only as a direct array argument, which callArguments() has already checked.
 static void checkArrayRefs(node *x) {
     if (!x) { return; }
-    if (x->kind == ARRAY_REF) {
-        fail("-array reference only valid as an array argument-");
-    }
+    qFail(x->kind == ARRAY_REF, "-array reference only valid as an array argument-");
     if (x->kind == FUNC_CALL) {
         for (node *arg = x->o1; arg; arg = arg->o2) {
             if (arg->o1->kind != ARRAY_REF) { checkArrayRefs(arg->o1); }
@@ -650,7 +622,7 @@ static void checkArrayRefs(node *x) {
 static node *defs(node *st) {
   nextSym();
   while (sym != EOI) {
-    if (sym != VOID_SYM && sym != INT_SYM && sym != BYTE_SYM) { fail("-def?-\n"); }
+    qFail(sym != VOID_SYM && sym != INT_SYM && sym != BYTE_SYM, "-def?-\n");
     int type = keywordType(sym);
     nextSym();
     char name[sizeof(idName)];

@@ -21,7 +21,7 @@ static const char *functionAt(int address) {
 
 void listing() {
     FILE *fp = fopen("listing.txt", "wt");
-    if (!fp) { fail("-cannot write listing.txt-"); }
+    qFail(!fp, "-cannot write listing.txt-");
     int p = 0;
     while (p < here) {
         printLabels(fp, p);

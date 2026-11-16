@@ -100,11 +100,11 @@ static void includeFile() {
     int length = 0;
     FILE *fp;
     while (ch == ' ' || ch == 9) { nextCh(); }
-    if (ch != '"') { fail("-include expects a quoted file name-"); }
+    qFail(ch != '"', "-include expects a quoted file name-");
     nextCh();
     while (ch != '"') {
-        if (ch == EOF || ch == '\n' || ch == '\r') { fail("-unterminated include file name-"); }
-        if (length >= MAX_PATH_LENGTH - 1) { fail("-include file name too long-"); }
+        qFail(ch == EOF || ch == '\n' || ch == '\r', "-unterminated include file name-");
+        qFail(length >= MAX_PATH_LENGTH - 1, "-include file name too long-");
         path[length++] = ch;
         nextCh();
     }
@@ -165,7 +165,7 @@ void nextSym() {
       case '#':
           nextCh();
           readName("-directive too long-");
-          if (strcmp(idName, "include") != 0) { fail("-unknown directive-"); }
+          qFail(strcmp(idName, "include") != 0, "-unknown directive-");
           includeFile();
           goto again;
       case '<': nextCh(); sym = symbolPair('=', LESS_EQ, LESS); break;

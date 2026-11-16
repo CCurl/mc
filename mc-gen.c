@@ -24,7 +24,7 @@ int opcodeLength(int op) {
     return len;
 }
 
-static void checkSize(int sz) { if (here + sz > MAX_CODE) { fail("-program too large-"); } }
+static void checkSize(int sz) { qFail(here + sz > MAX_CODE, "-program too large-"); }
 static void g(byte c)   { checkSize(1); vm[here++] = c; }
 static void g2(short c) { checkSize(2); *(short *)(vm + here) = c; here += 2; }
 static void g4(int c)   { checkSize(4); *(int *)(vm + here) = c; here += 4; }
@@ -42,7 +42,7 @@ static void fix(int src, int dst) {
 // The callee's frame starts at register base of the caller's frame. The operand holds the address,
 // the base register, and the callee's frame size, which patchCalls() fills in.
 static void emitCall(int index, int base) {
-    if (numCallFixups >= MAX_CALL_FIXUPS) { fail("-too many function calls-"); }
+    qFail(numCallFixups >= MAX_CALL_FIXUPS, "-too many function calls-");
     g(CALL);
     callFixups[numCallFixups].operand = here;
     callFixups[numCallFixups].functionIndex = index;
@@ -64,7 +64,7 @@ static void patchCalls() {
 // Writes the code, the global data, and the sizes needed to read them back.
 int saveImage(const char *fileName) {
     FILE *fp = fopen(fileName, "wb");
-    if (!fp) { fail("-cannot write image %s-\n", fileName); }
+    qFail(!fp, "-cannot write image %s-\n", fileName);
     fwrite(&here, sizeof(int), 1, fp);
     fwrite(&numGlobalBytes, sizeof(int), 1, fp);
     fwrite(vm, 1, here, fp);
@@ -81,7 +81,7 @@ void badImage(const char *fileName) { fail("-bad image %s-\n", fileName); }
 // Reads an image written by saveImage() and returns the bytes read
 int loadImage(const char *fileName) {
     FILE *fp = fopen(fileName, "rb");
-    if (!fp) { fail("-cannot read image %s-\n", fileName); }
+    qFail(!fp, "-cannot read image %s-\n", fileName);
     int codeSize, globalSize;
     if (fread(&codeSize, sizeof(int), 1, fp) != 1) { badImage(fileName); }
     if (fread(&globalSize, sizeof(int), 1, fp) != 1) { badImage(fileName); }
@@ -114,7 +114,7 @@ static int isRegVar(node *x) { return x->kind == LOCAL || (x->kind == VAR && x->
 static int regOf(node *x) { return x->kind == LOCAL ? x->val : -x->val - 1; }
 
 static int allocReg() {
-    if (nextReg >= MAX_REGISTERS) { fail("-too many registers-"); }
+    qFail(nextReg >= MAX_REGISTERS, "-too many registers-");
     int r = nextReg++;
     if (nextReg > maxReg) { maxReg = nextReg; }
     return r;
@@ -271,9 +271,7 @@ static void cInto(node *x, int dst) {
         case PRE_INC: case POST_INC: cIncrement(x, dst); break;
         case FUNC_CALL:
             if (x->val == BUILTIN_EMIT) { a = cAny(x->o1->o1); g(EMIT); g2(dst); g2(a); break; }
-            if (!functions[x->val].returnsValue) {
-                fail("-void function %s used as a value-\n", functions[x->val].name);
-            }
+            qFail(!functions[x->val].returnsValue, "-void function %s used as a value-\n", functions[x->val].name);
             cCall(x, dst);
             break;
         default: break;
@@ -368,15 +366,15 @@ static void cStmt(node *x) {
 static void checkCode() {
     int p = 0;
     while (p < here) {
-        if (vm[p] >= NUM_OPCODES) { fail("-internal: bad opcode at %d-", p); }
+        qFail(vm[p] >= NUM_OPCODES, "-internal: bad opcode at %d-", p);
         p += opcodeLength(vm[p]);
     }
-    if (p != here) { fail("-internal: code does not decode cleanly-"); }
+    qFail(p != here, "-internal: code does not decode cleanly-");
 }
 
 // Generates the program from a PROG node: a call to main, HALT, then each function body.
 void c(node *prog) {
-    if (prog->kind != PROG) { fail("-program expected-"); }
+    qFail(prog->kind != PROG, "-program expected-");
     emitCall(mainFunction, 0);
     g(HALT);
     for (int i = 0; i < numFunctions; i++) {
