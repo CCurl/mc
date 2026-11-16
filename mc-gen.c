@@ -1,7 +1,7 @@
 //--------------------------------------------------------------------------
 // Code generator for min-c
 
-#include "min-c.h"
+#include "mc.h"
 
 // -------------------------------------------------
 struct call_fixup_s callFixups[MAX_CALL_FIXUPS];

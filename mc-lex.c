@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Lexer for min-c
 
-#include "min-c.h"
+#include "mc.h"
 
 // -------------------------------------------------
 char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", NULL };
@@ -18,17 +18,8 @@ int sourceDepth = 0;
 char includedPaths[MAX_INCLUDED_FILES][MAX_PATH_LENGTH];
 int numIncludedPaths = 0;
 
-char variableNames[MAX_GLOBAL_NAMES][ID_NAME_LENGTH];
-int variableTypes[MAX_GLOBAL_NAMES];
-int variableBases[MAX_GLOBAL_NAMES];
-int variableIsArray[MAX_GLOBAL_NAMES];
 int stringValues[MAX_STRING_LENGTH], stringLength;
-byte globalMem[MAX_GLOBAL_BYTES];
-int numVariables;
-int numGlobalBytes;
 
-int loadInt(int addr) { return *(int *)(globalMem + addr); }
-void storeInt(int addr, int value) { *(int *)(globalMem + addr) = value; }
 
 void fail(const char *fmt, ...) {
     va_list args;
@@ -40,89 +31,6 @@ void fail(const char *fmt, ...) {
 }
 
 void syntaxError() { fail("-syntax error-"); }
-
-int findVariable(const char *name) {
-    for (int i = 0; i < numVariables; i++) {
-        if (strcmp(variableNames[i], name) == 0) { return i; }
-    }
-    return -1;
-}
-
-int declareVariable(const char *name, int size, int isArray, int type) {
-    int index = findVariable(name);
-    if (index >= 0) {
-        fail("-duplicate variable %s-\n", name);
-    }
-    if (size <= 0) { fail("-array size must be positive-"); }
-    int elementSize = type == TYPE_BYTE ? 1 : 4;
-    if (numVariables >= MAX_GLOBAL_NAMES || size > (MAX_GLOBAL_BYTES - numGlobalBytes) / elementSize) {
-        fail("-too many variables-");
-    }
-    strcpy(variableNames[numVariables], name);
-    variableBases[numVariables] = numGlobalBytes;
-    variableIsArray[numVariables] = isArray;
-    variableTypes[numVariables] = type;
-    numGlobalBytes += size * elementSize;
-    return numVariables++;
-}
-
-void storeStringBytes(int base) {
-    globalMem[base] = stringLength & 0xff;
-    globalMem[base + 1] = (stringLength >> 8) & 0xff;
-    for (int i = 0; i < stringLength; i++) {
-        globalMem[base + i + 2] = stringValues[i];
-    }
-}
-
-int allocateStringLiteral() {
-    int size = stringLength + STRING_OVERHEAD;
-    if (size > MAX_GLOBAL_BYTES - numGlobalBytes) {
-        fail("-too much global storage-");
-    }
-    int base = numGlobalBytes;
-    numGlobalBytes += size;
-    storeStringBytes(base);
-    return base;
-}
-
-int variableIndex(const char *name) {
-    int parameter = parameterIndex(name);
-    if (parameter >= 0) {
-        if (currentParameterIsArray(parameter)) {
-            fail("-array parameter %s requires an index-\n", name);
-        }
-        return -parameter - 1;
-    }
-    int index = findVariable(name);
-    if (index < 0) {
-        fail("-undeclared variable %s-\n", name);
-    }
-    if (variableIsArray[index]) {
-        fail("-array %s requires an index-\n", name);
-    }
-    return variableBases[index];
-}
-
-int arrayIndex(const char *name) {
-    if (localIndex(name) >= 0) {
-        fail("-local variable %s is not an array-\n", name);
-    }
-    int parameter = parameterIndex(name);
-    if (parameter >= 0) {
-        if (!currentParameterIsArray(parameter)) {
-            fail("-parameter %s is not an array-\n", name);
-        }
-        return -parameter - 1;
-    }
-    int index = findVariable(name);
-    if (index < 0) {
-        fail("-undeclared variable %s-\n", name);
-    }
-    if (!variableIsArray[index]) {
-        fail("-variable %s is not an array-\n", name);
-    }
-    return variableBases[index];
-}
 
 static int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }
 static int isNum(int ch) { return BTWI(ch,'0','9'); }

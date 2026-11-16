@@ -1,11 +1,14 @@
 /*---------------------------------------------------------------------------*/
 /* Virtual machine for min-c. */
 
-#include "min-c.h"
+#include "mc.h"
 
 // -------------------------------------------------
 static int regIndex(byte *a) { return *(unsigned short *)a; }
 static int f4(byte *a) { return *(int *)a; }
+byte globalMem[MAX_GLOBAL_BYTES];
+int loadInt(int addr) { return *(int *)(globalMem + addr); }
+void storeInt(int addr, int value) { *(int *)(globalMem + addr) = value; }
 
 // The register named by the 2-byte operand at p, in the current frame.
 #define REG(p) (st[frameBase + regIndex(p)])

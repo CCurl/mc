@@ -59,21 +59,6 @@
  *  Comments start with "//" and run to the end of the line; /* */ comments are not supported.
  *  Character literals are int-valued and represent the numeric value of one byte; supported escapes
  * are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
- *  Byte objects use unsigned 8-bit values (0 to 255) stored as bytes for globals and arrays, and in the VM's int slots for locals and parameters. Assignments,
- *  byte parameters, returns, and byte array stores narrow to this range; byte values
- *  promote to int in expressions. Conversions are implicit; casts are not supported.
- *  Scalar initializers are supported. Global initializers must be constant expressions
- *  and are folded at parse time; local initializers are assignments run at the declaration.
- *  String initializers are global byte arrays laid out as [length low byte, length high byte, ASCII values..., 0].
- * The length excludes the final zero; an omitted array size is inferred, and an
- * explicit size must fit the length and terminator. Non-ASCII characters are
- * rejected outside comments and character literals. String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
- *  String literals used as array arguments get anonymous global storage. They must be
- *  passed to byte[] parameters; other array arguments must match their element type.
- * String literals are valid only as array arguments or global array initializers.
- * Array parameters pass global-array base addresses by reference.
- * Array indexes are unchecked at runtime.
- * The VM service instruction is encoded as SYS followed by a one-byte service ID.
  *
  * The compiler does a minimal amount of error checking to help
  * highlight the structure of the compiler.
@@ -82,19 +67,46 @@
 
 ## Building and Testing
 
-- `make` builds `tc` with clang and `-m64`.
-- `make bin` copies `tc` to `~/bin/`.
+- `make` builds `mc` with clang and `-m64`.
+- `make bin` copies `mc` to `~/bin/`.
 - `make test` runs `unit-tests.mc`, which holds the program-level checks, and prints `passed: N, failed: M`.
 - `make invalid-tests` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.
-- `make listing-test` writes a listing of `listing-expected.mc` to `listing.txt` and diffs it against `listing-expected.txt`.
+- `make test-listing` writes a listing of `listing-expected.mc` to `listing.txt` and diffs it against `listing-expected.txt`.
 
 ## Command line
 
-    tc [-l] [-o] [-r] [-?] <file>
+    mc [-l] [-o] [-r] [-?] <source>
 
-- `-l`: write a listing of the generated code to `listing.txt`.
-- `-o`: save the compiled image to `a.img`.
-- `-r`: run the program (on by default).
-- `-?`: show the usage message.
+```
+usage: mc [-l] [-o] [-r] [-?] <source>
+  compiles the specified source file
+  -l: create 'listing.txt' file
+  -o: output compiled image to 'a.img'
+  -r: run after compile (default on)
+  -?: show this help message
+  defaults: -l: off, -o: off, -r: on
+```
+A source file is required. Without one, `mc` prints the usage message and exits.
 
-A source file is required. Without one, `tc` prints the usage message and exits.
+
+## Notes
+
+There is no operator precedence - strictly left-to-right.<br/>
+Use parentheses to control order. EG:
+- 2 + 3 * 4  = 20 (not 14)
+- 2 +(3 * 4) = 14
+- 3 * 4 + 2  = 14
+
+Byte objects use unsigned 8-bit values (0 to 255) stored as bytes for globals and arrays, and in the<br/>
+VM's int slots for locals and parameters.  Assignments, byte parameters, returns, and byte array stores<br/>
+narrow to this range; byte values promote to int in expressions.  Conversions are implicit; casts are<br/>
+not supported. Scalar initializers are supported. Global initializers must be constant expressions and<br/>
+are folded at parse time; local initializers are assignments run at the declaration. String initializers<br/>
+are global byte arrays laid out as [length low byte, length high byte, ASCII values..., 0]. The length excludes <br/>
+the final zero; an omitted array size is inferred, and an explicit size must fit the length and terminator<br/>
+Non-ASCII characters are rejected outside comments and character literals.<br/>
+String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'. String literals used as array arguments<br/>
+get anonymous global storage. They must be passed to byte[] parameters; other array arguments must match their<br/>
+element type. String literals are valid only as array arguments or global array initializers. Array parameters<br/>
+pass global-array base addresses by reference. Array indexes are unchecked at runtime. The VM service instruction<br/>
+is encoded as `SYS` followed by a one-byte service ID.

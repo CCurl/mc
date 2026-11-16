@@ -1,4 +1,4 @@
-// min-c.h
+// mc.h
 
 #ifndef _TINY_C_H_
 #define _TINY_C_H_
@@ -150,6 +150,7 @@ enum { OPCODES(OPCODE_ENUM) NUM_OPCODES };
 extern int sym, intVal;
 extern char idName[ID_NAME_LENGTH];
 extern int variableTypes[MAX_GLOBAL_NAMES], variableBases[MAX_GLOBAL_NAMES], variableIsArray[MAX_GLOBAL_NAMES];
+extern int stringValues[MAX_STRING_LENGTH];
 extern int stringLength;
 extern byte globalMem[MAX_GLOBAL_BYTES];
 extern int numGlobalBytes;
