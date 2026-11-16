@@ -24,7 +24,7 @@
     <ProjectGuid>{A71BB5CD-5907-498C-B66D-8B079A2D94B6}</ProjectGuid>
     <RootNamespace>stable</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>tc</ProjectName>
+    <ProjectName>mc</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -163,13 +163,13 @@
     <ClInclude Include="parser.c">
       <FileType>CppCode</FileType>
     </ClInclude>
-    <ClCompile Include="tiny-c.c" />
+    <ClCompile Include="min-c.c" />
     <ClInclude Include="vm.c">
       <FileType>CppCode</FileType>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="tiny-c.h" />
+    <ClInclude Include="min-c.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

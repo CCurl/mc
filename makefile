@@ -18,13 +18,13 @@ clean:
 	rm -f $(app)
 
 bench: $(app)
-	./$(app) bench.tc
+	./$(app) bench.mc
 
 test: $(app)
-	./$(app) unit-tests.tc
+	./$(app) unit-tests.mc
 
 test-invalid: $(app)
-	@set -e; for test in invalid-tests/*.tc; do \
+	@set -e; for test in invalid-tests/*.mc; do \
 		if ./$(app) "$$test" >/dev/null 2>&1; then \
 			echo "expected $$test to fail"; exit 1; \
 		fi; \
@@ -32,7 +32,7 @@ test-invalid: $(app)
 	done
 
 test-listing: $(app)
-	-./$(app) -l listing-expected.tc
+	-./$(app) -l listing-expected.mc
 	diff listing-expected.txt listing.txt
 
 bin: $(app)

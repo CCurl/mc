@@ -26,7 +26,7 @@ flowchart LR
 - `gen.c`: bytecode generation and call patching.
 - `vm.c`: the `run()` interpreter.
 - `listing.c`: the code listing. Option `-l` writes a listing of the generated code to `listing.txt`. `make listing-test` checks that listing against `listing-expected.txt`.
-- `lib/*.tc`: min-c source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
+- `lib/*.mc`: min-c source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
 
 ## 1. Lexer
 

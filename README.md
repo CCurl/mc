@@ -84,9 +84,9 @@
 
 - `make` builds `tc` with clang and `-m64`.
 - `make bin` copies `tc` to `~/bin/`.
-- `make test` runs `unit-tests.tc`, which holds the program-level checks, and prints `passed: N, failed: M`.
+- `make test` runs `unit-tests.mc`, which holds the program-level checks, and prints `passed: N, failed: M`.
 - `make invalid-tests` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.
-- `make listing-test` writes a listing of `listing-expected.tc` to `listing.txt` and diffs it against `listing-expected.txt`.
+- `make listing-test` writes a listing of `listing-expected.mc` to `listing.txt` and diffs it against `listing-expected.txt`.
 
 ## Command line
 

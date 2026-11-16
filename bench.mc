@@ -1,6 +1,6 @@
 // Benchmarks
 
-#include "lib/util.tc";
+#include "lib/util.mc";
 
 int mil(int x) { return x * 1000 * 1000; }
 
