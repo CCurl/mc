@@ -151,25 +151,15 @@
     <None Include="TechnicalOverview.md" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="dis.c">
-      <FileType>CppCode</FileType>
-    </ClInclude>
-    <ClInclude Include="gen.c">
-      <FileType>CppCode</FileType>
-    </ClInclude>
-    <ClInclude Include="lexer.c">
-      <FileType>CppCode</FileType>
-    </ClInclude>
-    <ClInclude Include="parser.c">
-      <FileType>CppCode</FileType>
-    </ClInclude>
-    <ClCompile Include="min-c.c" />
-    <ClInclude Include="vm.c">
-      <FileType>CppCode</FileType>
-    </ClInclude>
+    <ClCompile Include="mc-gen.c" />
+    <ClCompile Include="mc-lex.c" />
+    <ClCompile Include="mc-list.c" />
+    <ClCompile Include="mc-main.c" />
+    <ClCompile Include="mc-parse.c" />
+    <ClCompile Include="mc-vm.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="min-c.h" />
+    <ClInclude Include="mc.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
