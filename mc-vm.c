@@ -51,9 +51,9 @@ int run() {
         ACASE IADD  : REG(pc) = REG(pc+SZ16) + REG(pc+SZ32); pc += SZ48;
         ACASE ISUB  : REG(pc) = REG(pc+SZ16) - REG(pc+SZ32); pc += SZ48;
         ACASE IMUL  : REG(pc) = REG(pc+SZ16) * REG(pc+SZ32); pc += SZ48;
-        ACASE IDIV  : if (REG(pc+SZ32) == 0) { fail("-divide by zero-"); }
+        ACASE IDIV  : qFail(REG(pc+SZ32) == 0, "-divide by zero-");
                       REG(pc) = REG(pc+SZ16) / REG(pc+SZ32); pc += SZ48;
-        ACASE IMOD  : if (REG(pc+SZ32) == 0) { fail("-modulo by zero-"); }
+        ACASE IMOD  : qFail(REG(pc+SZ32) == 0, "-modulo by zero-");
                       REG(pc) = REG(pc+SZ16) %  REG(pc+SZ32); pc += SZ48;
         ACASE ILT   : REG(pc) = REG(pc+SZ16) <  REG(pc+SZ32); pc += SZ48;
         ACASE IGT   : REG(pc) = REG(pc+SZ16) >  REG(pc+SZ32); pc += SZ48;
@@ -73,8 +73,8 @@ int run() {
         ACASE JLE   : if (REG(pc) <= REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
         ACASE CALL  : {
                         int newBase = frameBase + regIndex(pc+SZ32);
-                        if (returnSp >= STACK_SIZE) { fail("-call stack overflow-"); }
-                        if (newBase + f4(pc+SZ48) > STACK_SIZE) { fail("-call frame overflow-"); }
+                        qFail(returnSp >= STACK_SIZE, "-call stack overflow-");
+                        qFail(newBase + f4(pc+SZ48) > STACK_SIZE, "-call frame overflow-");
                         returnStack[returnSp].pc = pc + 10;
                         returnStack[returnSp].frameBase = frameBase;
                         returnSp++;

@@ -76,7 +76,7 @@ int saveImage(const char *fileName) {
 /*
 // This function is for a later stage when we want to save and
 // load the generated code and global data.
-void badImage(const char *fileName) { fail("-bad image %s-\n", fileName); }
+void badImage(const char *fileName) { qFail(1, "-bad image %s-\n", fileName); }
 
 // Reads an image written by saveImage() and returns the bytes read
 int loadImage(const char *fileName) {

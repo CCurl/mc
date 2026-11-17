@@ -18,15 +18,6 @@ char includedPaths[MAX_INCLUDED_FILES][MAX_PATH_LENGTH];
 int numIncludedPaths = 0;
 int stringValues[MAX_STRING_LENGTH], stringLength;
 
-void fail(const char *fmt, ...) {
-    va_list args;
-    printf("%s:%d: ", currentPath, lineNumber);
-    va_start(args, fmt);
-    vprintf(fmt, args);
-    va_end(args);
-    exit(1);
-}
-
 void qFail(int condition, const char *fmt, ...) {
     if (condition) {
         va_list args;
@@ -38,7 +29,7 @@ void qFail(int condition, const char *fmt, ...) {
     }
 }
 
-void syntaxError() { fail("-syntax error-"); }
+void syntaxError() { qFail(1, "-syntax error-"); }
 
 static int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }
 static int isNum(int ch) { return BTWI(ch,'0','9'); }
@@ -207,7 +198,7 @@ void nextSym() {
             sym = 0;
             while (reservedWords[sym] != NULL && strcmp(reservedWords[sym], idName) != 0) { sym++; }
             if (reservedWords[sym] == NULL) { sym = ID; }
-        } else { fail("-ch-\n"); }
+        } else { qFail(1, "-ch '%c' expected to be alpha-\n", ch); }
         break;
     }
 }

@@ -291,7 +291,7 @@ static node *term() {
       if (sym == LPAR) {
           x = callArguments(name);
       } else if (isEmit) {
-          fail("-emit is a built-in function-");
+          qFail(1, "-emit is a built-in function-");
       } else if (sym == LBRACKET) {
           int base = arrayIndex(name);
           nextSym();
@@ -533,7 +533,7 @@ static void parseVariableDeclarator(const char *name, int type) {
         if (inferredSize) { size = requiredSize; }
         hasStringInitializer = 1;
     } else if (inferredSize) {
-        fail("-array size required unless initialized by a string-");
+        qFail(1, "-array size required unless initialized by a string-");
     }
     int base = variableBases[declareVariable(name, size, isArray, type)];
     if (scalar) {
