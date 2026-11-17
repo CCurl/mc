@@ -22,7 +22,7 @@ int run() {
     /* Each frame's registers start at st[frameBase]. Register 0 of a callee is the caller's CALL register. */
     int st[STACK_SIZE], frameBase = 0, returnSp = 0;
     byte *pc = vm;
-    struct return_s returnStack[STACK_SIZE];
+    struct return_s returnStack[RSTACK_SIZE];
 
     again:
     switch (*pc++) {
@@ -73,9 +73,9 @@ int run() {
         ACASE JLE   : if (REG(pc) <= REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
         ACASE CALL  : {
                         int newBase = frameBase + regIndex(pc+SZ32);
-                        qFail(returnSp >= STACK_SIZE, "-call stack overflow-");
-                        qFail(newBase + f4(pc+SZ48) > STACK_SIZE, "-call frame overflow-");
-                        returnStack[returnSp].pc = pc + 10;
+                        // qFail(returnSp >= RSTACK_SIZE, "-call stack overflow-");
+                        // wqFail(newBase + f4(pc+SZ48) > RSTACK_SIZE, "-call frame overflow-");
+                        returnStack[returnSp].pc = pc + SZ80;
                         returnStack[returnSp].frameBase = frameBase;
                         returnSp++;
                         frameBase = newBase;
@@ -93,4 +93,3 @@ int run() {
     }
     return st[0];
 }
-

@@ -160,20 +160,21 @@ The VM is a register machine implemented by `run()` in `mc-vm.c`. It has no sepa
 ## 7. Limitations
 
 - **Fixed limits.**
-  - `ID_NAME_LENGTH` is 64. Used for variable and parameter names.
-  - `MAX_CODE` is 65536 bytes.
+  - `ID_NAME_LENGTH` is 24. Used for variable and parameter names.
+  - `MAX_CODE` is 131072 bytes.
   - `MAX_NODES` is 16384 AST nodes.
   - `MAX_FUNCTIONS` is 1024 functions.
-  - `MAX_GLOBAL_NAMES` is 2048 global variable names.
-  - `MAX_GLOBAL_BYTES` is 2097152 bytes, shared by `int` and `byte` globals.
+  - `MAX_GLOBAL_NAMES` is 1024 global variable names.
+  - `MAX_GLOBAL_BYTES` is 4194304 bytes, shared by `int` and `byte` globals.
   - `MAX_STRING_LENGTH` is 1024 characters.
-  - `MAX_LOCALS` is 256 per function.
-  - `MAX_PARAMETERS` is 64 per function.
-  - `MAX_CALL_FIXUPS` is the same as `MAX_NODES`.
   - `MAX_PATH_LENGTH` is 64 chars.
-  - `MAX_INCLUDE_DEPTH` is 16.
-  - `MAX_INCLUDED_FILES` is 128.
-  - `STACK_SIZE` is 4096 slots. All active frames' registers share this array, and the return stack has 4096 entries. Each call uses `frameSize` slots, so the usable recursion depth depends on how many registers each function needs.
-  - `MAX_REGISTERS` is 65535 registers per function frame, the limit of a 2-byte register operand.
+  - `MAX_INCLUDE_DEPTH` is a stack for 16 files.
+  - `MAX_INCLUDED_FILES` is 128 files.
+  - `MAX_CALL_FIXUPS` is the same as `MAX_NODES`.
+  - `MAX_LOCALS` is 32 per function.
+  - `MAX_PARAMETERS` is 32 per function.
+  - `STACK_SIZE` is 8192 slots. All active frames' registers share this array.  Each call uses `frameSize` stack slots, so the usable recursion depth depends on how many registers each function needs.
+  - `RSTACK_SIZE` is 256 entries.
+  - `MAX_REGISTERS` is 256 registers per function frame, the limit of a 2-byte register operand.
 
 - **Local variables.** Locals are scalars only. Local arrays are not supported.

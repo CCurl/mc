@@ -9,21 +9,22 @@
 #include <stdarg.h>
 
 // ---------------------------------------------------------------------------
+#define ID_NAME_LENGTH         24
+#define MAX_CODE           131072 // 128 KB
+#define MAX_NODES           16384 
+#define MAX_FUNCTIONS        1024
+#define MAX_GLOBAL_NAMES     1024
+#define MAX_GLOBAL_BYTES  4194304 // 4 MB
+#define MAX_STRING_LENGTH    1024
 #define MAX_PATH_LENGTH        64
 #define MAX_INCLUDE_DEPTH      16
 #define MAX_INCLUDED_FILES    128
-#define MAX_GLOBAL_NAMES     2048
-#define MAX_STRING_LENGTH    1024
-#define MAX_NODES           16384 
-#define MAX_FUNCTIONS        1024
-#define MAX_PARAMETERS         64
-#define MAX_LOCALS            256
-#define MAX_CODE           131072 // 128 KB
-#define MAX_GLOBAL_BYTES  4194304 // 4 MB
-#define ID_NAME_LENGTH         64
-#define STACK_SIZE           4096
-#define MAX_REGISTERS       65535 // register operands are 2 bytes
 #define MAX_CALL_FIXUPS MAX_NODES
+#define MAX_LOCALS             32
+#define MAX_PARAMETERS         32
+#define STACK_SIZE           8192 // Size of the main stack
+#define RSTACK_SIZE           256 // Size of the return stack
+#define MAX_REGISTERS         256 // register operands are 2 bytes
 
 /* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
 #define STRING_OVERHEAD         3
