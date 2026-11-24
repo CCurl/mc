@@ -4,59 +4,68 @@
 #include "mc.h"
 
 // -------------------------------------------------
+// Code generation. Expressions leave their value in eax. A binary operation evaluates its left operand and
+// pushes it, evaluates the right operand into eax, moves that to ecx, pops the left operand into eax, and then
+// applies the operator. A statement leaves the stack as it found it.
+//
+// Calling convention: arguments are evaluated left to right and pushed, then the call pushes the return address.
+// The callee pushes ebp, sets ebp to esp, and pushes a zero for each local. Parameter i of n is at
+// [ebp + 8 + 4*(n-1-i)] and local j is at [ebp - 4*(j+1)]. The caller removes the arguments after the call.
+// The result is returned in eax.
+
 struct call_fixup_s callFixups[MAX_CALL_FIXUPS];
-byte vm[MAX_CODE];
 int here;
 int numCallFixups;
+static struct function_s *curFunction;
 
-// Register allocation for the function being generated: parameters, then locals, then temporaries.
-int nextReg, maxReg, firstTemp;
+static void checkSize(int sz) { qFail(here + sz > CODE_TOP, "-program too large-"); }
+static void g(int b) { checkSize(1); mem[here++] = (byte)b; }
+static void g4(int v) { checkSize(4); memcpy(mem + here, &v, 4); here += 4; }
+static void movImm(int reg, int v) { g(X_MOV_R_IMM + reg); g4(v); }
 
-#define OPCODE_NAME(name, kinds) #name,
-#define OPCODE_KINDS(name, kinds) kinds,
-const char *const opcodeNames[] = { OPCODES(OPCODE_NAME) };
-const char *const opcodeKinds[] = { OPCODES(OPCODE_KINDS) };
-
-// The length of an instruction: the opcode byte plus its operands ('r' is 2 bytes; 'a' and 't' are 4).
-int opcodeLength(int op) {
-    int len = 1;
-    for (const char *k = opcodeKinds[op]; *k; k++) { len += (*k == 'r') ? 2 : 4; }
-    return len;
-}
-
-static void checkSize(int sz) { qFail(here + sz > MAX_CODE, "-program too large-"); }
-static void g(byte c)   { checkSize(1); vm[here++] = c; }
-static void g2(short c) { checkSize(2); *(short *)(vm + here) = c; here += 2; }
-static void g4(int c)   { checkSize(4); *(int *)(vm + here) = c; here += 4; }
-
+// Reserves a 4-byte field for a rel32 displacement. fix() or patchCalls() fills it in.
 static int hole() {
     checkSize(4);
     int p = here;
     here += 4;
     return p;
 }
-static void fix(int src, int dst) {
-    *(int *)(vm + src) = dst - src;
+
+// The rel32 displacement is measured from the end of the field, which is also the end of the instruction.
+static void fix(int field, int dst) {
+    int rel = dst - (field + 4);
+    memcpy(mem + field, &rel, 4);
 }
 
-// The callee's frame starts at register base of the caller's frame. The operand holds the address,
-// the base register, and the callee's frame size, which patchCalls() fills in.
-static void emitCall(int index, int base) {
+// rr() emits an opcode with a ModRM byte for two registers. reg is a register or an opcode extension (/digit).
+// ri() adds an imm32 after such an operand.
+static void rr(int opcode, int reg, int rm) { g(opcode); g(0xC0 | (reg << 3) | rm); }
+static void ri(int opcode, int ext, int rm, int imm) { rr(opcode, ext, rm); g4(imm); }
+static void movzxAl() { g(X_ESCAPE); rr(X_MOVZX_R_RM8, EAX, EAX); }
+static void int80() { g(X_INT); g(0x80); }
+
+// Memory operands: a frame slot is [ebp+disp32], a fixed address is [disp32], and [base] is a register.
+static int slotDisp(int slot) {
+    int numParams = curFunction->numParameters;
+    return slot < numParams ? 8 + 4 * (numParams - 1 - slot) : -4 * (slot - numParams + 1);
+}
+static void modrmFrame(int reg, int slot) { g(0x80 | (reg << 3) | EBP); g4(slotDisp(slot)); }
+static void modrmAbs(int reg, int addr) { g((reg << 3) | 5); g4(addr); }  // mod=00, rm=101 means disp32
+static void modrmIndirect(int reg, int base) { g((reg << 3) | base); }
+
+// Emits a call to a user function. patchCalls() fills in the target address.
+static void emitCall(int index) {
     qFail(numCallFixups >= MAX_CALL_FIXUPS, "-too many function calls-");
-    g(CALL);
-    callFixups[numCallFixups].operand = here;
+    g(X_CALL);
+    callFixups[numCallFixups].operand = hole();
     callFixups[numCallFixups].functionIndex = index;
     numCallFixups++;
-    g4(0);
-    g2(base);
-    g4(0);
 }
 
 static void patchCalls() {
     for (int i = 0; i < numCallFixups; i++) {
         struct call_fixup_s *f = &callFixups[i];
-        *(int *)(vm + f->operand) = functions[f->functionIndex].address;
-        *(int *)(vm + f->operand + 6) = functions[f->functionIndex].frameSize;
+        fix(f->operand, functions[f->functionIndex].address);
     }
 }
 
@@ -65,12 +74,13 @@ static void patchCalls() {
 int saveImage(const char *fileName) {
     FILE *fp = fopen(fileName, "wb");
     qFail(!fp, "-cannot write image %s-\n", fileName);
-    fwrite(&here, sizeof(int), 1, fp);
+    int codeSize = here - CODE_BASE;
+    fwrite(&codeSize, sizeof(int), 1, fp);
     fwrite(&numGlobalBytes, sizeof(int), 1, fp);
-    fwrite(vm, 1, here, fp);
-    fwrite(globalMem, 1, numGlobalBytes, fp);
+    fwrite(mem + CODE_BASE, 1, codeSize, fp);
+    fwrite(mem, 1, numGlobalBytes, fp);
     fclose(fp);
-    return numGlobalBytes + here + (2*sizeof(int));
+    return numGlobalBytes + codeSize + (2*sizeof(int));
 }
     
 /*
@@ -96,230 +106,175 @@ int loadImage(const char *fileName) {
 }
 */
 
-static void emitLdi(int r, int v) { g(LDI); g2(r); g4(v); }
-static void emitMov(int dst, int src) { if (dst != src) { g(MOV); g2(dst); g2(src); } }
-static void emitI2b(int dst, int src) { g(I2B); g2(dst); g2(src); }
-static void emitIaddi(int dst, int src, int v) { g(IADDI); g2(dst); g2(src); g4(v); }
-static void emit3(int op, int dst, int a, int b) { g(op); g2(dst); g2(a); g2(b); }
+// A parameter or local is a frame slot. Parameters are slots 0..numParameters-1 and the locals follow them.
+static int isSlot(node *x) { return x->kind == LOCAL || x->val < 0; }
+static int slotOf(node *x) { return x->kind == LOCAL ? x->val : -x->val - 1; }
 
-static void emitRa(int op, int r, int a) { g(op); g2(r); g4(a); }
-static void emitRar(int op, int r, int a, int idx) { g(op); g2(r); g4(a); g2(idx); }
-static void emitRaa(int op, int r, int a, int b) { g(op); g2(r); g4(a); g4(b); }
-
-// Emits a conditional jump on register r. Returns the offset of its target field for fix().
-static int emitJumpIf(int op, int r) { g(op); g2(r); return hole(); }
-
-// Variables held in registers: locals, and parameters (which are registers 0..numParameters-1).
-static int isRegVar(node *x) { return x->kind == LOCAL || (x->kind == VAR && x->val < 0); }
-static int regOf(node *x) { return x->kind == LOCAL ? x->val : -x->val - 1; }
-
-static int allocReg() {
-    qFail(nextReg >= MAX_REGISTERS, "-too many registers-");
-    int r = nextReg++;
-    if (nextReg > maxReg) { maxReg = nextReg; }
-    return r;
+// Loads variable t into eax.
+static void loadVar(node *t) {
+    if (isSlot(t)) { g(X_MOV_R_RM); modrmFrame(EAX, slotOf(t)); }
+    else if (t->type == TYPE_BYTE) { g(X_ESCAPE); g(X_MOVZX_R_RM8); modrmAbs(EAX, t->val); }
+    else { g(X_MOV_R_RM); modrmAbs(EAX, t->val); }
 }
 
-// True if evaluating x may assign a variable.
-static int hasSideEffect(node *x) {
-    if (!x) { return 0; }
-    if (x->kind == SET || x->kind == PRE_INC || x->kind == POST_INC || x->kind == ARRAY_SET) { return 1; }
-    return hasSideEffect(x->o1) || hasSideEffect(x->o2);
+// Stores eax into variable t.
+static void storeVar(node *t) {
+    if (isSlot(t)) { g(X_MOV_RM_R); modrmFrame(EAX, slotOf(t)); }
+    else if (t->type == TYPE_BYTE) { g(X_MOV_RM8_R8); modrmAbs(EAX, t->val); }
+    else { g(X_MOV_RM_R); modrmAbs(EAX, t->val); }
 }
 
-static void cInto(node *x, int dst);
-static int cAny(node *x);
-static void cAssign(node *x);
-static void cElementStore(node *x);
-static void cStmt(node *x);
+// Loads the base address of array x into eax: a global's address, or the address held by a parameter.
+static void loadBase(node *x) {
+    if (x->val < 0) { g(X_MOV_R_RM); modrmFrame(EAX, -x->val - 1); }
+    else { movImm(EAX, x->val); }
+}
 
-// Returns a register holding the value of x. A variable's own register is returned unless it is
-// copied first, which happens when later may change it.
-static int cOperand(node *x, node *later) {
-    if (isRegVar(x) && hasSideEffect(later)) {
-        int t = allocReg();
-        emitMov(t, regOf(x));
-        return t;
+static void cExpr(node *x);
+static void cEffect(node *x);
+
+// Leaves the address of element x->o1 of array x in eax.
+static void cElementAddress(node *x) {
+    cExpr(x->o1);
+    if (x->type != TYPE_BYTE) { rr(X_GRP2_RM_IMM8, 4, EAX); g(2); }
+    if (x->val >= 0) { ri(X_GRP1_RM_IMM32, 0, EAX, x->val); }
+    else {
+        rr(X_MOV_RM_R, EAX, ECX);
+        loadBase(x);
+        rr(X_ADD_RM_R, ECX, EAX);
     }
-    return cAny(x);
 }
 
-// Returns a register holding the value of x, which is a variable's register or a new temporary.
-static int cAny(node *x) {
-    if (isRegVar(x)) { return regOf(x); }
-    int t = allocReg();
-    cInto(x, t);
-    return t;
-}
-
-// Loads register r from, or stores r into, element x->o1 of array x. The index is in register idx,
-// or is the constant k when idx is -1. The VM scales int elements by 4.
-static void emitElement(node *x, int r, int idx, int k, int isStore) {
-    int isByte = x->type == TYPE_BYTE;
-    if (x->val >= 0) {
-        if (idx < 0) {
-            emitRa(isByte ? (isStore ? BSET : BGET) : (isStore ? ISET : IGET), r, x->val + (isByte ? 1 : 4) * k);
-        } else {
-            emitRar(isByte ? (isStore ? BASET : BAGET) : (isStore ? IASET : IAGET), r, x->val, idx);
-        }
-        return;
+// Calls a user function. The arguments are pushed in order, and the caller removes them after the call.
+static void cCall(node *x) {
+    int n = 0;
+    for (node *a = x->o1; a; a = a->o2) {
+        cExpr(a->o1);
+        g(X_PUSH + EAX);
+        n++;
     }
-    if (idx < 0) { idx = allocReg(); emitLdi(idx, k); }
-    emit3(isByte ? (isStore ? PBASET : PBAGET) : (isStore ? PIASET : PIAGET), r, -x->val - 1, idx);
+    emitCall(x->val);
+    if (n > 0) { ri(X_GRP1_RM_IMM32, 0, ESP, 4 * n); }
 }
 
-// Assigns the value of SET node x.
-static void cAssign(node *x) {
+// Writes the low byte of arg to stdout with the write system call. The byte is left in eax.
+static void cEmit(node *arg) {
+    cExpr(arg);
+    g(X_PUSH + EAX);            // the byte is now at [esp]
+    rr(X_MOV_RM_R, ESP, ECX);
+    movImm(EDX, 1);
+    movImm(EBX, 1);
+    movImm(EAX, 4);
+    int80();
+    g(X_POP + EAX);
+    movzxAl();
+}
+
+// Evaluates the operands of a binary operation: the left operand ends up in eax and the right one in ecx.
+static void cOperands(node *x) {
+    cExpr(x->o1);
+    g(X_PUSH + EAX);
+    cExpr(x->o2);
+    rr(X_MOV_RM_R, EAX, ECX);
+    g(X_POP + EAX);
+}
+
+// Compares eax with ecx and leaves 0 or 1 in eax.
+static void cCompare(int cc) {
+    rr(X_CMP_RM_R, ECX, EAX);
+    g(X_ESCAPE); rr(X_SETCC + cc, 0, EAX);
+    movzxAl();
+}
+
+// Adds x->val to the variable of x. With keep, the expression's value is left on the stack:
+// the old value for a post-increment, the new value for a pre-increment.
+static void cIncrement(node *x, int keep) {
     node *t = x->o1;
-    if (isRegVar(t)) {
-        cInto(x->o2, regOf(t));
-        return;
-    }
-    int v = cAny(x->o2);
-    emitRa(t->type == TYPE_BYTE ? BSET : ISET, v, t->val);
+    int isPost = x->kind == POST_INC;
+    loadVar(t);
+    if (keep && isPost) { g(X_PUSH + EAX); }
+    ri(X_GRP1_RM_IMM32, 0, EAX, x->val);
+    if (x->type == TYPE_BYTE) { movzxAl(); }
+    storeVar(t);
+    if (keep && isPost) { g(X_POP + EAX); }
 }
 
-// Stores the value of ARRAY_SET node x.
-static void cElementStore(node *x) {
-    int idx, v;
-    if (x->o1->kind == CST) {
-        v = cAny(x->o2);
-        emitElement(x, v, -1, x->o1->val, 1);
-        return;
-    }
-    idx = cOperand(x->o1, x->o2);
-    v = cAny(x->o2);
-    emitElement(x, v, idx, 0, 1);
+// Loads the element at eax (as found by cElementAddress) into eax.
+static void loadElement(int type) {
+    if (type == TYPE_BYTE) { g(X_ESCAPE); g(X_MOVZX_R_RM8); modrmIndirect(EAX, EAX); }
+    else { g(X_MOV_R_RM); modrmIndirect(EAX, EAX); }
 }
 
-// Steps a variable by x->val. For post-increments the old value goes to dst; dst -1 discards it.
-static void cIncrement(node *x, int dst) {
-    node *t = x->o1;
-    int isPost = x->kind == POST_INC, isByte = x->type == TYPE_BYTE;
-    if (isRegVar(t)) {
-        int r = regOf(t);
-        if (dst < 0 && !isByte && (x->val == 1 || x->val == -1)) {
-            g(x->val == 1 ? IINC1 : IDEC1); g2(r);
-            return;
-        }
-        if (isPost && dst >= 0) { emitMov(dst, r); }
-        emitIaddi(r, r, x->val);
-        if (isByte) { emitI2b(r, r); }
-        if (!isPost && dst >= 0) { emitMov(dst, r); }
-        return;
-    }
-    if (dst < 0) { dst = allocReg(); }
-    int op = isByte ? (isPost ? BINCP : BINC) : (isPost ? IINCP : IINC);
-    emitRaa(op, dst, t->val, x->val);
-}
-
-// Calls the user function of node x, with the result in dst (-1 discards it). The callee's frame
-// starts at the first argument register. That is dst when dst is the top temporary, so no copy is needed.
-static void cCall(node *x, int dst) {
-    int mark = nextReg, base, i = 0;
-    base = (dst >= firstTemp && dst == nextReg - 1) ? dst : nextReg;
-    nextReg = base;
-    for (node *a = x->o1; a; a = a->o2) { allocReg(); }
-    for (node *a = x->o1; a; a = a->o2, i++) { cInto(a->o1, base + i); }
-    emitCall(x->val, base);
-    nextReg = mark;
-    if (dst >= 0) { emitMov(dst, base); }
-}
-
-static void cBinary(node *x, int dst, int op) {
-    int lr = cOperand(x->o1, x->o2);
-    int rr = cAny(x->o2);
-    emit3(op, dst, lr, rr);
-}
-
-// Evaluates x and leaves its value in register dst.
-static void cInto(node *x, int dst) {
-    int a;
-    if (x->kind == CST) { emitLdi(dst, x->val); return; }
+// Evaluates expression x into eax. Every expression leaves its value in eax.
+static void cExpr(node *x) {
     switch (x->kind) {
-        case VAR:
-            if (isRegVar(x)) { emitMov(dst, regOf(x)); }
-            else { emitRa(x->type == TYPE_BYTE ? BGET : IGET, dst, x->val); }
+        case CST: movImm(EAX, x->val); break;
+        case VAR: case LOCAL: loadVar(x); break;
+        case ARRAY_REF: loadBase(x); break;
+        case ARRAY_GET: cElementAddress(x); loadElement(x->type); break;
+        case BYTE_CONVERT: cExpr(x->o1); movzxAl(); break;
+        case ADD: cOperands(x); rr(X_ADD_RM_R, ECX, EAX); break;
+        case SUB: cOperands(x); rr(X_SUB_RM_R, ECX, EAX); break;
+        case MUL: cOperands(x); g(X_ESCAPE); rr(X_IMUL_R_RM, EAX, ECX); break;
+        case DIV: case MOD:
+            cOperands(x);
+            g(X_CDQ);
+            rr(X_GRP3_RM, 7, ECX);  // idiv ecx: the quotient is in eax and the remainder in edx
+            if (x->kind == MOD) { rr(X_MOV_RM_R, EDX, EAX); }
             break;
-        case LOCAL: emitMov(dst, x->val); break;
-        case ARRAY_REF:
-            if (x->val < 0) { emitMov(dst, -x->val - 1); } else { emitLdi(dst, x->val); }
-            break;
-        case ARRAY_GET:
-            if (x->o1->kind == CST) { emitElement(x, dst, -1, x->o1->val, 0); }
-            else { a = cAny(x->o1); emitElement(x, dst, a, 0, 0); }
-            break;
-        case BYTE_CONVERT: cInto(x->o1, dst); emitI2b(dst, dst); break;
-        case ADD:
-            if (x->o2->kind == CST) { a = cAny(x->o1); emitIaddi(dst, a, x->o2->val); break; }
-            if (x->o1->kind == CST) { a = cAny(x->o2); emitIaddi(dst, a, x->o1->val); break; }
-            cBinary(x, dst, IADD);
-            break;
-        case SUB:
-            if (x->o2->kind == CST) { a = cAny(x->o1); emitIaddi(dst, a, (int)(0u - (unsigned)x->o2->val)); break; }
-            cBinary(x, dst, ISUB);
-            break;
-        case MUL: cBinary(x, dst, IMUL); break;
-        case DIV: cBinary(x, dst, IDIV); break;
-        case MOD: cBinary(x, dst, IMOD); break;
-        case LT:  cBinary(x, dst, ILT); break;
-        case GT:  cBinary(x, dst, IGT); break;
-        case LE:  cBinary(x, dst, ILE); break;
-        case GE:  cBinary(x, dst, IGE); break;
-        case EQ:  cBinary(x, dst, IEQ); break;
-        case NE:  cBinary(x, dst, INE); break;
-        case PRE_INC: case POST_INC: cIncrement(x, dst); break;
+        case LT:  cOperands(x); cCompare(CC_L); break;
+        case GT:  cOperands(x); cCompare(CC_G); break;
+        case LE:  cOperands(x); cCompare(CC_LE); break;
+        case GE:  cOperands(x); cCompare(CC_GE); break;
+        case EQ:  cOperands(x); cCompare(CC_E); break;
+        case NE:  cOperands(x); cCompare(CC_NE); break;
+        case PRE_INC: case POST_INC: cIncrement(x, 1); break;
         case FUNC_CALL:
-            if (x->val == BUILTIN_EMIT) { a = cAny(x->o1->o1); g(EMIT); g2(dst); g2(a); break; }
+            if (x->val == BUILTIN_EMIT) { cEmit(x->o1->o1); break; }
             qFail(!functions[x->val].returnsValue, "-void function %s used as a value-\n", functions[x->val].name);
-            cCall(x, dst);
+            cCall(x);
             break;
-        default: break;
+        default: qFail(1, "-internal: bad expression kind %d-", x->kind);
     }
 }
 
-// The fused opcode that jumps when comparison x is true (whenTrue) or false, or -1 if x is not a
-// comparison. Negating an int comparison swaps it with its inverse, e.g. not (a < b) is a >= b.
-static int condJumpOp(node *x, int whenTrue) {
-    switch (x->kind) {
-        case LT: return whenTrue ? JLT : JGE;
-        case GT: return whenTrue ? JGT : JLE;
-        case LE: return whenTrue ? JLE : JGT;
-        case GE: return whenTrue ? JGE : JLT;
-        case EQ: return whenTrue ? JEQ : JNE;
-        case NE: return whenTrue ? JNE : JEQ;
-        default: return -1;
-    }
+// Stores into element x->o1 of array x (an ARRAY_SET node). The address is computed first, then the value.
+static void cElementStore(node *x) {
+    cElementAddress(x);
+    g(X_PUSH + EAX);
+    cExpr(x->o2);
+    g(X_POP + ECX);
+    if (x->type == TYPE_BYTE) { g(X_MOV_RM8_R8); } else { g(X_MOV_RM_R); }
+    modrmIndirect(EAX, ECX);
 }
 
-// Emits a jump taken when condition x is true (whenTrue) or false. Returns the hole for fix().
-static int condJump(node *x, int whenTrue) {
-    int op = condJumpOp(x, whenTrue);
-    if (op >= 0) {
-        int lr = cOperand(x->o1, x->o2);
-        int rr = cAny(x->o2);
-        g(op); g2(lr); g2(rr);
-        return hole();
-    }
-    return emitJumpIf(whenTrue ? JNZ : JZ, cAny(x));
-}
-
-// Evaluates x for its side effects only.
+// Evaluates x for its side effects. A value that x leaves in eax is simply overwritten by the next expression.
 static void cEffect(node *x) {
     switch (x->kind) {
-        case SET: cAssign(x); break;
-        case PRE_INC: case POST_INC: cIncrement(x, -1); break;
+        case SET: cExpr(x->o2); storeVar(x->o1); break;
+        case PRE_INC: case POST_INC: cIncrement(x, 0); break;
         case ARRAY_SET: cElementStore(x); break;
         case FUNC_CALL:
-            if (x->val != BUILTIN_EMIT) { cCall(x, -1); break; }
-            cInto(x, allocReg());
+            if (x->val == BUILTIN_EMIT) { cExpr(x); } else { cCall(x); }
             break;
-        default: cInto(x, allocReg()); break;
+        default: cExpr(x); break;
     }
 }
 
+// Emits a jump taken when x is true (whenTrue) or false. Returns the hole for fix().
+static int condJump(node *x, int whenTrue) {
+    cExpr(x);
+    rr(X_TEST_RM_R, EAX, EAX);
+    g(X_ESCAPE); g(X_JCC + (whenTrue ? CC_NE : CC_E));
+    return hole();
+}
+
+// Tears down the frame and returns to the caller. The caller removes the arguments.
+static void epilogue() { g(X_LEAVE); g(X_RET); }
+
+// Emits statement x. A statement leaves the stack as it found it.
 static void cStmt(node *x) {
-    int mark = nextReg, p1, p2, r, top;
+    int p1, p2, top;
     if (!x) { return; }
     switch (x->kind) {
         case SEQ: cStmt(x->o1); cStmt(x->o2); break;
@@ -327,15 +282,13 @@ static void cStmt(node *x) {
         case EXPR: cEffect(x->o1); break;
         case IF1:
             p1 = condJump(x->o1, 0);
-            nextReg = mark;
             cStmt(x->o2);
             fix(p1, here);
             break;
         case IF2:
             p1 = condJump(x->o1, 0);
-            nextReg = mark;
             cStmt(x->o2);
-            g(JMP); p2 = hole();
+            g(X_JMP); p2 = hole();
             fix(p1, here);
             cStmt(x->o3);
             fix(p2, here);
@@ -343,9 +296,8 @@ static void cStmt(node *x) {
         case WHILE:
             top = here;
             p1 = condJump(x->o1, 0);
-            nextReg = mark;
             cStmt(x->o2);
-            g(JMP); fix(hole(), top);
+            g(X_JMP); fix(hole(), top);
             fix(p1, here);
             break;
         case DO:
@@ -354,38 +306,33 @@ static void cStmt(node *x) {
             p1 = condJump(x->o2, 1);
             fix(p1, top);
             break;
-        case RETURN_NODE: r = cAny(x->o1); g(RET); g2(r); break;
-        case VOID_RETURN: g(RET0); break;
+        case RETURN_NODE: cExpr(x->o1); epilogue(); break;
+        case VOID_RETURN: epilogue(); break;
         default: cEffect(x); break;
     }
-    nextReg = mark;
 }
 
-// Walks the generated code one instruction at a time, using the operand sizes in OPCODES.
-// Fails if an opcode is unknown or the walk does not end exactly where the code ends.
-static void checkCode() {
-    int p = 0;
-    while (p < here) {
-        qFail(vm[p] >= NUM_OPCODES, "-internal: bad opcode at %d-", p);
-        p += opcodeLength(vm[p]);
-    }
-    qFail(p != here, "-internal: code does not decode cleanly-");
-}
-
-// Generates the program from a PROG node: a call to main, HALT, then each function body.
+// Generates the program. The code starts with a call to main that passes its return value to the exit system
+// call, then each function. A function sets up its frame, runs its body, and returns 0 if it falls off the end.
 void c(node *prog) {
     qFail(prog->kind != PROG, "-program expected-");
-    emitCall(mainFunction, 0);
-    g(HALT);
+    here = CODE_BASE;
+    emitCall(mainFunction);
+    rr(X_MOV_RM_R, EAX, EBX);  // the exit status
+    movImm(EAX, 1);            // the exit system call
+    int80();
     for (int i = 0; i < numFunctions; i++) {
         struct function_s *f = &functions[i];
+        curFunction = f;
         f->address = here;
-        firstTemp = f->numParameters + f->numLocals;
-        nextReg = maxReg = firstTemp;
+        g(X_PUSH + EBP);
+        rr(X_MOV_RM_R, ESP, EBP);
+        movImm(EAX, 0);
+        for (int j = 0; j < f->numLocals; j++) { g(X_PUSH + EAX); }
         cStmt(f->body);
-        g(RET0);
-        f->frameSize = maxReg;
+        movImm(EAX, 0);
+        epilogue();
     }
     patchCalls();
-    checkCode();
 }
+

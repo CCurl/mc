@@ -67,10 +67,10 @@ int declareVariable(const char *name, int size, int isArray, int type) {
 }
 
 void storeStringBytes(int base) {
-    globalMem[base] = stringLength & 0xff;
-    globalMem[base + 1] = (stringLength >> 8) & 0xff;
+    mem[base] = stringLength & 0xff;
+    mem[base + 1] = (stringLength >> 8) & 0xff;
     for (int i = 0; i < stringLength; i++) {
-        globalMem[base + i + 2] = stringValues[i];
+        mem[base + i + 2] = stringValues[i];
     }
 }
 
@@ -537,7 +537,7 @@ static void parseVariableDeclarator(const char *name, int type) {
     }
     int base = variableBases[declareVariable(name, size, isArray, type)];
     if (scalar) {
-        if (type == TYPE_BYTE) { globalMem[base] = scalar->val; }
+        if (type == TYPE_BYTE) { mem[base] = scalar->val; }
         else { storeInt(base, scalar->val); }
     }
     if (hasStringInitializer) {

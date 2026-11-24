@@ -1,22 +1,72 @@
-     0  CALL   main r0 3
-    11  HALT  
+start:
+00400000  E8 2C 00 00 00                 call main
+00400005  89 C3                          mov ebx, eax
+00400007  B8 01 00 00 00                 mov eax, 1
+0040000C  CD 80                          int 0x80
 
 twice:
-    12  IADD   r1 r0 r0
-    19  RET    r1
-    22  RET0  
+0040000E  55                             push ebp
+0040000F  89 E5                          mov ebp, esp
+00400011  B8 00 00 00 00                 mov eax, 0
+00400016  8B 85 08 00 00 00              mov eax, [ebp+8]
+0040001C  50                             push eax
+0040001D  8B 85 08 00 00 00              mov eax, [ebp+8]
+00400023  89 C1                          mov ecx, eax
+00400025  58                             pop eax
+00400026  01 C8                          add eax, ecx
+00400028  C9                             leave
+00400029  C3                             ret
+0040002A  B8 00 00 00 00                 mov eax, 0
+0040002F  C9                             leave
+00400030  C3                             ret
 
 main:
-    23  LDI    r0 0
-    30  LDI    r1 0
-    37  LDI    r2 3
-    44  JGE    r0 r2 ->102
-    53  MOV    r2 r0
-    58  CALL   twice r2 2
-    69  IASET  r2 0 r0
-    78  IAGET  r2 0 r0
-    87  IADD   r1 r1 r2
-    94  IINC1  r0
-    97  JMP    ->37
-   102  RET    r1
-   105  RET0  
+00400031  55                             push ebp
+00400032  89 E5                          mov ebp, esp
+00400034  B8 00 00 00 00                 mov eax, 0
+00400039  50                             push eax
+0040003A  50                             push eax
+0040003B  B8 00 00 00 00                 mov eax, 0
+00400040  89 85 FC FF FF FF              mov [ebp-4], eax
+00400046  B8 00 00 00 00                 mov eax, 0
+0040004B  89 85 F8 FF FF FF              mov [ebp-8], eax
+00400051  8B 85 FC FF FF FF              mov eax, [ebp-4]
+00400057  50                             push eax
+00400058  B8 03 00 00 00                 mov eax, 3
+0040005D  89 C1                          mov ecx, eax
+0040005F  58                             pop eax
+00400060  39 C8                          cmp eax, ecx
+00400062  0F 9C C0                       setl al
+00400065  0F B6 C0                       movzx eax, al
+00400068  85 C0                          test eax, eax
+0040006A  0F 84 5F 00 00 00              je 004000CF
+00400070  8B 85 FC FF FF FF              mov eax, [ebp-4]
+00400076  C1 E0 02                       shl eax, 2
+00400079  81 C0 00 00 00 00              add eax, 0
+0040007F  50                             push eax
+00400080  8B 85 FC FF FF FF              mov eax, [ebp-4]
+00400086  50                             push eax
+00400087  E8 82 FF FF FF                 call twice
+0040008C  81 C4 04 00 00 00              add esp, 4
+00400092  59                             pop ecx
+00400093  89 01                          mov [ecx], eax
+00400095  8B 85 F8 FF FF FF              mov eax, [ebp-8]
+0040009B  50                             push eax
+0040009C  8B 85 FC FF FF FF              mov eax, [ebp-4]
+004000A2  C1 E0 02                       shl eax, 2
+004000A5  81 C0 00 00 00 00              add eax, 0
+004000AB  8B 00                          mov eax, [eax]
+004000AD  89 C1                          mov ecx, eax
+004000AF  58                             pop eax
+004000B0  01 C8                          add eax, ecx
+004000B2  89 85 F8 FF FF FF              mov [ebp-8], eax
+004000B8  8B 85 FC FF FF FF              mov eax, [ebp-4]
+004000BE  81 C0 01 00 00 00              add eax, 1
+004000C4  89 85 FC FF FF FF              mov [ebp-4], eax
+004000CA  E9 82 FF FF FF                 jmp 00400051
+004000CF  8B 85 F8 FF FF FF              mov eax, [ebp-8]
+004000D5  C9                             leave
+004000D6  C3                             ret
+004000D7  B8 00 00 00 00                 mov eax, 0
+004000DC  C9                             leave
+004000DD  C3                             ret

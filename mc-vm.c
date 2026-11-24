@@ -1,95 +1,249 @@
 /*---------------------------------------------------------------------------*/
-/* Virtual machine for min-c. */
+/* Virtual machine for min-c. It runs the 32-bit x86 subset that the code generator emits. */
 
 #include "mc.h"
 
 // -------------------------------------------------
-static int regIndex(byte *a) { return *(unsigned short *)a; }
-static int f4(byte *a) { return *(int *)a; }
-byte globalMem[MAX_GLOBAL_BYTES];
-int loadInt(int addr) { return *(int *)(globalMem + addr); }
-void storeInt(int addr, int value) { *(int *)(globalMem + addr) = value; }
+// The memory image. Globals start at 0, the code at CODE_BASE, and the stack grows down from MEM_BYTES.
+byte mem[MEM_BYTES];
 
-// The register named by the 2-byte operand at p, in the current frame.
-#define REG(p) (st[frameBase + regIndex(p)])
-#define SZ16  2
-#define SZ32  4
-#define SZ48  6
-#define SZ64  8
-#define SZ80 10
+static void checkAddress(int addr, int size) {
+    qFail(addr < 0 || size > MEM_BYTES || addr > MEM_BYTES - size, "-bad memory address %d-", addr);
+}
 
-int run() {
-    /* Each frame's registers start at st[frameBase]. Register 0 of a callee is the caller's CALL register. */
-    int st[STACK_SIZE], frameBase = 0, returnSp = 0;
-    byte *pc = vm;
-    struct return_s returnStack[RSTACK_SIZE];
+int loadInt(int addr) {
+    checkAddress(addr, 4);
+    int value;
+    memcpy(&value, mem + addr, 4);
+    return value;
+}
 
-    again:
-    switch (*pc++) {
-        case LDI  : REG(pc) = f4(pc+SZ16); pc += SZ48;
-        ACASE MOV : REG(pc) = REG(pc+SZ16); pc += SZ32;
-        ACASE IGET: REG(pc) = loadInt(f4(pc+SZ16)); pc += SZ48;
-        ACASE ISET: storeInt(f4(pc+SZ16), REG(pc)); pc += SZ48;
-        ACASE BGET: REG(pc) = globalMem[f4(pc+SZ16)]; pc += SZ48;
-        ACASE BSET: globalMem[f4(pc+SZ16)] = REG(pc); pc += SZ48;
-        ACASE IAGET : REG(pc) = loadInt(f4(pc+SZ16) + 4 * REG(pc+SZ48)); pc += SZ64;
-        ACASE IASET : storeInt(f4(pc+SZ16) + 4 * REG(pc+SZ48), REG(pc)); pc += SZ64;
-        ACASE BAGET : REG(pc) = globalMem[f4(pc+SZ16) + REG(pc+SZ48)]; pc += SZ64;
-        ACASE BASET : globalMem[f4(pc+SZ16) + REG(pc+SZ48)] = REG(pc); pc += SZ64;
-        ACASE PIAGET: REG(pc) = loadInt(REG(pc+SZ16) + 4 * REG(pc+SZ32)); pc += SZ48;
-        ACASE PIASET: storeInt(REG(pc+SZ16) + 4 * REG(pc+SZ32), REG(pc)); pc += SZ48;
-        ACASE PBAGET: REG(pc) = globalMem[REG(pc+SZ16) + REG(pc+SZ32)]; pc += SZ48;
-        ACASE PBASET: globalMem[REG(pc+SZ16) + REG(pc+SZ32)] = REG(pc); pc += SZ48;
-        ACASE I2B   : REG(pc) = (byte)REG(pc+SZ16); pc += SZ32;
-        ACASE IADDI : REG(pc) = REG(pc+SZ16) + f4(pc+SZ32); pc += SZ64;
-        ACASE IINC1 : REG(pc)++; pc += SZ16;
-        ACASE IDEC1 : REG(pc)--; pc += SZ16;
-        ACASE IINC  : REG(pc) = loadInt(f4(pc+SZ16)) + f4(pc+SZ48); storeInt(f4(pc+SZ16), REG(pc)); pc += SZ80;
-        ACASE IINCP : REG(pc) = loadInt(f4(pc+SZ16)); storeInt(f4(pc+SZ16), REG(pc) + f4(pc+SZ48)); pc += SZ80;
-        ACASE BINC  : REG(pc) = (byte)(globalMem[f4(pc+SZ16)] + f4(pc+SZ48)); globalMem[f4(pc+SZ16)] = REG(pc); pc += SZ80;
-        ACASE BINCP : REG(pc) = globalMem[f4(pc+SZ16)]; globalMem[f4(pc+SZ16)] = REG(pc) + f4(pc+SZ48); pc += SZ80;
-        ACASE IADD  : REG(pc) = REG(pc+SZ16) + REG(pc+SZ32); pc += SZ48;
-        ACASE ISUB  : REG(pc) = REG(pc+SZ16) - REG(pc+SZ32); pc += SZ48;
-        ACASE IMUL  : REG(pc) = REG(pc+SZ16) * REG(pc+SZ32); pc += SZ48;
-        ACASE IDIV  : qFail(REG(pc+SZ32) == 0, "-divide by zero-");
-                      REG(pc) = REG(pc+SZ16) / REG(pc+SZ32); pc += SZ48;
-        ACASE IMOD  : qFail(REG(pc+SZ32) == 0, "-modulo by zero-");
-                      REG(pc) = REG(pc+SZ16) %  REG(pc+SZ32); pc += SZ48;
-        ACASE ILT   : REG(pc) = REG(pc+SZ16) <  REG(pc+SZ32); pc += SZ48;
-        ACASE IGT   : REG(pc) = REG(pc+SZ16) >  REG(pc+SZ32); pc += SZ48;
-        ACASE ILE   : REG(pc) = REG(pc+SZ16) <= REG(pc+SZ32); pc += SZ48;
-        ACASE IGE   : REG(pc) = REG(pc+SZ16) >= REG(pc+SZ32); pc += SZ48;
-        ACASE IEQ   : REG(pc) = REG(pc+SZ16) == REG(pc+SZ32); pc += SZ48;
-        ACASE INE   : REG(pc) = REG(pc+SZ16) != REG(pc+SZ32); pc += SZ48;
-        ACASE EMIT  : REG(pc) = putchar((char)REG(pc+SZ16)) ; pc += SZ32;
-        ACASE JMP   : pc += f4(pc);
-        ACASE JZ    : if (REG(pc) == 0) pc += SZ16 + f4(pc+SZ16); else pc += SZ48;
-        ACASE JNZ   : if (REG(pc) != 0) pc += SZ16 + f4(pc+SZ16); else pc += SZ48;
-        ACASE JLT   : if (REG(pc) <  REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
-        ACASE JGT   : if (REG(pc) >  REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
-        ACASE JEQ   : if (REG(pc) == REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
-        ACASE JNE   : if (REG(pc) != REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
-        ACASE JGE   : if (REG(pc) >= REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
-        ACASE JLE   : if (REG(pc) <= REG(pc+SZ16)) pc += SZ32 + f4(pc+SZ32); else pc += SZ64;
-        ACASE CALL  : {
-                        int newBase = frameBase + regIndex(pc+SZ32);
-                        // qFail(returnSp >= RSTACK_SIZE, "-call stack overflow-");
-                        // wqFail(newBase + f4(pc+SZ48) > RSTACK_SIZE, "-call frame overflow-");
-                        returnStack[returnSp].pc = pc + SZ80;
-                        returnStack[returnSp].frameBase = frameBase;
-                        returnSp++;
-                        frameBase = newBase;
-                        pc = vm + f4(pc);
-                      }
-        ACASE RET   : st[frameBase] = REG(pc); goto doReturn;
-        ACASE RET0  : st[frameBase] = 0;
-        doReturn:
-                      if (returnSp) {
-                          returnSp--;
-                          pc = returnStack[returnSp].pc;
-                          frameBase = returnStack[returnSp].frameBase;
-                      } else { return st[0]; }
-        ACASE HALT  : return st[0];
+void storeInt(int addr, int value) {
+    checkAddress(addr, 4);
+    memcpy(mem + addr, &value, 4);
+}
+
+static int loadByte(int addr) { checkAddress(addr, 1); return mem[addr]; }
+static void storeByte(int addr, int value) { checkAddress(addr, 1); mem[addr] = (byte)value; }
+
+// The processor state. Registers are indexed by their x86 encoding (EAX=0 ... EDI=7).
+// The flags are kept as the two operands of the last cmp or test. Only the signed
+// conditions are modelled, which is all the code generator uses.
+struct cpu_s {
+    int reg[8];
+    int pc;
+    int flagA, flagB;
+};
+
+// A decoded ModRM operand. When isReg is set the operand is register rm. Otherwise it is the memory at addr.
+struct modrm_s { int isReg, reg, rm, addr; };
+
+static int fetch8(struct cpu_s *c) { return mem[c->pc++]; }
+
+static int fetch32(struct cpu_s *c) {
+    int value = loadInt(c->pc);
+    c->pc += 4;
+    return value;
+}
+
+static void push(struct cpu_s *c, int value) {
+    qFail(c->reg[ESP] - 4 < CODE_TOP, "-stack overflow-");
+    c->reg[ESP] -= 4;
+    storeInt(c->reg[ESP], value);
+}
+
+static int pop(struct cpu_s *c) {
+    int value = loadInt(c->reg[ESP]);
+    c->reg[ESP] += 4;
+    return value;
+}
+
+// Decodes a ModRM byte and any displacement that follows it. Only register operands,
+// [reg], [disp32], and [reg+disp32] are supported. A SIB byte (rm = ESP) or disp8 is rejected.
+static struct modrm_s decodeModRM(struct cpu_s *c) {
+    int b = fetch8(c);
+    int mod = b >> 6;
+    struct modrm_s m = { 0, (b >> 3) & 7, b & 7, 0 };
+    m.isReg = mod == 3;
+    if (m.isReg) { return m; }
+    qFail(m.rm == ESP, "-unsupported x86 addressing: SIB-");
+    qFail(mod == 1, "-unsupported x86 addressing: disp8-");
+    if (mod == 0 && m.rm == EBP) { m.addr = fetch32(c); }
+    else if (mod == 0) { m.addr = c->reg[m.rm]; }
+    else { m.addr = c->reg[m.rm] + fetch32(c); }
+    return m;
+}
+
+static int getRM(struct cpu_s *c, struct modrm_s *m) { return m->isReg ? c->reg[m->rm] : loadInt(m->addr); }
+static void setRM(struct cpu_s *c, struct modrm_s *m, int value) {
+    if (m->isReg) { c->reg[m->rm] = value; } else { storeInt(m->addr, value); }
+}
+
+// The 8-bit registers are the low bytes of EAX, ECX, EDX, and EBX.
+static int reg8(struct cpu_s *c, int r) {
+    qFail(r > EBX, "-unsupported x86 8-bit register-");
+    return c->reg[r] & 0xff;
+}
+static void setReg8(struct cpu_s *c, int r, int value) {
+    qFail(r > EBX, "-unsupported x86 8-bit register-");
+    c->reg[r] = (c->reg[r] & ~0xff) | (value & 0xff);
+}
+static int getRM8(struct cpu_s *c, struct modrm_s *m) { return m->isReg ? reg8(c, m->rm) : loadByte(m->addr); }
+static void setRM8(struct cpu_s *c, struct modrm_s *m, int value) {
+    if (m->isReg) { setReg8(c, m->rm, value); } else { storeByte(m->addr, value); }
+}
+
+static int condition(struct cpu_s *c, int cc) {
+    switch (cc) {
+        case CC_E:  return c->flagA == c->flagB;
+        case CC_NE: return c->flagA != c->flagB;
+        case CC_L:  return c->flagA <  c->flagB;
+        case CC_GE: return c->flagA >= c->flagB;
+        case CC_LE: return c->flagA <= c->flagB;
+        case CC_G:  return c->flagA >  c->flagB;
+        default: qFail(1, "-unsupported x86 condition code %d-", cc);
     }
-    return st[0];
+    return 0;
+}
+
+// Runs the int 0x80 system call that the code generator uses: exit (1) and write to stdout (4).
+// Returns 1 when the program exits.
+static int systemCall(struct cpu_s *c) {
+    int *r = c->reg;
+    switch (r[EAX]) {
+        case 1: return 1;
+        case 4:
+            qFail(r[EBX] != 1, "-unsupported write to fd %d-", r[EBX]);
+            checkAddress(r[ECX], r[EDX]);
+            r[EAX] = (int)fwrite(mem + r[ECX], 1, (size_t)r[EDX], stdout);
+            return 0;
+        default: qFail(1, "-unsupported system call %d-", r[EAX]);
+    }
+    return 0;
+}
+
+// Runs the code from CODE_BASE until the program calls exit. Returns the exit status.
+int run() {
+    struct cpu_s c = { { 0 }, CODE_BASE, 0, 0 };
+    c.reg[ESP] = MEM_BYTES;
+    for (;;) {
+        int op = fetch8(&c);
+        switch (op) {
+            case X_ADD_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                setRM(&c, &m, getRM(&c, &m) + c.reg[m.reg]);
+                break;
+            }
+            case X_SUB_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                setRM(&c, &m, getRM(&c, &m) - c.reg[m.reg]);
+                break;
+            }
+            case X_CMP_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                c.flagA = getRM(&c, &m);
+                c.flagB = c.reg[m.reg];
+                break;
+            }
+            case X_TEST_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                c.flagA = getRM(&c, &m) & c.reg[m.reg];
+                c.flagB = 0;
+                break;
+            }
+            case X_MOV_RM8_R8: {
+                struct modrm_s m = decodeModRM(&c);
+                setRM8(&c, &m, reg8(&c, m.reg));
+                break;
+            }
+            case X_MOV_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                setRM(&c, &m, c.reg[m.reg]);
+                break;
+            }
+            case X_MOV_R_RM: {
+                struct modrm_s m = decodeModRM(&c);
+                c.reg[m.reg] = getRM(&c, &m);
+                break;
+            }
+            case X_CDQ:
+                c.reg[EDX] = c.reg[EAX] < 0 ? -1 : 0;
+                break;
+            case X_GRP1_RM_IMM32: {
+                struct modrm_s m = decodeModRM(&c);
+                int imm = fetch32(&c);
+                switch (m.reg) {
+                    case 0: setRM(&c, &m, getRM(&c, &m) + imm); break;  // add
+                    case 5: setRM(&c, &m, getRM(&c, &m) - imm); break;  // sub
+                    case 7: c.flagA = getRM(&c, &m); c.flagB = imm; break;  // cmp
+                    default: qFail(1, "-unsupported x86 group 1 operation %d-", m.reg);
+                }
+                break;
+            }
+            case X_GRP2_RM_IMM8: {
+                struct modrm_s m = decodeModRM(&c);
+                int count = fetch8(&c);
+                qFail(m.reg != 4, "-unsupported x86 group 2 operation %d-", m.reg);  // shl
+                setRM(&c, &m, (int)((unsigned)getRM(&c, &m) << (count & 31)));
+                break;
+            }
+            case X_GRP3_RM: {
+                // idiv: edx:eax divided by r/m, quotient to eax, remainder to edx.
+                struct modrm_s m = decodeModRM(&c);
+                qFail(m.reg != 7, "-unsupported x86 group 3 operation %d-", m.reg);
+                long long dividend = ((long long)(unsigned)c.reg[EDX] << 32) | (unsigned)c.reg[EAX];
+                long long divisor = getRM(&c, &m);
+                qFail(divisor == 0, "-divide by zero-");
+                long long quotient = dividend / divisor;
+                qFail(quotient != (int)quotient, "-divide overflow-");
+                c.reg[EDX] = (int)(dividend % divisor);
+                c.reg[EAX] = (int)quotient;
+                break;
+            }
+            case X_RET:
+                c.pc = pop(&c);
+                break;
+            case X_LEAVE:
+                c.reg[ESP] = c.reg[EBP];
+                c.reg[EBP] = pop(&c);
+                break;
+            case X_INT:
+                qFail(fetch8(&c) != 0x80, "-unsupported interrupt-");
+                if (systemCall(&c)) { return c.reg[EBX]; }
+                break;
+            case X_CALL: {
+                int rel = fetch32(&c);
+                push(&c, c.pc);
+                c.pc += rel;
+                break;
+            }
+            case X_JMP:
+                c.pc += fetch32(&c);
+                break;
+            case X_ESCAPE: {
+                int op2 = fetch8(&c);
+                if (op2 >= X_JCC && op2 < X_JCC + 16) {
+                    int rel = fetch32(&c);
+                    if (condition(&c, op2 - X_JCC)) { c.pc += rel; }
+                } else if (op2 >= X_SETCC && op2 < X_SETCC + 16) {
+                    struct modrm_s m = decodeModRM(&c);
+                    setRM8(&c, &m, condition(&c, op2 - X_SETCC));
+                } else if (op2 == X_IMUL_R_RM) {
+                    struct modrm_s m = decodeModRM(&c);
+                    c.reg[m.reg] = (int)((unsigned)c.reg[m.reg] * (unsigned)getRM(&c, &m));
+                } else if (op2 == X_MOVZX_R_RM8) {
+                    struct modrm_s m = decodeModRM(&c);
+                    c.reg[m.reg] = getRM8(&c, &m);
+                } else {
+                    qFail(1, "-unsupported x86 opcode 0F %02X-", op2);
+                }
+                break;
+            }
+            default:
+                if (op >= X_PUSH && op < X_PUSH + 8)           { push(&c, c.reg[op - X_PUSH]); break; }
+                if (op >= X_POP && op < X_POP + 8)             { c.reg[op - X_POP] = pop(&c); break; }
+                if (op >= X_MOV_R_IMM && op < X_MOV_R_IMM + 8) { c.reg[op - X_MOV_R_IMM] = fetch32(&c); break; }
+                qFail(1, "-unsupported x86 opcode %02X at %d-", op, c.pc - 1);
+        }
+    }
 }
