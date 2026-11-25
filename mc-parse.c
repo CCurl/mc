@@ -46,7 +46,7 @@ int constTypes[MAX_GLOBAL_NAMES];
 int constValues[MAX_GLOBAL_NAMES];
 int numConstants;
 int numVariables;
-int numGlobalBytes;
+int numGlobalBytes = ELF_HEADER_BYTES;
 int numZeroedBytes;
 
 int findVariable(const char *name) {
@@ -73,7 +73,7 @@ static void declareConstant(const char *name, int type, int value) {
     numConstants++;
 }
 
-// Initialized globals grow up from LOAD_BASE. Zero-filled globals grow down from the top of the global area,
+// Initialized globals grow up from LOAD_BASE + ELF_HEADER_BYTES. Zero-filled globals grow down from the top of the global area,
 // so their addresses stay fixed as more are declared, and they are not stored in the executable.
 int declareVariable(const char *name, int size, int isArray, int type, int zeroed) {
     int index = findVariable(name);

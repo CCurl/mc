@@ -1,5 +1,7 @@
 // Some standard utilities
 
+#include "lib/io.mc"
+
 // ---------------------------------------------
 // Strings are byte arrays. Format:
 // A 2-byte little-endian length, the characters, then a 0.
@@ -11,32 +13,6 @@ void strcatc(byte txt[], int c) {
     len = len+1;
     txt[0] = len%256; txt[1] = len/256;
 }
-
-// ---------------------------------------------
-// common I/O functions
-
-byte emitBuf[1];
-
-// Writes the low byte of c to stdout and returns that byte.
-int emit(int c) {
-    emitBuf[0] = c;
-    syscall(4, 1, emitBuf, 1);
-    return emitBuf[0];
-}
-
-void print(byte str[]) {
-    syscall(4, 1, str+2, strlen(str));
-}
-
-void printNum(int n, int b) {
-    if (n < 0) { emit('-'); n = -n; }
-    if (n > (b-1)) { printNum(n / b, b); }
-    n = n % b;
-    if (n > 9) { n=n+7; }
-    emit(n+'0');
-}
-
-void cr() { emit('\n'); }
 
 // ---------------------------------------------
 // file I/O. The flag and mode values are the Linux ones: O_RDONLY 0, O_WRONLY 1, O_CREAT 64, O_TRUNC 512,

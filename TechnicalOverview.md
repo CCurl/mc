@@ -140,17 +140,17 @@ One array, `mem[MEM_BYTES]`, holds everything. Addresses are real 32-bit address
 
 | Region | Address | Contents |
 |---|---|---|
-| Globals | `LOAD_BASE` .. `LOAD_BASE + numGlobalBytes` | Initialized global `int` and `byte` storage, string literals, and array data. Zero-filled globals sit at the top of the global area, below `CODE_BASE`, growing down from `LOAD_BASE + MAX_GLOBAL_BYTES`. The C runtime zero-initializes this array. |
+| Globals | `LOAD_BASE + ELF_HEADER_BYTES` .. `LOAD_BASE + numGlobalBytes` | Initialized global `int` and `byte` storage, string literals, and array data. The first `ELF_HEADER_BYTES` (0x80) of the global area hold the ELF headers in a native executable and are unused in the VM. Zero-filled globals sit at the top of the global area, below `CODE_BASE`, growing down from `LOAD_BASE + MAX_GLOBAL_BYTES`. The C runtime zero-initializes this array. |
 | Code | `CODE_BASE` (0x08448000) .. `here` | The entry stub and the functions. `here` is the next free byte. |
 | Stack | `CODE_TOP` .. `STACK_TOP` | Grows down from `STACK_TOP`. `esp` starts at `STACK_TOP`. |
 
 The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `LOAD_BASE + MAX_GLOBAL_BYTES`, `CODE_TOP` is `CODE_BASE + MAX_CODE`, `STACK_TOP` is `CODE_TOP + STACK_BYTES`, and `MEM_BYTES` is `STACK_TOP - LOAD_BASE`.
 
 `-o <exe>` writes the globals and code as a Linux 32-bit ELF executable (`saveExecutable()` in [mc-gen.c](/home/chris/code/mc/mc-gen.c)). The file has two `PT_LOAD` segments:
-- A data segment, read and write, at `LOAD_BASE`. Its file bytes are the initialized globals, string literals, and arrays. Its memory size is `MAX_GLOBAL_BYTES`, so the rest of the global area is zero-filled at load time and not stored in the file. Uninitialized globals and arrays are placed in that zero-filled part, so they cost no file space.
+- A data segment, read and write, at file offset 0 and `LOAD_BASE`. Its file bytes are the ELF and program headers (the first `ELF_HEADER_BYTES`, 0x80), then the initialized globals, string literals, and arrays. Its memory size is `MAX_GLOBAL_BYTES`, so the rest of the global area is zero-filled at load time and not stored in the file. Uninitialized globals and arrays are placed in that zero-filled part, so they cost no file space.
 - A text segment, read and execute, at `CODE_BASE`, placed at the next page boundary after the data.
 
-The first segment starts at file offset 0x1000, so the ELF headers are not mapped over the globals. The code is never written at run time, and the globals are never executed, so no segment is both writable and executable. The entry point is `CODE_BASE`, where the entry stub calls `main` and exits. The file is marked executable. No relocation is needed, because the code uses absolute addresses that already match the load address.
+The headers share the data segment's first page, so the ELF headers are mapped at `LOAD_BASE` but no global is at `LOAD_BASE` itself. The code is never written at run time, and the globals are never executed, so no segment is both writable and executable. The entry point is `CODE_BASE`, where the entry stub calls `main` and exits. The file is marked executable. No relocation is needed, because the code uses absolute addresses that already match the load address.
 
 String literals are stored in the writable data segment, not in code, so a program can modify them. Each occurrence of a literal in the source gets its own copy, with no sharing between identical strings. The VM does not enforce this split: it uses one `mem[]` array and checks only the address range, so a store into the code area succeeds in the VM even though the ELF code segment is read-only.
 

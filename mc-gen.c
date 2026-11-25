@@ -76,13 +76,14 @@ static void putLE(FILE *fp, unsigned value, int size) {
     for (int i = 0; i < size; i++) { fputc((value >> (8*i)) & 0xff, fp); }
 }
 
-// Writes a 32-bit Linux executable. The globals and code form one PT_LOAD segment at LOAD_BASE. The segment
-// is read from file offset 0x1000 so the ELF headers stay outside the globals, and execution starts at CODE_BASE.
+// Writes a 32-bit Linux executable with two PT_LOAD segments. The data segment starts at file offset 0 and LOAD_BASE,
+// so the ELF headers occupy the first ELF_HEADER_BYTES of it, followed by the globals. The code segment starts at the
+// next page boundary, and execution starts at CODE_BASE.
 int saveExecutable(const char *fileName) {
     const int pageSize = 0x1000, headerSize = 52, programHeaderSize = 32;
     unsigned dataSize = (unsigned)numGlobalBytes;
     unsigned codeSize = (unsigned)(here - CODE_BASE);
-    unsigned codeOffset = pageSize + ((dataSize + pageSize - 1) & ~(unsigned)(pageSize - 1));
+    unsigned codeOffset = (dataSize + pageSize - 1) & ~(unsigned)(pageSize - 1);
     FILE *fp = fopen(fileName, "wb");
     qFail(!fp, "-cannot write executable %s-\n", fileName);
     fwrite("\x7f" "ELF", 1, 4, fp);
@@ -105,7 +106,7 @@ int saveExecutable(const char *fileName) {
     putLE(fp, 0, 2);                    // e_shstrndx
     // Data segment: globals, read/write. The zeroed part of the global area is not stored in the file.
     putLE(fp, 1, 4);                    // p_type: PT_LOAD
-    putLE(fp, pageSize, 4);             // p_offset
+    putLE(fp, 0, 4);                    // p_offset
     putLE(fp, LOAD_BASE, 4);            // p_vaddr
     putLE(fp, LOAD_BASE, 4);            // p_paddr
     putLE(fp, dataSize, 4);             // p_filesz
@@ -121,9 +122,9 @@ int saveExecutable(const char *fileName) {
     putLE(fp, codeSize, 4);             // p_memsz
     putLE(fp, 5, 4);                    // p_flags: read, execute
     putLE(fp, pageSize, 4);             // p_align
-    for (int i = headerSize + 2 * programHeaderSize; i < pageSize; i++) { fputc(0, fp); }
-    fwrite(MEM_AT(LOAD_BASE), 1, dataSize, fp);
-    for (unsigned i = pageSize + dataSize; i < codeOffset; i++) { fputc(0, fp); }
+    for (int i = headerSize + 2 * programHeaderSize; i < ELF_HEADER_BYTES; i++) { fputc(0, fp); }
+    fwrite(MEM_AT(LOAD_BASE + ELF_HEADER_BYTES), 1, dataSize - ELF_HEADER_BYTES, fp);
+    for (unsigned i = dataSize; i < codeOffset; i++) { fputc(0, fp); }
     fwrite(MEM_AT(CODE_BASE), 1, codeSize, fp);
     fclose(fp);
     chmod(fileName, 0755);

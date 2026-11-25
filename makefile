@@ -22,7 +22,6 @@ bench-vm: $(app)
 
 test: $(app)
 	./$(app) -r unit-tests.mc
-	rm -f unit-tests.dat
 
 test-invalid: $(app)
 	@set -e; for test in invalid-tests/*.mc; do \

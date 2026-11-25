@@ -32,6 +32,7 @@
 #define STACK_TOP       (CODE_TOP + STACK_BYTES)         // esp starts here
 #define MEM_BYTES       (STACK_TOP - LOAD_BASE)          // size of mem[]
 #define MEM_AT(addr)    (mem + ((addr) - LOAD_BASE))
+#define ELF_HEADER_BYTES 0x80                            // the ELF and program headers come first, then the globals
 
 /* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
 #define STRING_OVERHEAD         3
