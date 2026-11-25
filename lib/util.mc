@@ -40,10 +40,18 @@ void cr() { emit('\n'); }
 
 // ---------------------------------------------
 // file I/O. The flag and mode values are the Linux ones: O_RDONLY 0, O_WRONLY 1, O_CREAT 64, O_TRUNC 512,
-// and mode 0644 is 420.
+
+// owner read/write, group read, others read - 0644 (base 8) is 420 (decimal)
+const int kMode = 420;
+
+// valid values for flags:
+const int O_RDONLY = 0;
+const int O_WRONLY = 1;
+const int O_CREAT = 64;
+const int O_TRUNC = 512;
 
 // Opens the file named by the string name (mc string format) and returns its descriptor, or a negative errno on failure.
-int fopen(byte name[], int flags) { return syscall(5, name+2, flags, 420); }
+int fopen(byte name[], int flags) { return syscall(5, name+2, flags, kMode); }
 
 // Closes a file descriptor. Returns 0 on success.
 int fclose(int fd) { return syscall(6, fd); }
