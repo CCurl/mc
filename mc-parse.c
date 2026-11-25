@@ -41,6 +41,10 @@ char variableNames[MAX_GLOBAL_NAMES][ID_NAME_LENGTH];
 int variableTypes[MAX_GLOBAL_NAMES];
 int variableBases[MAX_GLOBAL_NAMES];
 int variableIsArray[MAX_GLOBAL_NAMES];
+char constNames[MAX_GLOBAL_NAMES][ID_NAME_LENGTH];
+int constTypes[MAX_GLOBAL_NAMES];
+int constValues[MAX_GLOBAL_NAMES];
+int numConstants;
 int numVariables;
 int numGlobalBytes;
 int numZeroedBytes;
@@ -52,11 +56,28 @@ int findVariable(const char *name) {
     return -1;
 }
 
+// Scalar constants are substituted by the parser, so they need no storage in the program.
+static int findConstant(const char *name) {
+    for (int i = 0; i < numConstants; i++) {
+        if (strcmp(constNames[i], name) == 0) { return i; }
+    }
+    return -1;
+}
+
+static void declareConstant(const char *name, int type, int value) {
+    qFail(findVariable(name) >= 0 || findConstant(name) >= 0, "-duplicate variable %s-\n", name);
+    qFail(numConstants >= MAX_GLOBAL_NAMES, "-too many constants-");
+    strcpy(constNames[numConstants], name);
+    constTypes[numConstants] = type;
+    constValues[numConstants] = value;
+    numConstants++;
+}
+
 // Initialized globals grow up from LOAD_BASE. Zero-filled globals grow down from the top of the global area,
 // so their addresses stay fixed as more are declared, and they are not stored in the executable.
 int declareVariable(const char *name, int size, int isArray, int type, int zeroed) {
     int index = findVariable(name);
-    qFail(index >= 0, "-duplicate variable %s-\n", name);
+    qFail(index >= 0 || findConstant(name) >= 0, "-duplicate variable %s-\n", name);
     qFail((size <= 0), "-array size must be positive-");
     int elementSize = type == TYPE_BYTE ? 1 : 4;
     qFail(numVariables >= MAX_GLOBAL_NAMES, "-too many variables-");
@@ -116,6 +137,7 @@ int arrayIndex(const char *name) {
         return -parameter - 1;
     }
     int index = findVariable(name);
+    qFail(findConstant(name) >= 0, "-constant %s is not an array-\n", name);
     qFail((index < 0), "-undeclared variable %s-\n", name);
     qFail(!variableIsArray[index], "-variable %s is not an array-\n", name);
     return variableBases[index];
@@ -274,6 +296,9 @@ static node *nameNode(const char *name) {
         x = newNode(isArray ? ARRAY_REF : VAR);
         x->val = isArray ? arrayIndex(name) : variableIndex(name);
         x->type = functions[currentFunction].parameterTypes[parameter];
+    } else if (findConstant(name) >= 0) {
+        x = constant(constValues[findConstant(name)]);
+        x->type = constTypes[findConstant(name)];
     } else if (variable >= 0 && variableIsArray[variable]) {
         x = newNode(ARRAY_REF);
         x->val = variableBases[variable];
@@ -615,6 +640,22 @@ static void variableDeclarations(const char *firstName, int type) {
     expectSym(SEMI);
 }
 
+// <const_def> ::= "const" ("int" | "byte") <id> "=" <expr> ";". The initializer must fold to a constant.
+static void constDefinition(void) {
+    nextSym();
+    qFail(sym != INT_SYM && sym != BYTE_SYM, "-const must be int or byte-");
+    int type = keywordType(sym);
+    nextSym();
+    char name[sizeof(idName)];
+    expectName(name);
+    expectSym(EQUAL);
+    node *value = expr();
+    if (type == TYPE_BYTE) { value = byteConversion(value); }
+    qFail(value->kind != CST, "-const initializer must be constant-");
+    expectSym(SEMI);
+    declareConstant(name, type, value->val);
+}
+
 static int sameSignature(struct function_s *declared, struct function_s *header) {
     if (declared->returnType != header->returnType || declared->numParameters != header->numParameters) { return 0; }
     for (int i = 0; i < header->numParameters; i++) {
@@ -690,6 +731,7 @@ static void checkArrayRefs(node *x) {
 static node *defs(node *st) {
   nextSym();
   while (sym != EOI) {
+    if (sym == CONST_SYM) { constDefinition(); continue; }
     qFail(sym != VOID_SYM && sym != INT_SYM && sym != BYTE_SYM, "-def?-\n");
     int type = keywordType(sym);
     nextSym();

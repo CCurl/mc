@@ -389,6 +389,25 @@ void testLocalAlias() {
     check("alias of an int array parameter", aliasGet(aliasInts, 1) == 42);
 }
 
+// Scalar constants: folded by the parser, so they need no storage.
+const int kLimit = 10;
+const int kDerived = kLimit * 3 + 1;
+const byte kByte = 300;
+void testConstants() {
+    check("int constant reads its value", kLimit == 10);
+    check("constant folds from other constants", kDerived == 31);
+    check("byte constant wraps to a byte", kByte == 44);
+    int x = kLimit + 1;
+    check("constant used in an expression", x == 11);
+    check("constant used as a call argument", promoteByte(kByte) == 44);
+}
+
+int shadowConstant() { int kLimit = 3; return kLimit; }
+void testConstantShadowing() {
+    check("local shadows a constant", shadowConstant() == 3);
+    check("constant is unchanged after shadowing", kLimit == 10);
+}
+
 int twice(int x) { return x * 2; }
 int seven() { return 7; }
 int seven();  // a matching prototype after the definition is accepted
@@ -842,6 +861,8 @@ int main() {
     testSyscall();
     testFileIO();
     testLocalAlias();
+    testConstants();
+    testConstantShadowing();
     testProgramFlow();
     testBenchmark();
     print("\npassed: "); printNum(passes, 10);

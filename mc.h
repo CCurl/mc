@@ -42,14 +42,14 @@
 // ---------------------------------------------------------------------------
 // For the lexer and the parser ...
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-    BYTE_SYM, RETURN_SYM,                                       //  6 ->  7
-    LBRA, RBRA, LPAR, RPAR, PLUS,                               //  8 -> 12
-    MINUS, STAR, SLASH, MODULO,                                 // 13 -> 16
-    LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 17 -> 22
-    INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 23 -> 28
-	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS,       // 29 -> 32
-    LESS_EQ, GRT_EQ, AMP, PIPE, CARET, TILDE,                   // 33 -> 37
-    LSHIFT, RSHIFT, AND_AND, OR_OR                              // 38 -> 41
+    BYTE_SYM, RETURN_SYM, CONST_SYM,                            //  6 ->  8
+    LBRA, RBRA, LPAR, RPAR, PLUS,                               //  9 -> 13
+    MINUS, STAR, SLASH, MODULO,                                 // 14 -> 17
+    LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 18 -> 23
+    INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 24 -> 29
+	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS,       // 30 -> 33
+    LESS_EQ, GRT_EQ, AMP, PIPE, CARET, TILDE,                   // 34 -> 39
+    LSHIFT, RSHIFT, AND_AND, OR_OR                              // 40 -> 43
 };
 
 enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };

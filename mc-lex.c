@@ -4,7 +4,7 @@
 #include "mc.h"
 
 // -------------------------------------------------
-char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "return", NULL };
+char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "return", "const", NULL };
 
 FILE *inputFp = NULL;
 int ch = ' ', sym, intVal;

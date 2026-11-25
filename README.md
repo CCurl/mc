@@ -14,7 +14,7 @@
  *  <include> ::= "#include" '"' <file_name> '"'  (splices the file in place; each file is read once)
  *  main is a <func_def> with no parameters and return type "int" or "void"; it must be defined exactly once.
  *  <defs> ::= { <def> }
- *  <def> ::= <func_def> | <func_proto> | <var_def>
+ *  <def> ::= <func_def> | <func_proto> | <var_def> | <const_def>
  *  <func_def> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
  *  <func_proto> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" ";"
  *  <parameter> ::= ("int" | "byte") <id> [ "[" "]" ]
@@ -22,6 +22,7 @@
  *  <local_item> ::= <id> [ "=" <expr> ] | <id> "[" "]" "=" <array_name>    (an alias must name an array of the same element type)
  *  <var_def> ::= ("int" | "byte") <var_decl> { "," <var_decl> } ";"
  *  <var_decl> ::= <id> [ "[" <int> "]" ] | <id> "=" <constant_expr> | <id> "[" [ <int> ] "]" "=" <string>
+ *  <const_def> ::= "const" ("int" | "byte") <id> "=" <constant_expr> ";"    (scalar only; a constant name is replaced by its value, and cannot be assigned, incremented, or indexed)
  *  <statement> ::= <local_decl> |
  *                  <void_func_call> ";" |
  *                  "return" [ <expr> ] ";" |
