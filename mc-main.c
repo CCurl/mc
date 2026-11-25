@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     if (exeName) { rSpec = 0; }
 
     if ((!source) || hSpec) {
-        printf("usage: %s [-l] [-r] [-e <exe>] [-n] [-?] <source>\n", argv[0]);
+        printf("usage: %s [-l] [-o <exe>] [-r] [-?] <source>\n", argv[0]);
         printf("  compiles the specified source file\n");
         printf("  -l: create 'listing.txt' file\n");
         printf("  -o <exe>: output compiled executable to <exe>\n");

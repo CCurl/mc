@@ -1,6 +1,6 @@
 app := mc
 
-.PHONY: all clean bin test test-invalid test-listing test-exe bench-vm
+.PHONY: all clean bin test test-invalid test-listing test-exe bench-vm bench-exe
 
 CXX := clang
 CXXFLAGS := -m64 -Ofast -D IS_LINUX
@@ -36,14 +36,14 @@ test-listing: $(app)
 	diff listing-expected.txt listing.txt
 
 bench: $(app) bench.mc
-	./$(app) -n -e bench bench.mc
+	./$(app) -o bench bench.mc
 
 bench-exe: $(app) bench
 	./bench
 
 test-exe: $(app)
-	./$(app) -n -e unit-tests.exe unit-tests.mc
-	./$(app) unit-tests.mc > unit-tests.vm.txt
+	./$(app) -o unit-tests.exe unit-tests.mc
+	./$(app) -r unit-tests.mc > unit-tests.vm.txt
 	./unit-tests.exe > unit-tests.exe.txt
 	diff unit-tests.vm.txt unit-tests.exe.txt
 	rm -f unit-tests.exe unit-tests.vm.txt unit-tests.exe.txt

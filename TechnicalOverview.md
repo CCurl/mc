@@ -1,6 +1,6 @@
 # Technical overview: compilation and VM execution
 
-The compiler generates real 32-bit x86 machine code and writes it, together with the global data, into one memory array `mem[]`. `run()` in `mc-vm.c` then interprets that code. The VM decodes the same x86 subset the compiler emits, using the real Intel encodings, so the bytes can later be written to an executable unchanged. The pipeline is:
+The compiler generates real 32-bit x86 machine code and writes it, together with the global data, into one memory array `mem[]`. `run()` in `mc-vm.c` then interprets that code. The VM decodes the same x86 subset the compiler emits, using the real Intel encodings. The same bytes can also be written unchanged to a Linux executable with `-o`. The pipeline is:
 
 ```mermaid
 flowchart LR
@@ -8,13 +8,14 @@ flowchart LR
     B --> C[Parser: defs / statement / expr]
     C --> D[AST pool: nodes]
     C --> E[Symbol tables: functions, variables]
-    C --> K[globals: written during parsing]
-    D --> F[Array-reference check: checkArrayRefs in program]
+    C --> M[mem: globals written during parsing]
+    D --> F[Program checks: main, undefined functions, checkArrayRefs]
     F --> G[Codegen: c]
     E --> G
-    G --> H[x86 code bytes in mem]
-    H --> J[VM: run]
-    K --> J
+    G --> M
+    M --> J[VM: run, with -r]
+    M --> X[ELF executable, with -o]
+    G --> L[Listing, with -l]
 ```
 
 ## Source layout
@@ -23,7 +24,7 @@ flowchart LR
 - `mc.h`: shared types, structures, sizes, and defines
 - `mc-lex.c`: tokenization, the source/include stack, and error reporting.
 - `mc-parse.c`: AST nodes, function and variable tables, global variable storage, and program checks.
-- `mc-gen.c`: x86 code generation and call patching.
+- `mc-gen.c`: x86 code generation, call patching, and the ELF executable writer (`saveExecutable()`).
 - `mc-vm.c`: the x86 decoder and `run()` interpreter, with `mem[]`, `loadInt()` and `storeInt()`.
 - `mc-list.c`: the code listing. Option `-l` writes a disassembly of the generated code to `listing.txt`. `make test-listing` checks that listing against `listing-expected.txt`.
 - `lib/*.mc`: min-c source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
@@ -67,7 +68,7 @@ String literals are permitted only as array arguments or global array initialize
 
 ## 4. Code generation (`c()` walks the AST)
 
-The output is x86 machine code written to `mem[]` from `CODE_BASE` (0x08448000) upward. Each instruction uses its real Intel encoding, so the bytes can later be written to an executable unchanged. Only the subset listed below is emitted. Code generation is done in one pass over the AST, with forward jumps and calls patched afterward.
+The output is x86 machine code written to `mem[]` from `CODE_BASE` (0x08448000) upward. Each instruction uses its real Intel encoding, so the same bytes run in the VM or go into an executable unchanged. Only the subset listed below is emitted. Code generation is done in one pass over the AST, with forward jumps and calls patched afterward.
 
 The code starts with an entry stub that calls `main` and passes its result to the exit system call:
 
@@ -138,7 +139,7 @@ One array, `mem[MEM_BYTES]`, holds everything. Addresses are real 32-bit address
 
 The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `LOAD_BASE + MAX_GLOBAL_BYTES`, `CODE_TOP` is `CODE_BASE + MAX_CODE`, `STACK_TOP` is `CODE_TOP + STACK_BYTES`, and `MEM_BYTES` is `STACK_TOP - LOAD_BASE`.
 
-`-e <exe>` writes the image as a Linux 32-bit ELF executable (`saveExecutable()` in [mc-gen.c](/home/chris/code/mc/mc-gen.c)). The file has two `PT_LOAD` segments:
+`-o <exe>` writes the globals and code as a Linux 32-bit ELF executable (`saveExecutable()` in [mc-gen.c](/home/chris/code/mc/mc-gen.c)). The file has two `PT_LOAD` segments:
 - A data segment, read and write, at `LOAD_BASE`. Its file bytes are the globals in use. Its memory size is `MAX_GLOBAL_BYTES`, so the rest of the global area is zero-filled at load time and not stored in the file.
 - A text segment, read and execute, at `CODE_BASE`, placed at the next page boundary after the data.
 
@@ -146,11 +147,12 @@ The first segment starts at file offset 0x1000, so the ELF headers are not mappe
 
 Running the executable natively uses the kernel's `esp` and stack size, so `STACK_BYTES` and the VM's runtime checks do not apply. An out-of-range access or deep recursion is a segfault, and `INT_MIN / -1` raises SIGFPE instead of `-divide overflow-`. `make test-exe` builds `unit-tests.mc` into an executable, runs it, and checks its output against the VM run.
 
-The `-l` listing gives each instruction's address, its bytes, and its mnemonic, with a label line before each function. The disassembler in [mc-list.c](/home/chris/code/mc/mc-list.c) decodes only the encodings the code generator emits. `objdump` reads the same image as a cross-check:
+The `-l` listing gives each instruction's address, its bytes, and its mnemonic, with a label line before each function. The disassembler in [mc-list.c](/home/chris/code/mc/mc-list.c) decodes only the encodings the code generator emits. `objdump` reads the same bytes as a cross-check. The executable has no section headers, so take the code from its text segment (the `R E` load segment shown by `readelf -l`) and disassemble it at `CODE_BASE`:
 
 ```
-dd if=a.img bs=1 skip=8 count=<codeSize> of=code.bin
-objdump -D -b binary -m i386 -M intel code.bin
+readelf -l out.exe                  # note the Offset and FileSiz of the R E segment
+dd if=out.exe bs=1 skip=<offset> count=<filesz> of=code.bin
+objdump -D -b binary -m i386 -M intel --adjust-vma=0x08448000 code.bin
 ```
 
 Values in `mem[]` are read and written with `loadInt()` and `storeInt()`, which check each address (see [6. Runtime checks](#runtime-checks)).
@@ -189,7 +191,7 @@ Values in `mem[]` are read and written with `loadInt()` and `storeInt()`, which 
 - `eax = 1` is `exit`, with the status in `ebx`. `run()` returns that status.
 - `eax = 4` is `write`. Only fd 1 is supported, and the bytes go to stdout with `fwrite`.
 
-Any other call stops with `-unsupported system call-`. Syscall numbers are the Linux i386 ones, so this is the layer that a native executable would replace with a real kernel call.
+Any other call stops with `-unsupported system call-`. Syscall numbers are the Linux i386 ones. A native executable from `-o` makes the same `int 0x80` calls directly to the kernel.
 
 ### Runtime checks
 
@@ -202,7 +204,7 @@ Any other call stops with `-unsupported system call-`. Syscall numbers are the L
 ## 7. Limitations
 
 - **Fixed limits.**
-  - `ID_NAME_LENGTH` is 24. Used for variable and parameter names.
+  - `ID_NAME_LENGTH` is 24. Used for variable, parameter, local, and function names.
   - `MAX_CODE` is 131072 bytes of machine code.
   - `MAX_NODES` is 16384 AST nodes.
   - `MAX_FUNCTIONS` is 1024 functions.

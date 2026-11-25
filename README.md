@@ -6,8 +6,8 @@
 
 /*
  * This is a compiler for min-c, a stripped down version of C.
- * The compiler reads the program from the file named on the command line,
- * then runs it in the built-in VM. Output comes only from emit().
+ * The compiler reads the program from the file named on the command line and generates 32-bit x86 machine code.
+ * It can then run that code in the built-in VM (-r) or write it as a Linux executable (-o). Output comes only from emit().
  * The grammar of min-c in EBNF is:
  *
  *  <program> ::= { <def> }   (must define main)
@@ -50,7 +50,7 @@
  *
  * Reserved words: do, else, if, while, void, int, byte, emit, return.
  * * "emit" is a built-in function, so it cannot name a variable, parameter, local, or function.
- * * emit(int value) is a built-in VM service that writes the low byte to stdout.
+ * * emit(int value) is a built-in service that writes the low byte to stdout.
  * void calls are statements, not terms.
  * A function that reaches its end without a return returns 0.
  * A local or parameter may shadow a global or function name.
@@ -71,22 +71,24 @@
 - `make` builds `mc` with clang and `-m64`.
 - `make bin` copies `mc` to `~/bin/`.
 - `make test` runs `unit-tests.mc`, which holds the program-level checks, and prints `passed: N, failed: M`.
-- `make invalid-tests` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.
+- `make test-invalid` compiles each file in `invalid-tests/` and fails if any of them is accepted. These programs must be rejected.
 - `make test-listing` writes a listing of `listing-expected.mc` to `listing.txt` and diffs it against `listing-expected.txt`.
+- `make test-exe` builds `unit-tests.mc` into a native executable, runs it, and diffs its output against the VM run.
+- `make bench-vm` runs `bench.mc` in the VM.
+- `make bench` builds `bench.mc` into an executable named `bench`, and `make bench-exe` runs it.
 
 ## Command line
 
-    mc [-l] [-o] [-e <exe>] [-n] [-?] <source>
+    mc [-l] [-o <exe>] [-r] [-?] <source>
 
 ```
-usage: mc [-l] [-o] [-e <exe>] [-n] [-?] <source>
+usage: mc [-l] [-o <exe>] [-r] [-?] <source>
   compiles the specified source file
   -l: create 'listing.txt' file
-  -o: output compiled image to 'a.img'
-  -e <exe>: write a Linux 32-bit executable to <exe>
-  -n: do not run after compile (default run)
+  -o <exe>: write a Linux 32-bit executable to <exe>
+  -r: run in the VM after compile (ignored when -o is given)
   -?: show this help message
-  defaults: -l: off, -o: off, -n: off (run after compile)
+  defaults: -l: off, -o: off, -r: off (compile only)
 ```
 A source file is required. Without one, `mc` prints the usage message and exits.
 
@@ -100,7 +102,7 @@ Use parentheses to control order. EG:
 - 3 * 4 + 2  = 14
 
 Byte objects use unsigned 8-bit values (0 to 255) stored as bytes for globals and arrays, and in the<br/>
-VM's int slots for locals and parameters.  Assignments, byte parameters, returns, and byte array stores<br/>
+4-byte stack slots for locals and parameters.  Assignments, byte parameters, returns, and byte array stores<br/>
 narrow to this range; byte values promote to int in expressions.  Conversions are implicit; casts are<br/>
 not supported. Scalar initializers are supported. Global initializers must be constant expressions and<br/>
 are folded at parse time; local initializers are assignments run at the declaration. String initializers<br/>
@@ -110,5 +112,6 @@ Non-ASCII characters are rejected outside comments and character literals.<br/>
 String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'. String literals used as array arguments<br/>
 get anonymous global storage. They must be passed to byte[] parameters; other array arguments must match their<br/>
 element type. String literals are valid only as array arguments or global array initializers. Array parameters<br/>
-pass global-array base addresses by reference. Array indexes are unchecked at runtime. The VM service instruction<br/>
-is encoded as `SYS` followed by a one-byte service ID.
+pass global-array base addresses by reference. Array indexes are not bounds-checked. An access outside the memory<br/>
+image fails with `-bad memory address-`, but an access that lands in the globals, code, or stack is not detected.<br/>
+`emit` compiles to a Linux `write` system call (`int 0x80`, `eax` = 4) on stdout.
