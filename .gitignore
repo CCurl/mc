@@ -67,3 +67,5 @@ a.img
 out.img
 tmp.mc
 /.vs/*
+bench
+unit-tests

@@ -71,19 +71,6 @@ static void patchCalls() {
 }
 
 
-// Writes the code, the global data, and the sizes needed to read them back.
-int saveImage(const char *fileName) {
-    FILE *fp = fopen(fileName, "wb");
-    qFail(!fp, "-cannot write image %s-\n", fileName);
-    int codeSize = here - CODE_BASE;
-    fwrite(&codeSize, sizeof(int), 1, fp);
-    fwrite(&numGlobalBytes, sizeof(int), 1, fp);
-    fwrite(MEM_AT(CODE_BASE), 1, codeSize, fp);
-    fwrite(MEM_AT(LOAD_BASE), 1, numGlobalBytes, fp);
-    fclose(fp);
-    return numGlobalBytes + codeSize + (2*sizeof(int));
-}
-
 // Writes a little-endian value of the given size in bytes.
 static void putLE(FILE *fp, unsigned value, int size) {
     for (int i = 0; i < size; i++) { fputc((value >> (8*i)) & 0xff, fp); }
