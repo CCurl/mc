@@ -33,7 +33,7 @@ flowchart LR
 
 - `nextCh()` reads from `inputFp` and counts newlines in `lineNumber`.
 - `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, `PLUS_PLUS`, and `RETURN_SYM`. `++` and `--` are single tokens, so `a--b` is a syntax error; write `a - -b`.
-- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `mc.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `emit`, and `return`. `emit` is a keyword, so using it as a name is a syntax error. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
+- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `mc.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, and `return`. `syscall` is a built-in name, so a function cannot use it. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
 - `#include "path"` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
 - `qFail(cond, msg)` prints `path:line:` before every compile error.
 - The input file is a required command-line argument; see the command line section of `README.md`.
@@ -47,10 +47,11 @@ flowchart LR
 - Local slots follow the parameters in a function frame. Their encoded local index includes the function's parameter count; parameter indexes are relative to the start of the frame.
 - Each `statement()` call builds one node tree, for example `IF1`, `WHILE`, `DO`, `SEQ`, `EXPR`, `RETURN_NODE`, or `VOID_RETURN`.
 - A local declaration with an initializer becomes a `SET` to the local, wrapped in `EXPR` and sequenced with `SEQ`. `byte` locals convert the value first. The initializer runs each time the declaration executes, so it works inside loops.
-- Arithmetic operators (`+ - * / %`) have no precedence. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20`. Use parentheses to change the order. Assignment is a statement, not an expression: `statement()` parses an expression, and if it is followed by `=`, `assignment()` requires a `VAR`, `LOCAL`, or `ARRAY_GET` target. `a = b = 1;`, `if (a = 1)`, and `emit(a = 1)` are syntax errors.
+- Arithmetic and bitwise operators (`+ - * / % & | ^ << >>`) have no precedence. `>>` is an arithmetic shift, so `-8 >> 1` is `-4`, and the shift count is masked to 5 bits like x86. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20` and `6 | 1 & 2` is `2`. Use parentheses to change the order. `~` is a unary operator on a term, like unary `-`. Assignment is a statement, not an expression: `statement()` parses an expression, and if it is followed by `=`, `assignment()` requires a `VAR`, `LOCAL`, or `ARRAY_GET` target. `a = b = 1;`, `if (a = 1)`, and `emit(a = 1)` are syntax errors.
 - Unary minus is lowered to `0 - term`. Integer literals are never negative.
 - `x++`, `x--`, `++x`, and `--x` apply to scalar locals, parameters, and globals. The parser builds `POST_INC` or `PRE_INC` nodes; postfix yields the old value and prefix the new. Applying them to arrays or literals is an error.
 - Comparison operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) produce `1` when true and `0` when false.
+- `&&` and `||` are short-circuit and produce `1` or `0`. The right operand is skipped when the left one decides the result. They sit below comparisons, so `1 < 2 && 3 > 2` works without parentheses.
 
 ## 3. Program-level checks (`program()`)
 
@@ -105,13 +106,17 @@ Instructions used by the generator:
 | Array element (store) | Compute the address as above, `push eax`, evaluate the value into `eax`, `pop ecx`, then `mov [ecx], eax` (or `mov [ecx], al`) |
 | Binary `+ - *` | Left operand to `eax`, `push eax`, right operand to `eax`, `mov ecx, eax`, `pop eax`, then `add`, `sub`, or `imul eax, ecx` |
 | `/` and `%` | The operands as above, then `cdq` and `idiv ecx`. `%` finishes with `mov eax, edx`. |
+| Binary `& \| ^` | The operands as above, then `and`, `or`, or `xor eax, ecx` |
+| Binary `<<` and `>>` | The operands as above, then `shl eax, cl` (`D3 /4`) or `sar eax, cl` (`D3 /7`). The VM masks the count to 5 bits, like x86. |
+| `&&` and `\|\|` | Evaluate the left operand, `test eax, eax`, then `je` (for `&&`) or `jne` (for `\|\|`) past the right operand. Otherwise evaluate the right operand. Finish with `test eax, eax` and `setne al`, `movzx eax, al`, so the result is 0 or 1. |
+| Unary `~` | The operand into `eax`, then `not eax` (`F7 /2`) |
 | Comparison | The operands as above, then `cmp eax, ecx`, `setcc al`, `movzx eax, al` (`setl`, `setg`, `setle`, `setge`, `sete`, `setne`) |
 | Increment or decrement | Load, `add eax, imm32` (negative for `--`), `movzx eax, al` for `byte`, then store. Post-increment `push`es the old value and `pop`s it back, so the value is the old one. |
 | Byte conversion | `movzx eax, al` |
 | Control flow | `test eax, eax`, then `jz` or `jnz rel32` (`0F 84` / `0F 85`). `while` and `do` use `jmp rel32` for the back edge. Forward targets are holes patched by `fix()`. |
 | Call | Each argument is evaluated and pushed, then `call rel32`, then `add esp, 4*n` to remove the arguments. The result is in `eax`. |
 | Return | Evaluate the value into `eax`, then `leave` and `ret`. `return;` in a `void` function uses the same epilogue. |
-| Built-in `emit` | `push eax` (the byte is at `[esp]`), `mov ecx, esp`, `mov edx, 1`, `mov ebx, 1`, `mov eax, 4`, `int 0x80`, `pop eax`, `movzx eax, al`. The expression value is the byte, as before. |
+| Built-in `syscall(n, ...)` | `push ebp`, push each argument (padded with zeros to 7), pop into `ebp`, `edi`, `esi`, `edx`, `ecx`, `ebx`, `eax`, `int 0x80`, `pop ebp`. The result is in `eax`. |
 | Program end | Entry stub as above |
 
 Notable generation details:
@@ -125,7 +130,8 @@ Notable generation details:
 - Frame layout: a parameter `i` of `n` is at `[ebp+8+4*(n-1-i)]`, because the caller pushes arguments left to right. Local `j` is at `[ebp-4*(j+1)]`.
 - Operands are 4-byte values in little-endian byte order, which is native on x86.
 - Every value is a 32-bit `int`. `byte` values are 0..255. Byte locals and parameters take a 4-byte slot. Byte globals and array elements take one byte of memory.
-- `emit` uses the `write` system call (number 4) on fd 1, so its output goes to stdout.
+- `emit` is a library function in `lib/util.mc`. It calls `syscall(4, 1, ...)` (`write`, number 4, on fd 1), so its output goes to stdout. The VM implements `exit` (1), `read` (3), `write` (4), `open` (5), and `close` (6), using the host's calls and returning `-errno` on failure as the kernel does. `fopen`, `fclose`, `fread`, and `fwrite` in `lib/util.mc` wrap the last four.
+- An array name may be one operand of `+` or `-`, giving an integer address (`name+2` skips the 2-byte length). Two array operands, or an array on the right of `-`, are errors. Because the result is an integer, it can be passed to `syscall` but not to a parameter declared as an array. `fopen` passes `name+2` and relies on the trailing zero to end the path.
 
 ## 5. The memory image
 
@@ -133,14 +139,14 @@ One array, `mem[MEM_BYTES]`, holds everything. Addresses are real 32-bit address
 
 | Region | Address | Contents |
 |---|---|---|
-| Globals | `LOAD_BASE` .. `LOAD_BASE + numGlobalBytes` | Global `int` and `byte` storage, string literals, and array data. The C runtime zero-initializes this array. |
+| Globals | `LOAD_BASE` .. `LOAD_BASE + numGlobalBytes` | Initialized global `int` and `byte` storage, string literals, and array data. Zero-filled globals sit at the top of the global area, below `CODE_BASE`, growing down from `LOAD_BASE + MAX_GLOBAL_BYTES`. The C runtime zero-initializes this array. |
 | Code | `CODE_BASE` (0x08448000) .. `here` | The entry stub and the functions. `here` is the next free byte. |
 | Stack | `CODE_TOP` .. `STACK_TOP` | Grows down from `STACK_TOP`. `esp` starts at `STACK_TOP`. |
 
 The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `LOAD_BASE + MAX_GLOBAL_BYTES`, `CODE_TOP` is `CODE_BASE + MAX_CODE`, `STACK_TOP` is `CODE_TOP + STACK_BYTES`, and `MEM_BYTES` is `STACK_TOP - LOAD_BASE`.
 
 `-o <exe>` writes the globals and code as a Linux 32-bit ELF executable (`saveExecutable()` in [mc-gen.c](/home/chris/code/mc/mc-gen.c)). The file has two `PT_LOAD` segments:
-- A data segment, read and write, at `LOAD_BASE`. Its file bytes are the globals in use. Its memory size is `MAX_GLOBAL_BYTES`, so the rest of the global area is zero-filled at load time and not stored in the file.
+- A data segment, read and write, at `LOAD_BASE`. Its file bytes are the initialized globals, string literals, and arrays. Its memory size is `MAX_GLOBAL_BYTES`, so the rest of the global area is zero-filled at load time and not stored in the file. Uninitialized globals and arrays are placed in that zero-filled part, so they cost no file space.
 - A text segment, read and execute, at `CODE_BASE`, placed at the next page boundary after the data.
 
 The first segment starts at file offset 0x1000, so the ELF headers are not mapped over the globals. The code is never written at run time, and the globals are never executed, so no segment is both writable and executable. The entry point is `CODE_BASE`, where the entry stub calls `main` and exits. The file is marked executable. No relocation is needed, because the code uses absolute addresses that already match the load address.
@@ -189,7 +195,7 @@ Values in `mem[]` are read and written with `loadInt()` and `storeInt()`, which 
 `int 0x80` is the system call interface. Only these calls are supported:
 
 - `eax = 1` is `exit`, with the status in `ebx`. `run()` returns that status.
-- `eax = 4` is `write`. Only fd 1 is supported, and the bytes go to stdout with `fwrite`.
+- `eax = 4` is `write`. Any fd is passed to the host's `write`, so the bytes go to that descriptor.
 
 Any other call stops with `-unsupported system call-`. Syscall numbers are the Linux i386 ones. A native executable from `-o` makes the same `int 0x80` calls directly to the kernel.
 

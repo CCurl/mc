@@ -103,6 +103,18 @@ static int disassemble(int addr, char *text) {
             n = disassembleModRM(addr + 1, &reg, rm, 0, "");
             sprintf(text, "sub %s, %s", rm, reg32Names[reg]);
             return 1 + n;
+        case X_AND_RM_R:
+            n = disassembleModRM(addr + 1, &reg, rm, 0, "");
+            sprintf(text, "and %s, %s", rm, reg32Names[reg]);
+            return 1 + n;
+        case X_OR_RM_R:
+            n = disassembleModRM(addr + 1, &reg, rm, 0, "");
+            sprintf(text, "or %s, %s", rm, reg32Names[reg]);
+            return 1 + n;
+        case X_XOR_RM_R:
+            n = disassembleModRM(addr + 1, &reg, rm, 0, "");
+            sprintf(text, "xor %s, %s", rm, reg32Names[reg]);
+            return 1 + n;
         case X_CMP_RM_R:
             n = disassembleModRM(addr + 1, &reg, rm, 0, "");
             sprintf(text, "cmp %s, %s", rm, reg32Names[reg]);
@@ -141,10 +153,20 @@ static int disassemble(int addr, char *text) {
                 return 2 + n;
             }
             break;
+        case X_GRP2_RM_CL:
+            n = disassembleModRM(addr + 1, &reg, rm, 0, "");
+            if (reg == 4 || reg == 7) {
+                sprintf(text, "%s %s, cl", reg == 4 ? "shl" : "sar", rm);
+                return 1 + n;
+            }
+            break;
         case X_GRP3_RM:
             n = disassembleModRM(addr + 1, &reg, rm, 0, "dword ");
+            if (reg == 2) {
+                sprintf(text, "not %s", rm);
+                return 1 + n;
+            }
             if (reg == 7) {
-                sprintf(text, "idiv %s", rm);
                 return 1 + n;
             }
             break;

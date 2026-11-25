@@ -181,17 +181,24 @@ static void cCall(node *x) {
     if (n > 0) { ri(X_GRP1_RM_IMM32, 0, ESP, 4 * n); }
 }
 
-// Writes the low byte of arg to stdout with the write system call. The byte is left in eax.
-static void cEmit(node *arg) {
-    cExpr(arg);
-    g(X_PUSH + EAX);            // the byte is now at [esp]
-    rr(X_MOV_RM_R, ESP, ECX);
-    movImm(EDX, 1);
-    movImm(EBX, 1);
-    movImm(EAX, 4);
+// The system call of syscall(n, a1, ..., a6). ebp is the frame pointer, and it carries a6, so it is saved first
+// and restored after the call. Each argument is pushed, unused ones are zero, and the values are popped into
+// eax (n), ebx, ecx, edx, esi, edi, and ebp. The result is left in eax.
+static void cSyscall(node *args) {
+    g(X_PUSH + EBP);
+    int n = 0;
+    for (node *a = args; a; a = a->o2, n++) {
+        cExpr(a->o1);
+        g(X_PUSH + EAX);
+    }
+    for (; n < 7; n++) {
+        movImm(EAX, 0);
+        g(X_PUSH + EAX);
+    }
+    g(X_POP + EBP); g(X_POP + EDI); g(X_POP + ESI); g(X_POP + EDX);
+    g(X_POP + ECX); g(X_POP + EBX); g(X_POP + EAX);
     int80();
-    g(X_POP + EAX);
-    movzxAl();
+    g(X_POP + EBP);
 }
 
 // Evaluates the operands of a binary operation: the left operand ends up in eax and the right one in ecx.
@@ -207,6 +214,20 @@ static void cOperands(node *x) {
 static void cCompare(int cc) {
     rr(X_CMP_RM_R, ECX, EAX);
     g(X_ESCAPE); rr(X_SETCC + cc, 0, EAX);
+    movzxAl();
+}
+
+// && and || leave 0 or 1 in eax. The right operand is skipped when the left one decides the result.
+// A skipped right side leaves the left value in eax, which the final test still normalizes to 0 or 1.
+static void cLogical(node *x) {
+    cExpr(x->o1);
+    rr(X_TEST_RM_R, EAX, EAX);
+    g(X_ESCAPE); g(X_JCC + (x->kind == LOG_AND ? CC_E : CC_NE));
+    int skip = hole();
+    cExpr(x->o2);
+    fix(skip, here);
+    rr(X_TEST_RM_R, EAX, EAX);
+    g(X_ESCAPE); rr(X_SETCC + CC_NE, 0, EAX);
     movzxAl();
 }
 
@@ -252,9 +273,16 @@ static void cExpr(node *x) {
         case GE:  cOperands(x); cCompare(CC_GE); break;
         case EQ:  cOperands(x); cCompare(CC_E); break;
         case NE:  cOperands(x); cCompare(CC_NE); break;
+        case BIT_AND: cOperands(x); rr(X_AND_RM_R, ECX, EAX); break;
+        case BIT_OR:  cOperands(x); rr(X_OR_RM_R, ECX, EAX); break;
+        case BIT_XOR: cOperands(x); rr(X_XOR_RM_R, ECX, EAX); break;
+        case BIT_NOT: cExpr(x->o1); rr(X_GRP3_RM, 2, EAX); break;  // not eax
+        case BIT_SHL: cOperands(x); rr(X_GRP2_RM_CL, 4, EAX); break;  // shl eax, cl
+        case BIT_SHR: cOperands(x); rr(X_GRP2_RM_CL, 7, EAX); break;  // sar eax, cl
+        case LOG_AND: case LOG_OR: cLogical(x); break;
         case PRE_INC: case POST_INC: cIncrement(x, 1); break;
         case FUNC_CALL:
-            if (x->val == BUILTIN_EMIT) { cEmit(x->o1->o1); break; }
+            if (x->val == BUILTIN_SYSCALL) { cSyscall(x->o1); break; }
             qFail(!functions[x->val].returnsValue, "-void function %s used as a value-\n", functions[x->val].name);
             cCall(x);
             break;
@@ -279,7 +307,7 @@ static void cEffect(node *x) {
         case PRE_INC: case POST_INC: cIncrement(x, 0); break;
         case ARRAY_SET: cElementStore(x); break;
         case FUNC_CALL:
-            if (x->val == BUILTIN_EMIT) { cExpr(x); } else { cCall(x); }
+            if (x->val == BUILTIN_SYSCALL) { cExpr(x); } else { cCall(x); }
             break;
         default: cExpr(x); break;
     }

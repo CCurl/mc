@@ -42,7 +42,7 @@ main:
 0844806A  0F 84 5F 00 00 00              je 084480CF
 08448070  8B 85 FC FF FF FF              mov eax, [ebp-4]
 08448076  C1 E0 02                       shl eax, 2
-08448079  81 C0 00 80 04 08              add eax, 134512640
+08448079  81 C0 F0 7F 44 08              add eax, 138706928
 0844807F  50                             push eax
 08448080  8B 85 FC FF FF FF              mov eax, [ebp-4]
 08448086  50                             push eax
@@ -54,7 +54,7 @@ main:
 0844809B  50                             push eax
 0844809C  8B 85 FC FF FF FF              mov eax, [ebp-4]
 084480A2  C1 E0 02                       shl eax, 2
-084480A5  81 C0 00 80 04 08              add eax, 134512640
+084480A5  81 C0 F0 7F 44 08              add eax, 138706928
 084480AB  8B 00                          mov eax, [eax]
 084480AD  89 C1                          mov ecx, eax
 084480AF  58                             pop eax

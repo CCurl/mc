@@ -18,10 +18,11 @@ clean:
 	rm -f $(app)
 
 bench-vm: $(app)
-	./$(app) bench.mc
+	./$(app) -r bench.mc
 
 test: $(app)
-	./$(app) unit-tests.mc
+	./$(app) -r unit-tests.mc
+	rm -f unit-tests.dat
 
 test-invalid: $(app)
 	@set -e; for test in invalid-tests/*.mc; do \
@@ -46,7 +47,7 @@ test-exe: $(app)
 	./$(app) -r unit-tests.mc > unit-tests.vm.txt
 	./unit-tests.exe > unit-tests.exe.txt
 	diff unit-tests.vm.txt unit-tests.exe.txt
-	rm -f unit-tests.exe unit-tests.vm.txt unit-tests.exe.txt
+	rm -f unit-tests.exe unit-tests.vm.txt unit-tests.exe.txt unit-tests.dat
 
 bin: $(app)
 	cp -u -p $(app) ~/bin/$(app)

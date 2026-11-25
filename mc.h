@@ -42,13 +42,14 @@
 // ---------------------------------------------------------------------------
 // For the lexer and the parser ...
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-    BYTE_SYM, EMIT_SYM, RETURN_SYM,                             //  6 ->  8
-    LBRA, RBRA, LPAR, RPAR, PLUS,                               //  9 -> 13
-    MINUS, STAR, SLASH, MODULO,                                 // 14 -> 17
-    LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 18 -> 23
-    INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 24 -> 29
-	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS,       // 30 -> 33
-    LESS_EQ, GRT_EQ                                             // 34 -> 35
+    BYTE_SYM, RETURN_SYM,                                       //  6 ->  7
+    LBRA, RBRA, LPAR, RPAR, PLUS,                               //  8 -> 12
+    MINUS, STAR, SLASH, MODULO,                                 // 13 -> 16
+    LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 17 -> 22
+    INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 23 -> 28
+	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS,       // 29 -> 32
+    LESS_EQ, GRT_EQ, AMP, PIPE, CARET, TILDE,                   // 33 -> 37
+    LSHIFT, RSHIFT, AND_AND, OR_OR                              // 38 -> 41
 };
 
 enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
@@ -57,10 +58,11 @@ enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
 // For the parser and the code generator ...
 enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, LE, GE, EQ, NE, SET, FUNC_CALL,
     ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
-    IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC
+    IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC,
+    BIT_AND, BIT_OR, BIT_XOR, BIT_NOT, BIT_SHL, BIT_SHR, LOG_AND, LOG_OR
 };
 
-#define BUILTIN_EMIT -1
+#define BUILTIN_SYSCALL -1
 
 // ---------------------------------------------------------------------------
 // Shared types and structs ...
@@ -105,7 +107,10 @@ enum { CC_E = 4, CC_NE = 5, CC_L = 0xC, CC_GE = 0xD, CC_LE = 0xE, CC_G = 0xF };
 // Base opcodes that take a register in their low bits are listed with that register added.
 enum {
     X_ADD_RM_R = 0x01,      // add r/m, reg
+    X_OR_RM_R = 0x09,       // or r/m, reg
+    X_AND_RM_R = 0x21,      // and r/m, reg
     X_SUB_RM_R = 0x29,      // sub r/m, reg
+    X_XOR_RM_R = 0x31,      // xor r/m, reg
     X_CMP_RM_R = 0x39,      // cmp r/m, reg
     X_TEST_RM_R = 0x85,     // test r/m, reg
     X_MOV_RM8_R8 = 0x88,    // mov r/m8, reg8
@@ -114,7 +119,8 @@ enum {
     X_CDQ = 0x99,           // edx = sign of eax
     X_GRP1_RM_IMM32 = 0x81, // ModRM reg field /0 = add, /5 = sub; imm32 follows
     X_GRP2_RM_IMM8 = 0xC1,  // ModRM reg field /4 = shl; imm8 follows
-    X_GRP3_RM = 0xF7,       // ModRM reg field /7 = idiv edx:eax by r/m
+    X_GRP2_RM_CL = 0xD3,    // ModRM reg field /4 = shl, /7 = sar; count in cl
+    X_GRP3_RM = 0xF7,       // ModRM reg field /2 = not r/m, /7 = idiv edx:eax by r/m
     X_RET = 0xC3,
     X_LEAVE = 0xC9,
     X_INT = 0xCD,           // imm8 follows
@@ -140,7 +146,7 @@ extern int variableTypes[MAX_GLOBAL_NAMES], variableBases[MAX_GLOBAL_NAMES], var
 extern int stringValues[MAX_STRING_LENGTH];
 extern int stringLength;
 extern byte mem[MEM_BYTES];
-extern int numGlobalBytes;
+extern int numGlobalBytes, numZeroedBytes;
 extern int here;
 extern struct function_s functions[MAX_FUNCTIONS];
 extern int numFunctions, mainFunction;
@@ -152,7 +158,7 @@ void nextSym(void);
 int loadInt(int addr);
 void storeInt(int addr, int value);
 int findVariable(const char *name);
-int declareVariable(const char *name, int size, int isArray, int type);
+int declareVariable(const char *name, int size, int isArray, int type, int zeroed);
 int variableIndex(const char *name);
 int arrayIndex(const char *name);
 int allocateStringLiteral(void);

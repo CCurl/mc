@@ -4,7 +4,7 @@
 #include "mc.h"
 
 // -------------------------------------------------
-char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "emit", "return", NULL };
+char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "return", NULL };
 
 FILE *inputFp = NULL;
 int ch = ' ', sym, intVal;
@@ -159,8 +159,12 @@ void nextSym() {
           qFail(strcmp(idName, "include") != 0, "-unknown directive-");
           includeFile();
           goto again;
-      case '<': nextCh(); sym = symbolPair('=', LESS_EQ, LESS); break;
-      case '>': nextCh(); sym = symbolPair('=', GRT_EQ, GRT); break;
+      case '<': nextCh(); if (ch == '<') { nextCh(); sym = LSHIFT; } else { sym = symbolPair('=', LESS_EQ, LESS); } break;
+      case '>': nextCh(); if (ch == '>') { nextCh(); sym = RSHIFT; } else { sym = symbolPair('=', GRT_EQ, GRT); } break;
+      case '&': nextCh(); sym = symbolPair('&', AND_AND, AMP); break;
+      case '|': nextCh(); sym = symbolPair('|', OR_OR, PIPE); break;
+      case '^': nextCh(); sym = CARET; break;
+      case '~': nextCh(); sym = TILDE; break;
       case '!': nextCh(); if (ch != '=') { syntaxError(); } nextCh(); sym = NE_SYM; break;
       case ';': nextCh(); sym = SEMI;  break;
       case '=': nextCh(); sym = symbolPair('=', EQ_SYM, EQUAL); break;

@@ -43,6 +43,7 @@ int variableBases[MAX_GLOBAL_NAMES];
 int variableIsArray[MAX_GLOBAL_NAMES];
 int numVariables;
 int numGlobalBytes;
+int numZeroedBytes;
 
 int findVariable(const char *name) {
     for (int i = 0; i < numVariables; i++) {
@@ -51,18 +52,25 @@ int findVariable(const char *name) {
     return -1;
 }
 
-int declareVariable(const char *name, int size, int isArray, int type) {
+// Initialized globals grow up from LOAD_BASE. Zero-filled globals grow down from the top of the global area,
+// so their addresses stay fixed as more are declared, and they are not stored in the executable.
+int declareVariable(const char *name, int size, int isArray, int type, int zeroed) {
     int index = findVariable(name);
     qFail(index >= 0, "-duplicate variable %s-\n", name);
     qFail((size <= 0), "-array size must be positive-");
     int elementSize = type == TYPE_BYTE ? 1 : 4;
     qFail(numVariables >= MAX_GLOBAL_NAMES, "-too many variables-");
-    qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes) / elementSize, "-too many variables-");
+    qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes - numZeroedBytes) / elementSize, "-too many variables-");
     strcpy(variableNames[numVariables], name);
-    variableBases[numVariables] = LOAD_BASE + numGlobalBytes;
     variableIsArray[numVariables] = isArray;
     variableTypes[numVariables] = type;
-    numGlobalBytes += size * elementSize;
+    if (zeroed) {
+        numZeroedBytes += size * elementSize;
+        variableBases[numVariables] = LOAD_BASE + MAX_GLOBAL_BYTES - numZeroedBytes;
+    } else {
+        variableBases[numVariables] = LOAD_BASE + numGlobalBytes;
+        numGlobalBytes += size * elementSize;
+    }
     return numVariables++;
 }
 
@@ -76,7 +84,7 @@ void storeStringBytes(int base) {
 
 int allocateStringLiteral() {
     int size = stringLength + STRING_OVERHEAD;
-    qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes), "-too much global storage-");
+    qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes - numZeroedBytes), "-too much global storage-");
     int base = LOAD_BASE + numGlobalBytes;
     numGlobalBytes += size;
     storeStringBytes(base);
@@ -138,6 +146,7 @@ static node *constant(int value) {
 static node *foldNode(node *x) {
     node *a = x->o1, *b = x->o2;
     if (x->kind == BYTE_CONVERT) { return a->kind == CST ? constant((byte)a->val) : x; }
+    if (x->kind == BIT_NOT) { return a->kind == CST ? constant(~a->val) : x; }
     if (!a || !b || a->kind != CST || b->kind != CST) { return x; }
     switch (x->kind) {
         case ADD: return constant(a->val + b->val);
@@ -151,6 +160,13 @@ static node *foldNode(node *x) {
         case GE:  return constant(a->val >= b->val);
         case EQ:  return constant(a->val == b->val);
         case NE:  return constant(a->val != b->val);
+        case BIT_AND: return constant(a->val & b->val);
+        case BIT_OR:  return constant(a->val | b->val);
+        case BIT_XOR: return constant(a->val ^ b->val);
+        case BIT_SHL: return constant((int)((unsigned)a->val << (b->val & 31)));
+        case BIT_SHR: return constant(a->val >> (b->val & 31));
+        case LOG_AND: return constant(a->val && b->val);
+        case LOG_OR:  return constant(a->val || b->val);
         default: return x;
     }
 }
@@ -186,8 +202,8 @@ static void expectName(char *name) {
 }
 
 static node *callArguments(const char *name) {
-    int index = strcmp(name, "emit") == 0 ? BUILTIN_EMIT : functionIndex(name);
-    qFail(index != BUILTIN_EMIT && !functions[index].declared, "-function %s used before declaration-\n", name);
+    int index = strcmp(name, "syscall") == 0 ? BUILTIN_SYSCALL : functionIndex(name);
+    qFail(index != BUILTIN_SYSCALL && !functions[index].declared, "-function %s used before declaration-\n", name);
     node *args = NULL;
     node **tail = &args;
     int count = 0;
@@ -203,8 +219,8 @@ static node *callArguments(const char *name) {
         } while (1);
     }
     expectSym(RPAR);
-    if (index == BUILTIN_EMIT) {
-        qFail((count != 1 || args->o1->kind == ARRAY_REF), "-emit expects one scalar argument-");
+    if (index == BUILTIN_SYSCALL) {
+        qFail((count < 1 || count > 7), "-syscall expects 1 to 7 arguments-");
     } else {
         struct function_s *function = &functions[index];
         qFail(count != function->numParameters, "-function %s expects %d argument(s), got %d-\n", name, function->numParameters, count);
@@ -271,27 +287,27 @@ static node *increment(int kind, node *target, int delta) {
     return x;
 }
 
-/* <term> ::= <id> | <id> "(" [ <expr> { "," <expr> } ] ")" | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> */
+/* <term> ::= <id> | <id> "(" [ <expr> { "," <expr> } ] ")" | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> | "~" <term> */
 static node *term() {
   node *x = NULL;
   if (sym == MINUS) {
       nextSym();
       return gen(SUB, constant(0), term());
+  } else if (sym == TILDE) {
+      nextSym();
+      return gen(BIT_NOT, term(), NULL);
   } else if (sym == PLUS_PLUS || sym == MINUS_MINUS) {
       int delta = sym == PLUS_PLUS ? 1 : -1;
       nextSym();
       char name[sizeof(idName)];
       expectName(name);
       x = increment(PRE_INC, nameNode(name), delta);
-  } else if (sym == ID || sym == EMIT_SYM) {
+  } else if (sym == ID) {
       char name[sizeof(idName)];
       strcpy(name, idName);
-      int isEmit = sym == EMIT_SYM;
       nextSym();
       if (sym == LPAR) {
           x = callArguments(name);
-      } else if (isEmit) {
-          qFail(1, "-emit is a built-in function-");
       } else if (sym == LBRACKET) {
           int base = arrayIndex(name);
           nextSym();
@@ -326,11 +342,16 @@ static int mathop() {
     else if (sym==STAR)  { return MUL; }
     else if (sym==SLASH) { return DIV; }
     else if (sym==MODULO) { return MOD; }
+    else if (sym==AMP)   { return BIT_AND; }
+    else if (sym==PIPE)  { return BIT_OR; }
+    else if (sym==CARET) { return BIT_XOR; }
+    else if (sym==LSHIFT) { return BIT_SHL; }
+    else if (sym==RSHIFT) { return BIT_SHR; }
     return 0;
 }
 
 /* <math> ::= <term> | <math> <math_op> <term> */
-/* <math_op> ::= "+" | "-" | "*" | "/" | "%" */
+/* <math_op> ::= "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" */
 static node *sum() {
   node *x = term();
   int op;
@@ -341,8 +362,8 @@ static node *sum() {
   return x;
 }
 
-/* <expr> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math> */
-node *expr() {
+/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math> */
+static node *comparison() {
   node *x = sum();
   if (sym == LESS)     { nextSym(); return gen(LT, x, sum()); }
   if (sym == GRT)      { nextSym(); return gen(GT, x, sum()); }
@@ -350,6 +371,17 @@ node *expr() {
   if (sym == GRT_EQ)   { nextSym(); return gen(GE, x, sum()); }
   if (sym == EQ_SYM)   { nextSym(); return gen(EQ, x, sum()); }
   if (sym == NE_SYM)   { nextSym(); return gen(NE, x, sum()); }
+  return x;
+}
+
+/* <expr> ::= <test> { ("&&" | "||") <test> }, applied left to right */
+node *expr() {
+  node *x = comparison();
+  while (sym == AND_AND || sym == OR_OR) {
+    int op = sym == AND_AND ? LOG_AND : LOG_OR;
+    nextSym();
+    x = gen(op, x, comparison());
+  }
   return x;
 }
 
@@ -535,7 +567,8 @@ static void parseVariableDeclarator(const char *name, int type) {
     } else if (inferredSize) {
         qFail(1, "-array size required unless initialized by a string-");
     }
-    int base = variableBases[declareVariable(name, size, isArray, type)];
+    int zeroed = !scalar && !hasStringInitializer;
+    int base = variableBases[declareVariable(name, size, isArray, type, zeroed)];
     if (scalar) {
         if (type == TYPE_BYTE) { *MEM_AT(base) = scalar->val; }
         else { storeInt(base, scalar->val); }
@@ -568,7 +601,7 @@ static int sameSignature(struct function_s *declared, struct function_s *header)
 
 // A header that repeats an earlier declaration must match it.
 static int parseHeader(const char *name, int returnType) {
-    qFail((strcmp(name, "emit") == 0), "-emit is a built-in function-");
+    qFail((strcmp(name, "syscall") == 0), "-syscall is a built-in function-");
     int index = functionIndex(name);
     struct function_s *function = &functions[index];
     struct function_s previous = *function;
@@ -603,9 +636,18 @@ static void parseFunctionDefinition(const char *name, int returnType) {
     currentFunction = previousFunction;
 }
 
-// An array reference is valid only as a direct array argument, which callArguments() has already checked.
+// An array reference is valid only as a direct array argument, which callArguments() has already checked,
+// or as an operand of + or -, where it stands for the array's address.
 static void checkArrayRefs(node *x) {
     if (!x) { return; }
+    if (x->kind == ADD || x->kind == SUB) {
+        int left = x->o1->kind == ARRAY_REF, right = x->o2->kind == ARRAY_REF;
+        qFail(left && right, "-cannot combine two arrays-");
+        qFail(right && x->kind == SUB, "-array must be the left operand of '-'-");
+        if (!left) { checkArrayRefs(x->o1); }
+        if (!right) { checkArrayRefs(x->o2); }
+        return;
+    }
     qFail(x->kind == ARRAY_REF, "-array reference only valid as an array argument-");
     if (x->kind == FUNC_CALL) {
         for (node *arg = x->o1; arg; arg = arg->o2) {

@@ -2,6 +2,9 @@
 /* Virtual machine for min-c. It runs the 32-bit x86 subset that the code generator emits. */
 
 #include "mc.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 // -------------------------------------------------
 // The memory image. Addresses run from LOAD_BASE: the globals, then the code at CODE_BASE, then the stack,
@@ -107,16 +110,36 @@ static int condition(struct cpu_s *c, int cc) {
     return 0;
 }
 
-// Runs the int 0x80 system call that the code generator uses: exit (1) and write to stdout (4).
+// Returns a NUL-terminated string in guest memory, checking every byte up to the terminator.
+static const char *guestString(int addr) {
+    int a = addr;
+    while (*MEM_AT(a)) { checkAddress(a, 1); a = a + 1; }
+    return (const char *)MEM_AT(addr);
+}
+
+// The kernel returns a failed call as -errno in eax. The C library wrappers return -1 and set errno instead.
+static int kernelResult(long result) { return result < 0 ? -errno : (int)result; }
+
+// Runs the int 0x80 system calls that the code generator uses: exit (1), read (3), write (4), open (5), close (6).
+// Each call goes to the host with the same arguments, so the result matches the executable's.
 // Returns 1 when the program exits.
 static int systemCall(struct cpu_s *c) {
     int *r = c->reg;
     switch (r[EAX]) {
         case 1: return 1;
-        case 4:
-            qFail(r[EBX] != 1, "-unsupported write to fd %d-", r[EBX]);
+        case 3:
             checkAddress(r[ECX], r[EDX]);
-            r[EAX] = (int)fwrite(MEM_AT(r[ECX]), 1, (size_t)r[EDX], stdout);
+            r[EAX] = kernelResult(read(r[EBX], MEM_AT(r[ECX]), (size_t)r[EDX]));
+            return 0;
+        case 4:
+            checkAddress(r[ECX], r[EDX]);
+            r[EAX] = kernelResult(write(r[EBX], MEM_AT(r[ECX]), (size_t)r[EDX]));
+            return 0;
+        case 5:
+            r[EAX] = kernelResult(open(guestString(r[EBX]), r[ECX], r[EDX]));
+            return 0;
+        case 6:
+            r[EAX] = kernelResult(close(r[EBX]));
             return 0;
         default: qFail(1, "-unsupported system call %d-", r[EAX]);
     }
@@ -138,6 +161,21 @@ int run() {
             case X_SUB_RM_R: {
                 struct modrm_s m = decodeModRM(&c);
                 setRM(&c, &m, getRM(&c, &m) - c.reg[m.reg]);
+                break;
+            }
+            case X_AND_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                setRM(&c, &m, getRM(&c, &m) & c.reg[m.reg]);
+                break;
+            }
+            case X_OR_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                setRM(&c, &m, getRM(&c, &m) | c.reg[m.reg]);
+                break;
+            }
+            case X_XOR_RM_R: {
+                struct modrm_s m = decodeModRM(&c);
+                setRM(&c, &m, getRM(&c, &m) ^ c.reg[m.reg]);
                 break;
             }
             case X_CMP_RM_R: {
@@ -188,9 +226,24 @@ int run() {
                 setRM(&c, &m, (int)((unsigned)getRM(&c, &m) << (count & 31)));
                 break;
             }
-            case X_GRP3_RM: {
-                // idiv: edx:eax divided by r/m, quotient to eax, remainder to edx.
+            case X_GRP2_RM_CL: {
                 struct modrm_s m = decodeModRM(&c);
+                int count = c.reg[ECX] & 31;
+                if (m.reg == 4) {
+                    setRM(&c, &m, (int)((unsigned)getRM(&c, &m) << count));  // shl
+                } else {
+                    qFail(m.reg != 7, "-unsupported x86 group 2 operation %d-", m.reg);
+                    setRM(&c, &m, getRM(&c, &m) >> count);  // sar
+                }
+                break;
+            }
+            case X_GRP3_RM: {
+                // not (/2): r/m = ~r/m. idiv (/7): edx:eax divided by r/m, quotient to eax, remainder to edx.
+                struct modrm_s m = decodeModRM(&c);
+                if (m.reg == 2) {
+                    setRM(&c, &m, ~getRM(&c, &m));
+                    break;
+                }
                 qFail(m.reg != 7, "-unsupported x86 group 3 operation %d-", m.reg);
                 long long dividend = ((long long)(unsigned)c.reg[EDX] << 32) | (unsigned)c.reg[EAX];
                 long long divisor = getRM(&c, &m);

@@ -35,12 +35,12 @@
  *  <paren_expr> ::= "(" <expr> ")"
  *  <assignment> ::= <lvalue> "=" <expr>   (assignment is a statement only, not an expression)
  *  <lvalue> ::= <id> | <id> "[" <expr> "]"
- *  <expr> ::= <test>
+ *  <expr> ::= <test> | <expr> ("&&" | "||") <test>   (short-circuit, result is 0 or 1)
  *  <incdec> ::= ("++" | "--") <scalar_id> | <scalar_id> ("++" | "--")   (scalar locals, parameters, and globals only; postfix yields the old value, prefix the new)
  *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math>
  *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)
- *  <math_op> ::= "+" | "-" | "*" | "/" | "%"
- *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <incdec> | <int> | <char> | <string> | <paren_expr> | "-" <term>
+ *  <math_op> ::= "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>"   (">>" is an arithmetic shift)
+ *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <incdec> | <int> | <char> | <string> | <paren_expr> | "-" <term> | "~" <term>
  *  <func_call> ::= (<int_func_id> | <byte_func_id>) "(" [ <expr> { "," <expr> } ] ")"
  *  <void_func_call> ::= <void_func_id> "(" [ <expr> { "," <expr> } ] ")"
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
@@ -48,9 +48,9 @@
  *  <int_func_id> and <byte_func_id> are IDs of functions returning a value;
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
  *
- * Reserved words: do, else, if, while, void, int, byte, emit, return.
- * * "emit" is a built-in function, so it cannot name a variable, parameter, local, or function.
- * * emit(int value) is a built-in service that writes the low byte to stdout.
+ * Reserved words: do, else, if, while, void, int, byte, return.
+ * * "syscall" is a built-in intrinsic, so it cannot name a function. syscall(n, a1, ..., a6) takes 1 to 7 arguments, loads them into eax, ebx, ecx, edx, esi, edi, ebp, and runs int 0x80. ebp is saved and restored.
+ * * emit(int value) is a library function in lib/util.mc. It calls syscall to write the low byte to stdout.
  * void calls are statements, not terms.
  * A function that reaches its end without a return returns 0.
  * A local or parameter may shadow a global or function name.
@@ -114,4 +114,4 @@ get anonymous global storage. They must be passed to byte[] parameters; other ar
 element type. String literals are valid only as array arguments or global array initializers. Array parameters<br/>
 pass global-array base addresses by reference. Array indexes are not bounds-checked. An access outside the memory<br/>
 image fails with `-bad memory address-`, but an access that lands in the globals, code, or stack is not detected.<br/>
-`emit` compiles to a Linux `write` system call (`int 0x80`, `eax` = 4) on stdout.
+`syscall(n, ...)` compiles to a Linux system call (`int 0x80`, `eax` = n). `emit` is a library function in `lib/util.mc` that calls `syscall(4, 1, ...)` to write one byte to stdout.

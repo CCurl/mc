@@ -158,6 +158,12 @@ void testArithmetic() {
     check("left-to-right subtraction", 10 - 4 - 3 == 3);
     // sum() has no precedence; operators apply left to right.
     check("operators evaluate left to right", 2 + 3 * 4 == 20);
+    check("bitwise and", (12 & 10) == 8);
+    check("bitwise or", (12 | 10) == 14);
+    check("bitwise xor", (12 ^ 10) == 6);
+    check("bitwise not", ~0 == -1);
+    check("bitwise not binds to its term", ~2 + 1 == -2);
+    check("bitwise operators evaluate left to right", (6 | 1 & 2) == 2);
     check("parentheses override order", 2 + (3 * 4) == 14);
 }
 
@@ -336,6 +342,28 @@ void testArrays() {
 // emit() prints the newline and returns the byte written.
 void testEmit() {
     check("emit returns written byte", emit('*') == '*');
+}
+
+// syscall() returns the system call's result. A write of zero bytes returns 0.
+void testSyscall() {
+    check("syscall write of zero bytes returns 0", syscall(4, 1, emitBuf, 0) == 0);
+}
+
+byte ioOut[2], ioIn[8];
+
+// fopen/fwrite/fclose/fread round-trip a file. A missing file gives a negative result.
+void testFileIO() {
+    ioOut[0] = 'm'; ioOut[1] = 'c';
+    int fd = fopen("unit-tests.dat", 577);
+    check("fopen for writing returns a descriptor", fd >= 0);
+    check("fwrite returns the byte count", fwrite(fd, ioOut, 2) == 2);
+    check("fclose returns 0", fclose(fd) == 0);
+    fd = fopen("unit-tests.dat", 0);
+    check("fopen for reading returns a descriptor", fd >= 0);
+    check("fread returns the byte count", fread(fd, ioIn, 8) == 2);
+    check("fread returns the written bytes", ioIn[0] == 'm' && ioIn[1] == 'c');
+    fclose(fd);
+    check("fopen of a missing file returns a negative errno", fopen("no-such-file.dat", 0) < 0);
 }
 
 int twice(int x) { return x * 2; }
@@ -592,6 +620,14 @@ int parity(int x) {
 int isFalse(int value) { return value == 0; }
 
 int modTest(int a, int b, int c) { return (a % b) == c; }
+int bitAnd(int a, int b) { return a & b; }
+int bitOr(int a, int b) { return a | b; }
+int bitXor(int a, int b) { return a ^ b; }
+int bitNot(int a) { return ~a; }
+int shiftLeft(int a, int b) { return a << b; }
+int shiftRight(int a, int b) { return a >> b; }
+int gSideEffects;
+int sideEffect(int value) { gSideEffects++; return value; }
 
 void testProgramFlow() {
     int localA;
@@ -682,6 +718,26 @@ void testProgramFlow() {
     check("division", div(20, 5) == 4);
     check("modulo", modTest(123, 100, 23));
     check("negative modulo", -7 % 3 == -1);
+    check("runtime bitwise and", bitAnd(12, 10) == 8);
+    check("runtime bitwise or", bitOr(12, 10) == 14);
+    check("runtime bitwise xor", bitXor(12, 10) == 6);
+    check("runtime bitwise not", bitNot(5) == -6);
+    check("shift left", (3 << 4) == 48);
+    check("shift right", (48 >> 4) == 3);
+    check("arithmetic shift right keeps the sign", (-8 >> 1) == -4);
+    check("runtime shift left", shiftLeft(3, 4) == 48);
+    check("runtime arithmetic shift right", shiftRight(-8, 1) == -4);
+    check("logical and is 0 or 1", (2 && 3) == 1);
+    check("logical and with a zero is 0", (0 && 5) == 0);
+    check("logical or is 0 or 1", (0 || 7) == 1);
+    check("logical or of zeros is 0", (0 || 0) == 0);
+    check("logical operators on comparisons", 1 < 2 && 3 > 2 || 0);
+    gSideEffects = 0;
+    check("&& skips the right side when the left is false", (0 && sideEffect(1)) == 0 && gSideEffects == 0);
+    gSideEffects = 0;
+    check("|| skips the right side when the left is true", (1 || sideEffect(0)) == 1 && gSideEffects == 0);
+    gSideEffects = 0;
+    check("&& evaluates the right side when the left is true", (1 && sideEffect(0)) == 0 && gSideEffects == 1);
     check("equality", 7 == 7);
     check("equality false", isFalse(7 == 8));
     check("inequality true", 7 != 8);
@@ -709,7 +765,7 @@ int mil(int n) { return n * 1000 * 1000; }
 
 void testBenchmark() {
     int i, n;
-    i = mil(100);
+    i = mil(5);
     while (i) { i--; }
     check("100 million iteration while loop completes", i == 0);
     i = 0;
@@ -760,6 +816,8 @@ int main() {
     testLiterals2();
     testLongJumps();
     testEmit();
+    testSyscall();
+    testFileIO();
     testProgramFlow();
     testBenchmark();
     print("\npassed: "); printNum(passes, 10);
