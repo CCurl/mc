@@ -67,7 +67,7 @@ String literals are permitted only as array arguments or global array initialize
 
 ## 4. Code generation (`c()` walks the AST)
 
-The output is x86 machine code written to `mem[]` from `CODE_BASE` (0x400000) upward. Each instruction uses its real Intel encoding, so the bytes can later be written to an executable unchanged. Only the subset listed below is emitted. Code generation is done in one pass over the AST, with forward jumps and calls patched afterward.
+The output is x86 machine code written to `mem[]` from `CODE_BASE` (0x08448000) upward. Each instruction uses its real Intel encoding, so the bytes can later be written to an executable unchanged. Only the subset listed below is emitted. Code generation is done in one pass over the AST, with forward jumps and calls patched afterward.
 
 The code starts with an entry stub that calls `main` and passes its result to the exit system call:
 
@@ -128,15 +128,15 @@ Notable generation details:
 
 ## 5. The memory image
 
-One array, `mem[MEM_BYTES]`, holds everything:
+One array, `mem[MEM_BYTES]`, holds everything. Addresses are real 32-bit addresses starting at `LOAD_BASE` (0x08048000, the usual base of a 32-bit Linux executable). `MEM_AT(addr)` maps an address to its byte in `mem[]`, and the VM and code generator use it for every access.
 
 | Region | Address | Contents |
 |---|---|---|
-| Globals | `0 .. numGlobalBytes` | Global `int` and `byte` storage, string literals, and array data. The C runtime zero-initializes this array. |
-| Code | `CODE_BASE` (0x400000) .. `here` | The entry stub and the functions. `here` is the next free byte. |
-| Stack | `CODE_TOP` .. `MEM_BYTES` | Grows down from `MEM_BYTES`. `esp` starts at `MEM_BYTES`. |
+| Globals | `LOAD_BASE` .. `LOAD_BASE + numGlobalBytes` | Global `int` and `byte` storage, string literals, and array data. The C runtime zero-initializes this array. |
+| Code | `CODE_BASE` (0x08448000) .. `here` | The entry stub and the functions. `here` is the next free byte. |
+| Stack | `CODE_TOP` .. `STACK_TOP` | Grows down from `STACK_TOP`. `esp` starts at `STACK_TOP`. |
 
-The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `MAX_GLOBAL_BYTES`, `CODE_TOP` is `CODE_BASE + MAX_CODE`, and `MEM_BYTES` is `CODE_TOP + STACK_BYTES`.
+The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `LOAD_BASE + MAX_GLOBAL_BYTES`, `CODE_TOP` is `CODE_BASE + MAX_CODE`, `STACK_TOP` is `CODE_TOP + STACK_BYTES`, and `MEM_BYTES` is `STACK_TOP - LOAD_BASE`.
 
 The `-l` listing gives each instruction's address, its bytes, and its mnemonic, with a label line before each function. The disassembler in [mc-list.c](/home/chris/code/mc/mc-list.c) decodes only the encodings the code generator emits. `objdump` reads the same image as a cross-check:
 
@@ -155,7 +155,7 @@ Values in `mem[]` are read and written with `loadInt()` and `storeInt()`, which 
 
 | State | Declaration | Purpose |
 |---|---|---|
-| Registers | `struct cpu_s`, `reg[8]` | `eax` through `edi`, using the x86 numbering. `esp` starts at `MEM_BYTES`. |
+| Registers | `struct cpu_s`, `reg[8]` | `eax` through `edi`, using the x86 numbering. `esp` starts at `STACK_TOP`. |
 | Program counter | `pc` | Address of the next instruction in `mem[]`. |
 | Flags | `flagA`, `flagB` | The operands of the last `cmp` or `test`. Conditions are evaluated from these two values. Arithmetic does not set flags. |
 | Memory | `mem[MEM_BYTES]` | Globals, code, and the stack, as in section 5. |
@@ -185,7 +185,7 @@ Any other call stops with `-unsupported system call-`. Syscall numbers are the L
 
 ### Runtime checks
 
-- Every load and store checks its address against `MEM_BYTES`, so an out-of-range access fails with `-bad memory address-`. The check covers wild pointers into code or the stack, which a bad array index can now reach.
+- Every load and store checks its address against `LOAD_BASE` .. `STACK_TOP`, so an out-of-range access fails with `-bad memory address-`. The check covers wild pointers into code or the stack, which a bad array index can now reach. Instruction fetches are checked too.
 - `esp` may not drop below `CODE_TOP`, so a runaway recursion fails with `-stack overflow-`.
 - `idiv` stops on a zero divisor with `-divide by zero-`, which covers both `/` and `%`. It also checks for quotient overflow (`-divide overflow-`).
 - Unsupported instructions, operands, condition codes, and system calls stop with a message that names the opcode or field.

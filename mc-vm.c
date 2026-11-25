@@ -4,27 +4,28 @@
 #include "mc.h"
 
 // -------------------------------------------------
-// The memory image. Globals start at 0, the code at CODE_BASE, and the stack grows down from MEM_BYTES.
+// The memory image. Addresses run from LOAD_BASE: the globals, then the code at CODE_BASE, then the stack,
+// which grows down from STACK_TOP.
 byte mem[MEM_BYTES];
 
 static void checkAddress(int addr, int size) {
-    qFail(addr < 0 || size > MEM_BYTES || addr > MEM_BYTES - size, "-bad memory address %d-", addr);
+    qFail(addr < LOAD_BASE || size > MEM_BYTES || addr > STACK_TOP - size, "-bad memory address %d-", addr);
 }
 
 int loadInt(int addr) {
     checkAddress(addr, 4);
     int value;
-    memcpy(&value, mem + addr, 4);
+    memcpy(&value, MEM_AT(addr), 4);
     return value;
 }
 
 void storeInt(int addr, int value) {
     checkAddress(addr, 4);
-    memcpy(mem + addr, &value, 4);
+    memcpy(MEM_AT(addr), &value, 4);
 }
 
-static int loadByte(int addr) { checkAddress(addr, 1); return mem[addr]; }
-static void storeByte(int addr, int value) { checkAddress(addr, 1); mem[addr] = (byte)value; }
+static int loadByte(int addr) { checkAddress(addr, 1); return *MEM_AT(addr); }
+static void storeByte(int addr, int value) { checkAddress(addr, 1); *MEM_AT(addr) = (byte)value; }
 
 // The processor state. Registers are indexed by their x86 encoding (EAX=0 ... EDI=7).
 // The flags are kept as the two operands of the last cmp or test. Only the signed
@@ -38,7 +39,7 @@ struct cpu_s {
 // A decoded ModRM operand. When isReg is set the operand is register rm. Otherwise it is the memory at addr.
 struct modrm_s { int isReg, reg, rm, addr; };
 
-static int fetch8(struct cpu_s *c) { return mem[c->pc++]; }
+static int fetch8(struct cpu_s *c) { checkAddress(c->pc, 1); return *MEM_AT(c->pc++); }
 
 static int fetch32(struct cpu_s *c) {
     int value = loadInt(c->pc);
@@ -115,7 +116,7 @@ static int systemCall(struct cpu_s *c) {
         case 4:
             qFail(r[EBX] != 1, "-unsupported write to fd %d-", r[EBX]);
             checkAddress(r[ECX], r[EDX]);
-            r[EAX] = (int)fwrite(mem + r[ECX], 1, (size_t)r[EDX], stdout);
+            r[EAX] = (int)fwrite(MEM_AT(r[ECX]), 1, (size_t)r[EDX], stdout);
             return 0;
         default: qFail(1, "-unsupported system call %d-", r[EAX]);
     }
@@ -125,7 +126,7 @@ static int systemCall(struct cpu_s *c) {
 // Runs the code from CODE_BASE until the program calls exit. Returns the exit status.
 int run() {
     struct cpu_s c = { { 0 }, CODE_BASE, 0, 0 };
-    c.reg[ESP] = MEM_BYTES;
+    c.reg[ESP] = STACK_TOP;
     for (;;) {
         int op = fetch8(&c);
         switch (op) {

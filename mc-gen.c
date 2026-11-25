@@ -19,8 +19,8 @@ int numCallFixups;
 static struct function_s *curFunction;
 
 static void checkSize(int sz) { qFail(here + sz > CODE_TOP, "-program too large-"); }
-static void g(int b) { checkSize(1); mem[here++] = (byte)b; }
-static void g4(int v) { checkSize(4); memcpy(mem + here, &v, 4); here += 4; }
+static void g(int b) { checkSize(1); *MEM_AT(here++) = (byte)b; }
+static void g4(int v) { checkSize(4); memcpy(MEM_AT(here), &v, 4); here += 4; }
 static void movImm(int reg, int v) { g(X_MOV_R_IMM + reg); g4(v); }
 
 // Reserves a 4-byte field for a rel32 displacement. fix() or patchCalls() fills it in.
@@ -34,7 +34,7 @@ static int hole() {
 // The rel32 displacement is measured from the end of the field, which is also the end of the instruction.
 static void fix(int field, int dst) {
     int rel = dst - (field + 4);
-    memcpy(mem + field, &rel, 4);
+    memcpy(MEM_AT(field), &rel, 4);
 }
 
 // rr() emits an opcode with a ModRM byte for two registers. reg is a register or an opcode extension (/digit).
@@ -77,8 +77,8 @@ int saveImage(const char *fileName) {
     int codeSize = here - CODE_BASE;
     fwrite(&codeSize, sizeof(int), 1, fp);
     fwrite(&numGlobalBytes, sizeof(int), 1, fp);
-    fwrite(mem + CODE_BASE, 1, codeSize, fp);
-    fwrite(mem, 1, numGlobalBytes, fp);
+    fwrite(MEM_AT(CODE_BASE), 1, codeSize, fp);
+    fwrite(MEM_AT(LOAD_BASE), 1, numGlobalBytes, fp);
     fclose(fp);
     return numGlobalBytes + codeSize + (2*sizeof(int));
 }

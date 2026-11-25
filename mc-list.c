@@ -17,7 +17,7 @@ static const char *ccNames[16] = { "o", "no", "b", "ae", "e", "ne", "be", "a", "
 
 static int readInt(int addr) {
     int value;
-    memcpy(&value, mem + addr, 4);
+    memcpy(&value, MEM_AT(addr), 4);
     return value;
 }
 
@@ -25,7 +25,7 @@ static int readInt(int addr) {
 // byteRegs selects 8-bit register names. memPrefix (such as "dword ") goes before a memory operand.
 // Returns the number of bytes used.
 static int disassembleModRM(int addr, int *reg, char *out, int byteRegs, const char *memPrefix) {
-    int b = mem[addr];
+    int b = *MEM_AT(addr);
     int mod = b >> 6, rm = b & 7;
     *reg = (b >> 3) & 7;
     if (mod == 3) {
@@ -55,7 +55,7 @@ static void targetText(char *out, int target) {
 
 // Writes the two-byte instruction (0F xx) at addr and returns its length.
 static int disassembleEscape(int addr, char *text) {
-    int op2 = mem[addr + 1];
+    int op2 = *MEM_AT(addr + 1);
     int reg, n, rel;
     char rm[64], target[32];
     if (op2 >= X_JCC && op2 < X_JCC + 16) {
@@ -85,7 +85,7 @@ static int disassembleEscape(int addr, char *text) {
 
 // Writes the instruction at addr to text and returns its length. Bytes outside the subset are shown as db.
 static int disassemble(int addr, char *text) {
-    int op = mem[addr];
+    int op = *MEM_AT(addr);
     int reg, n, imm, rel;
     char rm[64], target[32];
     if (op >= X_PUSH && op < X_PUSH + 8) { sprintf(text, "push %s", reg32Names[op - X_PUSH]); return 1; }
@@ -137,7 +137,7 @@ static int disassemble(int addr, char *text) {
         case X_GRP2_RM_IMM8:
             n = disassembleModRM(addr + 1, &reg, rm, 0, "dword ");
             if (reg == 4) {
-                sprintf(text, "shl %s, %d", rm, mem[addr + 1 + n]);
+                sprintf(text, "shl %s, %d", rm, *MEM_AT(addr + 1 + n));
                 return 2 + n;
             }
             break;
@@ -155,7 +155,7 @@ static int disassemble(int addr, char *text) {
             sprintf(text, "leave");
             return 1;
         case X_INT:
-            sprintf(text, "int 0x%02X", mem[addr + 1]);
+            sprintf(text, "int 0x%02X", *MEM_AT(addr + 1));
             return 2;
         case X_CALL:
             rel = readInt(addr + 1);
@@ -184,7 +184,7 @@ void listing(void) {
         if (label) { fprintf(fp, "%s%s:\n", p > CODE_BASE ? "\n" : "", label); }
         char text[128], bytes[64] = "";
         int len = disassemble(p, text);
-        for (int i = 0; i < len; i++) { sprintf(bytes + strlen(bytes), "%02X ", mem[p + i]); }
+        for (int i = 0; i < len; i++) { sprintf(bytes + strlen(bytes), "%02X ", *MEM_AT(p + i)); }
         fprintf(fp, "%08X  %-30s %s\n", (unsigned)p, bytes, text);
         p += len;
     }

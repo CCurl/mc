@@ -59,7 +59,7 @@ int declareVariable(const char *name, int size, int isArray, int type) {
     qFail(numVariables >= MAX_GLOBAL_NAMES, "-too many variables-");
     qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes) / elementSize, "-too many variables-");
     strcpy(variableNames[numVariables], name);
-    variableBases[numVariables] = numGlobalBytes;
+    variableBases[numVariables] = LOAD_BASE + numGlobalBytes;
     variableIsArray[numVariables] = isArray;
     variableTypes[numVariables] = type;
     numGlobalBytes += size * elementSize;
@@ -67,17 +67,17 @@ int declareVariable(const char *name, int size, int isArray, int type) {
 }
 
 void storeStringBytes(int base) {
-    mem[base] = stringLength & 0xff;
-    mem[base + 1] = (stringLength >> 8) & 0xff;
+    *MEM_AT(base) = stringLength & 0xff;
+    *MEM_AT(base + 1) = (stringLength >> 8) & 0xff;
     for (int i = 0; i < stringLength; i++) {
-        mem[base + i + 2] = stringValues[i];
+        *MEM_AT(base + i + 2) = stringValues[i];
     }
 }
 
 int allocateStringLiteral() {
     int size = stringLength + STRING_OVERHEAD;
     qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes), "-too much global storage-");
-    int base = numGlobalBytes;
+    int base = LOAD_BASE + numGlobalBytes;
     numGlobalBytes += size;
     storeStringBytes(base);
     return base;
@@ -537,7 +537,7 @@ static void parseVariableDeclarator(const char *name, int type) {
     }
     int base = variableBases[declareVariable(name, size, isArray, type)];
     if (scalar) {
-        if (type == TYPE_BYTE) { mem[base] = scalar->val; }
+        if (type == TYPE_BYTE) { *MEM_AT(base) = scalar->val; }
         else { storeInt(base, scalar->val); }
     }
     if (hasStringInitializer) {

@@ -24,10 +24,14 @@
 #define MAX_PARAMETERS         32
 #define STACK_BYTES        65536 // Size of the stack, which grows down from the top of memory
 
-// One memory image holds the globals, then the code, then the stack.
-#define CODE_BASE       MAX_GLOBAL_BYTES         // the code starts after the global data
-#define CODE_TOP        (CODE_BASE + MAX_CODE)   // the stack may not grow below this
-#define MEM_BYTES       (CODE_TOP + STACK_BYTES) // esp starts here
+// One memory image holds the globals, then the code, then the stack. Addresses start at LOAD_BASE,
+// the usual base of a 32-bit Linux executable, and MEM_AT() maps an address to its byte in mem[].
+#define LOAD_BASE       0x08048000
+#define CODE_BASE       (LOAD_BASE + MAX_GLOBAL_BYTES)   // the code starts after the global data
+#define CODE_TOP        (CODE_BASE + MAX_CODE)           // the stack may not grow below this
+#define STACK_TOP       (CODE_TOP + STACK_BYTES)         // esp starts here
+#define MEM_BYTES       (STACK_TOP - LOAD_BASE)          // size of mem[]
+#define MEM_AT(addr)    (mem + ((addr) - LOAD_BASE))
 
 /* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
 #define STRING_OVERHEAD         3
