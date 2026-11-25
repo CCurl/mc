@@ -76,16 +76,17 @@
 
 ## Command line
 
-    mc [-l] [-o] [-r] [-?] <source>
+    mc [-l] [-o] [-e <exe>] [-n] [-?] <source>
 
 ```
-usage: mc [-l] [-o] [-r] [-?] <source>
+usage: mc [-l] [-o] [-e <exe>] [-n] [-?] <source>
   compiles the specified source file
   -l: create 'listing.txt' file
   -o: output compiled image to 'a.img'
-  -r: run after compile (default on)
+  -e <exe>: write a Linux 32-bit executable to <exe>
+  -n: do not run after compile (default run)
   -?: show this help message
-  defaults: -l: off, -o: off, -r: on
+  defaults: -l: off, -o: off, -n: off (run after compile)
 ```
 A source file is required. Without one, `mc` prints the usage message and exits.
 

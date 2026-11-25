@@ -166,6 +166,7 @@ node *program(void);
 void c(node *x);
 int run(void);
 int saveImage(const char *fileName);
+int saveExecutable(const char *fileName);
 int loadImage(const char *fileName);
 void listing(void);
 

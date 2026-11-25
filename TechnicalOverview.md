@@ -138,6 +138,14 @@ One array, `mem[MEM_BYTES]`, holds everything. Addresses are real 32-bit address
 
 The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `LOAD_BASE + MAX_GLOBAL_BYTES`, `CODE_TOP` is `CODE_BASE + MAX_CODE`, `STACK_TOP` is `CODE_TOP + STACK_BYTES`, and `MEM_BYTES` is `STACK_TOP - LOAD_BASE`.
 
+`-e <exe>` writes the image as a Linux 32-bit ELF executable (`saveExecutable()` in [mc-gen.c](/home/chris/code/mc/mc-gen.c)). The file has two `PT_LOAD` segments:
+- A data segment, read and write, at `LOAD_BASE`. Its file bytes are the globals in use. Its memory size is `MAX_GLOBAL_BYTES`, so the rest of the global area is zero-filled at load time and not stored in the file.
+- A text segment, read and execute, at `CODE_BASE`, placed at the next page boundary after the data.
+
+The first segment starts at file offset 0x1000, so the ELF headers are not mapped over the globals. The code is never written at run time, and the globals are never executed, so no segment is both writable and executable. The entry point is `CODE_BASE`, where the entry stub calls `main` and exits. The file is marked executable. No relocation is needed, because the code uses absolute addresses that already match the load address.
+
+Running the executable natively uses the kernel's `esp` and stack size, so `STACK_BYTES` and the VM's runtime checks do not apply. An out-of-range access or deep recursion is a segfault, and `INT_MIN / -1` raises SIGFPE instead of `-divide overflow-`. `make test-exe` builds `unit-tests.mc` into an executable, runs it, and checks its output against the VM run.
+
 The `-l` listing gives each instruction's address, its bytes, and its mnemonic, with a label line before each function. The disassembler in [mc-list.c](/home/chris/code/mc/mc-list.c) decodes only the encodings the code generator emits. `objdump` reads the same image as a cross-check:
 
 ```

@@ -2,6 +2,7 @@
 // Code generator for min-c
 
 #include "mc.h"
+#include <sys/stat.h>
 
 // -------------------------------------------------
 // Code generation. Expressions leave their value in eax. A binary operation evaluates its left operand and
@@ -81,6 +82,65 @@ int saveImage(const char *fileName) {
     fwrite(MEM_AT(LOAD_BASE), 1, numGlobalBytes, fp);
     fclose(fp);
     return numGlobalBytes + codeSize + (2*sizeof(int));
+}
+
+// Writes a little-endian value of the given size in bytes.
+static void putLE(FILE *fp, unsigned value, int size) {
+    for (int i = 0; i < size; i++) { fputc((value >> (8*i)) & 0xff, fp); }
+}
+
+// Writes a 32-bit Linux executable. The globals and code form one PT_LOAD segment at LOAD_BASE. The segment
+// is read from file offset 0x1000 so the ELF headers stay outside the globals, and execution starts at CODE_BASE.
+int saveExecutable(const char *fileName) {
+    const int pageSize = 0x1000, headerSize = 52, programHeaderSize = 32;
+    unsigned dataSize = (unsigned)numGlobalBytes;
+    unsigned codeSize = (unsigned)(here - CODE_BASE);
+    unsigned codeOffset = pageSize + ((dataSize + pageSize - 1) & ~(unsigned)(pageSize - 1));
+    FILE *fp = fopen(fileName, "wb");
+    qFail(!fp, "-cannot write executable %s-\n", fileName);
+    fwrite("\x7f" "ELF", 1, 4, fp);
+    putLE(fp, 1, 1);                    // 32-bit
+    putLE(fp, 1, 1);                    // little-endian
+    putLE(fp, 1, 1);                    // ELF version
+    putLE(fp, 0, 9);                    // OS/ABI, ABI version, padding
+    putLE(fp, 2, 2);                    // e_type: ET_EXEC
+    putLE(fp, 3, 2);                    // e_machine: EM_386
+    putLE(fp, 1, 4);                    // e_version
+    putLE(fp, CODE_BASE, 4);            // e_entry
+    putLE(fp, headerSize, 4);           // e_phoff
+    putLE(fp, 0, 4);                    // e_shoff
+    putLE(fp, 0, 4);                    // e_flags
+    putLE(fp, headerSize, 2);           // e_ehsize
+    putLE(fp, programHeaderSize, 2);    // e_phentsize
+    putLE(fp, 2, 2);                    // e_phnum
+    putLE(fp, 0, 2);                    // e_shentsize
+    putLE(fp, 0, 2);                    // e_shnum
+    putLE(fp, 0, 2);                    // e_shstrndx
+    // Data segment: globals, read/write. The zeroed part of the global area is not stored in the file.
+    putLE(fp, 1, 4);                    // p_type: PT_LOAD
+    putLE(fp, pageSize, 4);             // p_offset
+    putLE(fp, LOAD_BASE, 4);            // p_vaddr
+    putLE(fp, LOAD_BASE, 4);            // p_paddr
+    putLE(fp, dataSize, 4);             // p_filesz
+    putLE(fp, MAX_GLOBAL_BYTES, 4);     // p_memsz
+    putLE(fp, 6, 4);                    // p_flags: read, write
+    putLE(fp, pageSize, 4);             // p_align
+    // Text segment: code, read/execute, starting at CODE_BASE.
+    putLE(fp, 1, 4);                    // p_type: PT_LOAD
+    putLE(fp, codeOffset, 4);           // p_offset
+    putLE(fp, CODE_BASE, 4);            // p_vaddr
+    putLE(fp, CODE_BASE, 4);            // p_paddr
+    putLE(fp, codeSize, 4);             // p_filesz
+    putLE(fp, codeSize, 4);             // p_memsz
+    putLE(fp, 5, 4);                    // p_flags: read, execute
+    putLE(fp, pageSize, 4);             // p_align
+    for (int i = headerSize + 2 * programHeaderSize; i < pageSize; i++) { fputc(0, fp); }
+    fwrite(MEM_AT(LOAD_BASE), 1, dataSize, fp);
+    for (unsigned i = pageSize + dataSize; i < codeOffset; i++) { fputc(0, fp); }
+    fwrite(MEM_AT(CODE_BASE), 1, codeSize, fp);
+    fclose(fp);
+    chmod(fileName, 0755);
+    return (int)(codeOffset + codeSize);
 }
     
 /*
