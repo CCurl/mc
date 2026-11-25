@@ -130,29 +130,6 @@ int saveExecutable(const char *fileName) {
     return (int)(codeOffset + codeSize);
 }
     
-/*
-// This function is for a later stage when we want to save and
-// load the generated code and global data.
-void badImage(const char *fileName) { qFail(1, "-bad image %s-\n", fileName); }
-
-// Reads an image written by saveImage() and returns the bytes read
-int loadImage(const char *fileName) {
-    FILE *fp = fopen(fileName, "rb");
-    qFail(!fp, "-cannot read image %s-\n", fileName);
-    int codeSize, globalSize;
-    if (fread(&codeSize, sizeof(int), 1, fp) != 1) { badImage(fileName); }
-    if (fread(&globalSize, sizeof(int), 1, fp) != 1) { badImage(fileName); }
-    if (codeSize < 0 || codeSize > MAX_CODE) { badImage(fileName); }
-    if (globalSize < 0 || globalSize > MAX_GLOBAL_BYTES) { badImage(fileName); }
-    if (fread(vm, 1, codeSize, fp) != (size_t)codeSize) { badImage(fileName); }
-    if (fread(globalMem, 1, globalSize, fp) != (size_t)globalSize) { badImage(fileName); }
-    fclose(fp);
-    here = codeSize;
-    numGlobalBytes = globalSize;
-    return numGlobalBytes + here + (2*sizeof(int));
-}
-*/
-
 // A parameter or local is a frame slot. Parameters are slots 0..numParameters-1 and the locals follow them.
 static int isSlot(node *x) { return x->kind == LOCAL || x->val < 0; }
 static int slotOf(node *x) { return x->kind == LOCAL ? x->val : -x->val - 1; }
@@ -382,4 +359,3 @@ void c(node *prog) {
     }
     patchCalls();
 }
-
