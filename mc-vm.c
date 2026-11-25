@@ -120,7 +120,7 @@ static const char *guestString(int addr) {
 // The kernel returns a failed call as -errno in eax. The C library wrappers return -1 and set errno instead.
 static int kernelResult(long result) { return result < 0 ? -errno : (int)result; }
 
-// Runs the int 0x80 system calls that the code generator uses: exit (1), read (3), write (4), open (5), close (6).
+// Runs the int 0x80 system calls that the code generator uses: exit (1), read (3), write (4), open (5), close (6), unlink (10).
 // Each call goes to the host with the same arguments, so the result matches the executable's.
 // Returns 1 when the program exits.
 static int systemCall(struct cpu_s *c) {
@@ -140,6 +140,9 @@ static int systemCall(struct cpu_s *c) {
             return 0;
         case 6:
             r[EAX] = kernelResult(close(r[EBX]));
+            return 0;
+        case 10:
+            r[EAX] = kernelResult(unlink(guestString(r[EBX])));
             return 0;
         default: qFail(1, "-unsupported system call %d-", r[EAX]);
     }

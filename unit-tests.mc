@@ -353,17 +353,19 @@ byte ioOut[2], ioIn[8];
 
 // fopen/fwrite/fclose/fread round-trip a file. A missing file gives a negative result.
 void testFileIO() {
+    byte nm[] = "unit-tests.dat";
     ioOut[0] = 'm'; ioOut[1] = 'c';
-    int fd = fopen("unit-tests.dat", 577);
+    int fd = fopen(nm, 577);
     check("fopen for writing returns a descriptor", fd >= 0);
     check("fwrite returns the byte count", fwrite(fd, ioOut, 2) == 2);
     check("fclose returns 0", fclose(fd) == 0);
-    fd = fopen("unit-tests.dat", 0);
+    fd = fopen(nm, 0);
     check("fopen for reading returns a descriptor", fd >= 0);
     check("fread returns the byte count", fread(fd, ioIn, 8) == 2);
     check("fread returns the written bytes", ioIn[0] == 'm' && ioIn[1] == 'c');
     fclose(fd);
-    check("fopen of a missing file returns a negative errno", fopen("no-such-file.dat", 0) < 0);
+    fdelete(nm);
+    check("fopen of a missing file returns a negative errno", fopen(nm, 0) < 0);
 }
 
 byte aliasName[] = "chris";
@@ -786,9 +788,9 @@ int mil(int n) { return n * 1000 * 1000; }
 
 void testBenchmark() {
     int i, n;
-    i = mil(5);
+    i = mil(10);
     while (i) { i--; }
-    check("100 million iteration while loop completes", i == 0);
+    check("10 million iteration while loop completes", i == 0);
     i = 0;
     n = 0;
     do { i = i + (++n); } while (i < 1000);

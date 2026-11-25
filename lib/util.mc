@@ -53,3 +53,6 @@ int fread(int fd, byte buf[], int n) { return syscall(3, fd, buf, n); }
 
 // Writes n bytes from buf. Returns the number of bytes written.
 int fwrite(int fd, byte buf[], int n) { return syscall(4, fd, buf, n); }
+
+// Deletes the file named by the string name (mc string format). Returns 0 on success.
+int fdelete(byte name[]) { return syscall(10, name+2); }
