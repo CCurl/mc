@@ -104,7 +104,12 @@ int variableIndex(const char *name) {
 }
 
 int arrayIndex(const char *name) {
-    qFail(localIndex(name) >= 0, "-local variable %s is not an array-\n", name);
+    int local = localIndex(name);
+    if (local >= 0) {
+        struct function_s *function = &functions[currentFunction];
+        qFail(!function->localIsArray[local], "-local variable %s is not an array-\n", name);
+        return -(function->numParameters + local) - 1;
+    }
     int parameter = parameterIndex(name);
     if (parameter >= 0) {
         qFail(!currentParameterIsArray(parameter), "-parameter %s is not an array-\n", name);
@@ -243,6 +248,8 @@ static node *callArguments(const char *name) {
 }
 
 static int arrayElementType(const char *name) {
+    int local = localIndex(name);
+    if (local >= 0) { return functions[currentFunction].localTypes[local]; }
     int parameter = parameterIndex(name);
     if (parameter >= 0) {
         return functions[currentFunction].parameterTypes[parameter];
@@ -257,8 +264,10 @@ static node *nameNode(const char *name) {
     int variable = findVariable(name);
     node *x;
     if (local >= 0) {
-        x = newNode(LOCAL);
-        x->val = functions[currentFunction].numParameters + local;
+        int slot = functions[currentFunction].numParameters + local;
+        int isAlias = functions[currentFunction].localIsArray[local];
+        x = newNode(isAlias ? ARRAY_REF : LOCAL);
+        x->val = isAlias ? -slot - 1 : slot;
         x->type = functions[currentFunction].localTypes[local];
     } else if (parameter >= 0) {
         int isArray = functions[currentFunction].parameterIsArray[parameter];
@@ -426,16 +435,32 @@ static node *statement() {
           struct function_s *function = &functions[currentFunction];
           qFail(function->numLocals >= MAX_LOCALS, "-too many local variables-");
           int local = function->numLocals;
+          int isAlias = 0;
+          if (sym == LBRACKET) {
+              nextSym();
+              expectSym(RBRACKET);
+              qFail(sym != EQUAL, "-array alias %s requires an initializer-\n", name);
+              isAlias = 1;
+          }
           strcpy(function->localNames[local], name);
-          function->localTypes[function->numLocals++] = localType;
+          function->localTypes[local] = localType;
+          function->localIsArray[local] = isAlias;
+          function->numLocals++;
           if (sym == EQUAL) {
               nextSym();
               node *value = expr();
-              if (localType == TYPE_BYTE) { value = byteConversion(value); }
               node *target = newNode(LOCAL);
               target->val = function->numParameters + local;
               target->type = localType;
-              node *set = gen(SET, target, value);
+              node *set;
+              if (isAlias) {
+                  qFail(value->kind != ARRAY_REF || value->type != localType, "-array alias %s must be initialized by an array of the same element type-\n", name);
+                  set = gen(SET, target, value);
+                  set->val = 1;  // marks an alias initializer, the only place checkArrayRefs allows an array reference to be stored
+              } else {
+                  if (localType == TYPE_BYTE) { value = byteConversion(value); }
+                  set = gen(SET, target, value);
+              }
               set->type = localType;
               x = gen(SEQ, x, 0);
               x->o2 = gen(EXPR, set, NULL);
@@ -640,6 +665,7 @@ static void parseFunctionDefinition(const char *name, int returnType) {
 // or as an operand of + or -, where it stands for the array's address.
 static void checkArrayRefs(node *x) {
     if (!x) { return; }
+    if (x->kind == SET && x->val == 1 && x->o2->kind == ARRAY_REF) { return; }
     if (x->kind == ADD || x->kind == SUB) {
         int left = x->o1->kind == ARRAY_REF, right = x->o2->kind == ARRAY_REF;
         qFail(left && right, "-cannot combine two arrays-");

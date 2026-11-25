@@ -61,7 +61,7 @@ flowchart LR
 - A global variable and a function may have the same name. `f = ...` assigns the variable and `f(...)` calls the function.
 - Parse errors report the line the lexer has reached, which can be one line past the offending token when that token ends a line. Errors found after parsing (validation and code generation, for example a void call used as a value) report the position where parsing stopped, not the offending line.
 - `callArguments()` checks call arity, argument kinds (scalar or array), and array element types against the callee's declared signature.
-- `checkArrayRefs()` rejects array references anywhere except as direct array arguments.
+- `checkArrayRefs()` rejects array references anywhere except as direct array arguments, as operands of `+` or `-`, or as the initializer of a local array alias (`SET` with `val == 1`).
 - `prog->o1` is set to `main`'s body.
 
 Strings are lexed into `stringValues[]`, then materialized during parsing. `allocateStringLiteral()` reserves anonymous global byte storage laid out as `[length low byte, length high byte, chars..., 0]` and writes it directly into `mem[]`.
@@ -151,6 +151,8 @@ The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `LOAD_BASE
 
 The first segment starts at file offset 0x1000, so the ELF headers are not mapped over the globals. The code is never written at run time, and the globals are never executed, so no segment is both writable and executable. The entry point is `CODE_BASE`, where the entry stub calls `main` and exits. The file is marked executable. No relocation is needed, because the code uses absolute addresses that already match the load address.
 
+String literals are stored in the writable data segment, not in code, so a program can modify them. Each occurrence of a literal in the source gets its own copy, with no sharing between identical strings. The VM does not enforce this split: it uses one `mem[]` array and checks only the address range, so a store into the code area succeeds in the VM even though the ELF code segment is read-only.
+
 Running the executable natively uses the kernel's `esp` and stack size, so `STACK_BYTES` and the VM's runtime checks do not apply. An out-of-range access or deep recursion is a segfault, and `INT_MIN / -1` raises SIGFPE instead of `-divide overflow-`. `make test-exe` builds `unit-tests.mc` into an executable, runs it, and checks its output against the VM run.
 
 The `-l` listing gives each instruction's address, its bytes, and its mnemonic, with a label line before each function. The disassembler in [mc-list.c](/home/chris/code/mc/mc-list.c) decodes only the encodings the code generator emits. `objdump` reads the same bytes as a cross-check. The executable has no section headers, so take the code from its text segment (the `R E` load segment shown by `readelf -l`) and disassemble it at `CODE_BASE`:
@@ -225,4 +227,4 @@ Any other call stops with `-unsupported system call-`. Syscall numbers are the L
   - `MAX_PARAMETERS` is 32 per function.
   - `STACK_BYTES` is 65536 bytes of stack, shared by the call frames and the pushed operands.
 
-- **Local variables.** Locals are scalars only. Local arrays are not supported.
+- **Local variables.** Locals are scalars, or array aliases: `byte p[] = name;` (or `int xi[] = intArray;`) makes a local name an existing array of the same element type. The alias's frame slot holds the array's address, so writes through it change the original. An alias must be initialized from an array name, with no `+` or `-`, and it cannot be a global. Local arrays with their own storage are not supported.

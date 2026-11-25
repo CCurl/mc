@@ -91,6 +91,7 @@ struct function_s {
     int numLocals;
     char localNames[MAX_LOCALS][ID_NAME_LENGTH];
     int localTypes[MAX_LOCALS];
+    int localIsArray[MAX_LOCALS];  // an array alias, whose frame slot holds the address of the array it names
 };
 
 struct call_fixup_s { int operand; int functionIndex; };

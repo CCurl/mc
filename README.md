@@ -18,7 +18,8 @@
  *  <func_def> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
  *  <func_proto> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" ";"
  *  <parameter> ::= ("int" | "byte") <id> [ "[" "]" ]
- *  <local_decl> ::= ("int" | "byte") <id> [ "=" <expr> ] { "," <id> [ "=" <expr> ] } ";"
+ *  <local_decl> ::= ("int" | "byte") <local_item> { "," <local_item> } ";"
+ *  <local_item> ::= <id> [ "=" <expr> ] | <id> "[" "]" "=" <array_name>    (an alias must name an array of the same element type)
  *  <var_def> ::= ("int" | "byte") <var_decl> { "," <var_decl> } ";"
  *  <var_decl> ::= <id> [ "[" <int> "]" ] | <id> "=" <constant_expr> | <id> "[" [ <int> ] "]" "=" <string>
  *  <statement> ::= <local_decl> |

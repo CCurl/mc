@@ -366,6 +366,27 @@ void testFileIO() {
     check("fopen of a missing file returns a negative errno", fopen("no-such-file.dat", 0) < 0);
 }
 
+byte aliasName[] = "chris";
+int aliasInts[3];
+
+void setFirstChar(byte str[]) { byte p[] = str; p[2] = 'Z'; }
+int aliasGet(int arr[], int i) { int xi[] = arr; return xi[i]; }
+
+// A local array alias names an existing array, so writes through it change that array.
+void testLocalAlias() {
+    byte p[] = aliasName;
+    p[2] = 'C';
+    check("byte alias writes the named array", aliasName[2] == 'C');
+    check("byte alias reads the named array", p[2] == 'C');
+    setFirstChar(aliasName);
+    check("alias of an array parameter writes the caller array", aliasName[2] == 'Z');
+    int xi[] = aliasInts;
+    xi[1] = 42;
+    check("int alias writes the named array", aliasInts[1] == 42);
+    check("int alias passes as an array argument", aliasGet(xi, 1) == 42);
+    check("alias of an int array parameter", aliasGet(aliasInts, 1) == 42);
+}
+
 int twice(int x) { return x * 2; }
 int seven() { return 7; }
 int seven();  // a matching prototype after the definition is accepted
@@ -818,6 +839,7 @@ int main() {
     testEmit();
     testSyscall();
     testFileIO();
+    testLocalAlias();
     testProgramFlow();
     testBenchmark();
     print("\npassed: "); printNum(passes, 10);
