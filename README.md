@@ -12,17 +12,17 @@
  *
  *  <program> ::= { <def> }   (must define main)
  *  <include> ::= "#include" '"' <file_name> '"'  (splices the file in place; each file is read once)
- *  main is a <func_def> with no parameters and return type "int" or "void"; it must be defined exactly once.
+ *  main is a <func_def> with no parameters and return type "int"; it must be defined exactly once.
  *  <defs> ::= { <def> }
  *  <def> ::= <func_def> | <func_proto> | <var_def> | <const_def>
- *  <func_def> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
- *  <func_proto> ::= ("void" | "int" | "byte") <id> "(" [ <parameter> { "," <parameter> } ] ")" ";"
- *  <parameter> ::= ("int" | "byte") <id> [ "[" "]" ]
- *  <local_decl> ::= ("int" | "byte") <local_item> { "," <local_item> } ";"
+ *  <func_def> ::= ("int" | "char") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
+ *  <func_proto> ::= ("int" | "char") <id> "(" [ <parameter> { "," <parameter> } ] ")" ";"
+ *  <parameter> ::= ("int" | "char") <id> [ "[" "]" ]
+ *  <local_decl> ::= ("int" | "char") <local_item> { "," <local_item> } ";"
  *  <local_item> ::= <id> [ "=" <expr> ] | <id> "[" "]" "=" <array_name>    (an alias must name an array of the same element type)
- *  <var_def> ::= ("int" | "byte") <var_decl> { "," <var_decl> } ";"
+ *  <var_def> ::= ("int" | "char") <var_decl> { "," <var_decl> } ";"
  *  <var_decl> ::= <id> [ "[" <int> "]" ] | <id> "=" <constant_expr> | <id> "[" [ <int> ] "]" "=" <string>
- *  <const_def> ::= "const" ("int" | "byte") <id> "=" <constant_expr> ";"    (scalar only; a constant name is replaced by its value, and cannot be assigned, incremented, or indexed)
+ *  <const_def> ::= "const" ("int" | "char") <id> "=" <constant_expr> ";"    (scalar only; a constant name is replaced by its value, and cannot be assigned, incremented, or indexed)
  *  <statement> ::= <local_decl> |
  *                  <void_func_call> ";" |
  *                  "return" [ <expr> ] ";" |
@@ -50,10 +50,10 @@
  *  <int_func_id> and <byte_func_id> are IDs of functions returning a value;
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
  *
- * Reserved words: do, else, if, while, void, int, byte, return.
+ * Reserved words: do, else, if, while, void, int, char, return. Using void is a compile error.
  * * "syscall" is a built-in intrinsic, so it cannot name a function. syscall(n, a1, ..., a6) takes 1 to 7 arguments, loads them into eax, ebx, ecx, edx, esi, edi, ebp, and runs int 0x80. ebp is saved and restored.
  * * emit(int value) is a library function in lib/util.mc. It calls syscall to write the low byte to stdout.
- * void calls are statements, not terms.
+ * every function returns int, so calls can be terms or statements.
  * A function that reaches its end without a return returns 0.
  * A local or parameter may shadow a global or function name.
  * Comments start with "//" and run to the end of the line; /* */ comments are not supported.
@@ -104,15 +104,14 @@ Use parentheses to control order. EG:
 - 3 * 4 + 2  = 14
 
 Byte objects use unsigned 8-bit values (0 to 255) stored as bytes for globals and arrays, and in the<br/>
-4-byte stack slots for locals and parameters.  Assignments, byte parameters, returns, and byte array stores<br/>
-narrow to this range; byte values promote to int in expressions.  Conversions are implicit; casts are<br/>
+4-byte stack slots for locals and parameters.  Assignments, char parameters, returns, and char array stores<br/>
+narrow to this range; char values promote to int in expressions.  Conversions are implicit; casts are<br/>
 not supported. Scalar initializers are supported. Global initializers must be constant expressions and<br/>
 are folded at parse time; local initializers are assignments run at the declaration. String initializers<br/>
-are global byte arrays laid out as [length low byte, length high byte, ASCII values..., 0]. The length excludes <br/>
-the final zero; an omitted array size is inferred, and an explicit size must fit the length and terminator<br/>
+are global char arrays laid out as the ASCII values followed by a 0. An omitted array size is inferred, and an explicit size must fit the characters and terminator<br/>
 Non-ASCII characters are rejected outside comments and character literals.<br/>
 String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'. String literals used as array arguments<br/>
-get anonymous global storage. They must be passed to byte[] parameters; other array arguments must match their<br/>
+get anonymous global storage. They must be passed to char[] parameters; other array arguments must match their<br/>
 element type. String literals are valid only as array arguments or global array initializers. Array parameters<br/>
 pass global-array base addresses by reference. Array indexes are not bounds-checked. An access outside the memory<br/>
 image fails with `-bad memory address-`, but an access that lands in the globals, code, or stack is not detected.<br/>

@@ -96,10 +96,8 @@ int declareVariable(const char *name, int size, int isArray, int type, int zeroe
 }
 
 void storeStringBytes(int base) {
-    *MEM_AT(base) = stringLength & 0xff;
-    *MEM_AT(base + 1) = (stringLength >> 8) & 0xff;
     for (int i = 0; i < stringLength; i++) {
-        *MEM_AT(base + i + 2) = stringValues[i];
+        *MEM_AT(base + i) = stringValues[i];
     }
 }
 
@@ -151,7 +149,7 @@ static int functionIndex(const char *name) {
     struct function_s *function = &functions[numFunctions];
     memset(function, 0, sizeof(*function));
     strcpy(function->name, name);
-    function->returnType = TYPE_VOID;
+    function->returnType = TYPE_INT;
     return numFunctions++;
 }
 
@@ -210,10 +208,9 @@ static node *byteConversion(node *value) {
     return conversion;
 }
 
-// The type named by a void, int, or byte keyword.
+// The type named by an int or char keyword.
 static int keywordType(int keyword) {
-    if (keyword == VOID_SYM) { return TYPE_VOID; }
-    return keyword == BYTE_SYM ? TYPE_BYTE : TYPE_INT;
+    return keyword == CHAR_SYM ? TYPE_BYTE : TYPE_INT;
 }
 
 static void expectSym(int exp) {
@@ -257,7 +254,7 @@ static node *callArguments(const char *name) {
             qFail(isArray != function->parameterIsArray[i], "-argument %d to %s must be %s-\n", i + 1, name,
                   function->parameterIsArray[i] ? "an array reference" : "a scalar");
             qFail(isArray && arg->o1->type != function->parameterTypes[i], "-argument %d to %s must be %s array-\n", i + 1, name,
-                  function->parameterTypes[i] == TYPE_BYTE ? "a byte" : "an int");
+                  function->parameterTypes[i] == TYPE_BYTE ? "a char" : "an int");
             if (!isArray && function->parameterTypes[i] == TYPE_BYTE) {
                 arg->o1 = byteConversion(arg->o1);
             }
@@ -449,7 +446,7 @@ static node *block(node *x);
 
 static node *statement() {
   node *x;
-  if ((sym == INT_SYM || sym == BYTE_SYM) && currentFunction >= 0) {
+  if ((sym == INT_SYM || sym == CHAR_SYM) && currentFunction >= 0) {
       int localType = keywordType(sym);
       nextSym();
       x = newNode(EMPTY);
@@ -497,10 +494,8 @@ static node *statement() {
   } else if (sym == RETURN_SYM) {
       nextSym();
       if (sym == SEMI) {
-          qFail(currentFunction < 0 || functions[currentFunction].returnsValue, "-return without a value requires a void function-");
-          x = newNode(VOID_RETURN);
+          qFail(1, "-return without a value-");
       } else {
-          qFail(currentFunction < 0 || !functions[currentFunction].returnsValue, "-return value requires a non-void function-");
           node *value = expr();
           if (functions[currentFunction].returnType == TYPE_BYTE) {
               value = byteConversion(value);
@@ -560,7 +555,7 @@ static void parseParameters(struct function_s *function) {
     expectSym(LPAR);
     if (sym != RPAR) {
         while (1) {
-            if (sym != INT_SYM && sym != BYTE_SYM) { syntaxError(); }
+            if (sym != INT_SYM && sym != CHAR_SYM) { syntaxError(); }
             int parameterType = keywordType(sym);
             nextSym();
             if (sym != ID) { syntaxError(); }
@@ -609,7 +604,7 @@ static void parseVariableDeclarator(const char *name, int type) {
         qFail(scalar->kind != CST, "-global initializer must be constant-");
     } else if (sym == EQUAL) {
         nextSym();
-        qFail(type != TYPE_BYTE || sym != STRING_LITERAL, "-string initializer requires a byte array-");
+        qFail(type != TYPE_BYTE || sym != STRING_LITERAL, "-string initializer requires a char array-");
         int requiredSize = stringLength + STRING_OVERHEAD;
         qFail(!inferredSize && size < requiredSize, "-array is too small for string initializer-");
         if (inferredSize) { size = requiredSize; }
@@ -640,10 +635,10 @@ static void variableDeclarations(const char *firstName, int type) {
     expectSym(SEMI);
 }
 
-// <const_def> ::= "const" ("int" | "byte") <id> "=" <expr> ";". The initializer must fold to a constant.
+// <const_def> ::= "const" ("int" | "char") <id> "=" <expr> ";". The initializer must fold to a constant.
 static void constDefinition(void) {
     nextSym();
-    qFail(sym != INT_SYM && sym != BYTE_SYM, "-const must be int or byte-");
+    qFail(sym != INT_SYM && sym != CHAR_SYM, "-const must be int or char-");
     int type = keywordType(sym);
     nextSym();
     char name[sizeof(idName)];
@@ -672,7 +667,6 @@ static int parseHeader(const char *name, int returnType) {
     struct function_s *function = &functions[index];
     struct function_s previous = *function;
     function->returnType = returnType;
-    function->returnsValue = returnType != TYPE_VOID;
     function->numParameters = 0;
     memset(function->parameterIsArray, 0, sizeof(function->parameterIsArray));
     parseParameters(function);
@@ -691,7 +685,7 @@ static void parseFunctionDefinition(const char *name, int returnType) {
     qFail(functions[index].defined, "-duplicate function %s-\n", name);
     functions[index].defined = 1;
     if (strcmp(name, "main") == 0) {
-        qFail(returnType == TYPE_BYTE, "-main must return int or void-");
+        qFail(returnType != TYPE_INT, "-main must return int-");
         qFail(functions[index].numParameters != 0, "-main must not have parameters-");
         mainFunction = index;
     }
@@ -732,14 +726,13 @@ static node *defs(node *st) {
   nextSym();
   while (sym != EOI) {
     if (sym == CONST_SYM) { constDefinition(); continue; }
-    qFail(sym != VOID_SYM && sym != INT_SYM && sym != BYTE_SYM, "-def?-\n");
+    qFail(sym != INT_SYM && sym != CHAR_SYM, "-def?-\n");
     int type = keywordType(sym);
     nextSym();
     char name[sizeof(idName)];
     expectName(name);
     if (sym == LPAR) { parseFunctionDefinition(name, type); }
-    else if (type != TYPE_VOID) { variableDeclarations(name, type); }
-    else { syntaxError(); }
+    else { variableDeclarations(name, type); }
   }
   return st;
 }

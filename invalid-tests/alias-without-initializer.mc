@@ -1,1 +1,1 @@
-int main() { byte p[]; return 0; }
+int main() { char p[]; return 0; }

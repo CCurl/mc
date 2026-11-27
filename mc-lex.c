@@ -4,7 +4,7 @@
 #include "mc.h"
 
 // -------------------------------------------------
-char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "byte", "return", "const", NULL };
+char *reservedWords[] = { "do", "else", "if", "while", "void", "int", "char", "return", "const", NULL };
 
 FILE *inputFp = NULL;
 int ch = ' ', sym, intVal;
@@ -202,6 +202,7 @@ void nextSym() {
             sym = 0;
             while (reservedWords[sym] != NULL && strcmp(reservedWords[sym], idName) != 0) { sym++; }
             if (reservedWords[sym] == NULL) { sym = ID; }
+            if (sym == VOID_SYM) { qFail(1, "-void is not supported-"); }
         } else { qFail(1, "-ch '%c' expected to be alpha-\n", ch); }
         break;
     }

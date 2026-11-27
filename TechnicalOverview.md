@@ -33,21 +33,21 @@ flowchart LR
 
 - `nextCh()` reads from `inputFp` and counts newlines in `lineNumber`.
 - `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, `PLUS_PLUS`, and `RETURN_SYM`. `++` and `--` are single tokens, so `a--b` is a syntax error; write `a - -b`.
-- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `mc.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `byte`, `return`, and `const`. `syscall` is a built-in name, so a function cannot use it. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
+- Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `mc.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `char`, `return`, and `const`. Using `void` is a compile error, since only `int` functions are supported. `syscall` is a built-in name, so a function cannot use it. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
 - `#include "path"` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
 - `qFail(cond, msg)` prints `path:line:` before every compile error.
 - The input file is a required command-line argument; see the command line section of `README.md`.
 
 ## 2. Parser: builds an AST, not code
 
-- `defs()` handles top-level globals, constants, and functions. `variableDeclarations()` handles global `int` and `byte` scalars and arrays, including string initializers. A global scalar initializer is parsed as an expression, converted for `byte` globals, and must fold to a constant at parse time; a non-constant initializer is a compile error.
-- `const int NAME = <expr>;` and `const byte NAME = <expr>;` declare a global scalar constant. The initializer must fold to a constant (other constants may be used). `byte` constants are converted like `byte` globals, so `const byte kB = 300;` is 44. The parser stores the value in a table and `nameNode()` substitutes a `CST` node, so the code generator and the executable need no change and the constant takes no storage. Assignment, `++`/`--`, and indexing of a constant are compile errors, and a local or parameter with the same name shadows it. Constants are global only and must be declared before the code that uses them.
+- `defs()` handles top-level globals, constants, and functions. `variableDeclarations()` handles global `int` and `char` scalars and arrays, including string initializers. A global scalar initializer is parsed as an expression, converted for `char` globals, and must fold to a constant at parse time; a non-constant initializer is a compile error.
+- `const int NAME = <expr>;` and `const char NAME = <expr>;` declare a global scalar constant. The initializer must fold to a constant (other constants may be used). `char` constants are converted like `char` globals, so `const char kB = 300;` is 44. The parser stores the value in a table and `nameNode()` substitutes a `CST` node, so the code generator and the executable need no change and the constant takes no storage. Assignment, `++`/`--`, and indexing of a constant are compile errors, and a local or parameter with the same name shadows it. Constants are global only and must be declared before the code that uses them.
 - `parseFunctionDefinition()` records each function in `functions[]`, including its return type, parameter types and array flags, locals, and body. A prototype (a header ending in `;`) records the same signature without a body. A function's index is assigned on first reference, but a call must follow a prototype or definition of that function.
 - Statements and expressions become `node` structs in the fixed pool `nodes[MAX_NODES]`. Each node has a `kind`, up to three children (`o1`, `o2`, `o3`), and a `val`.
-- Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Int and byte globals both live in `mem[]`, addressed by byte offset. Int scalars and int array elements take 4 bytes, read and written by `loadInt`/`storeInt`; byte globals and byte array elements take one byte each. The parser records each scalar or array element's `int`/`byte` type for conversions and array argument checks.
+- Locals are resolved to frame slots at parse time. Parameters use negative `val` (`-index-1`) to distinguish them from globals. Int and char globals both live in `mem[]`, addressed by byte offset. Int scalars and int array elements take 4 bytes, read and written by `loadInt`/`storeInt`; char globals and char array elements take one byte each. The parser records each scalar or array element's `int`/`char` type for conversions and array argument checks.
 - Local slots follow the parameters in a function frame. Their encoded local index includes the function's parameter count; parameter indexes are relative to the start of the frame.
-- Each `statement()` call builds one node tree, for example `IF1`, `WHILE`, `DO`, `SEQ`, `EXPR`, `RETURN_NODE`, or `VOID_RETURN`.
-- A local declaration with an initializer becomes a `SET` to the local, wrapped in `EXPR` and sequenced with `SEQ`. `byte` locals convert the value first. The initializer runs each time the declaration executes, so it works inside loops.
+- Each `statement()` call builds one node tree, for example `IF1`, `WHILE`, `DO`, `SEQ`, `EXPR`, `RETURN_NODE`.
+- A local declaration with an initializer becomes a `SET` to the local, wrapped in `EXPR` and sequenced with `SEQ`. `char` locals convert the value first. The initializer runs each time the declaration executes, so it works inside loops.
 - Arithmetic and bitwise operators (`+ - * / % & | ^ << >>`) have no precedence. `>>` is an arithmetic shift, so `-8 >> 1` is `-4`, and the shift count is masked to 5 bits like x86. `sum()` applies them strictly left to right, so `2 + 3 * 4` is `20` and `6 | 1 & 2` is `2`. Use parentheses to change the order. `~` is a unary operator on a term, like unary `-`. Assignment is a statement, not an expression: `statement()` parses an expression, and if it is followed by `=`, `assignment()` requires a `VAR`, `LOCAL`, or `ARRAY_GET` target. `a = b = 1;`, `if (a = 1)`, and `emit(a = 1)` are syntax errors.
 - Unary minus is lowered to `0 - term`. Integer literals are never negative.
 - `x++`, `x--`, `++x`, and `--x` apply to scalar locals, parameters, and globals. The parser builds `POST_INC` or `PRE_INC` nodes; postfix yields the old value and prefix the new. Applying them to arrays or literals is an error.
@@ -56,7 +56,7 @@ flowchart LR
 
 ## 3. Program-level checks (`program()`)
 
-- A `main` must exist, must take no parameters, and must return `int` or `void`.
+- A `main` must exist, must take no parameters, and must return `int`.
 - Every declared function must be defined. A call must follow a prototype or definition of its function.
 - A repeated prototype or definition must match the earlier declaration's return type, parameter types, and array flags; parameter names may differ.
 - A global variable and a function may have the same name. `f = ...` assigns the variable and `f(...)` calls the function.
@@ -65,8 +65,8 @@ flowchart LR
 - `checkArrayRefs()` rejects array references anywhere except as direct array arguments, as operands of `+` or `-`, or as the initializer of a local array alias (`SET` with `val == 1`).
 - `prog->o1` is set to `main`'s body.
 
-Strings are lexed into `stringValues[]`, then materialized during parsing. `allocateStringLiteral()` reserves anonymous global byte storage laid out as `[length low byte, length high byte, chars..., 0]` and writes it directly into `mem[]`.
-String literals are permitted only as array arguments or global array initializers. Explicitly sized string-initialized arrays must fit the 2-byte length, all characters, and the terminating zero.
+Strings are lexed into `stringValues[]`, then materialized during parsing. `allocateStringLiteral()` reserves anonymous global char storage laid out as `[chars..., 0]` and writes it directly into `mem[]`.
+String literals are permitted only as array arguments or global array initializers. Explicitly sized string-initialized arrays must fit all characters and the terminating zero.
 
 ## 4. Code generation (`c()` walks the AST)
 
@@ -102,8 +102,8 @@ Instructions used by the generator:
 | Constant | `mov eax, imm32` |
 | Parameter or local read or write | `mov eax, [ebp+disp32]` / `mov [ebp+disp32], eax` |
 | Global `int` read or write | `mov eax, [addr32]` / `mov [addr32], eax` (absolute address, no base register) |
-| Global `byte` read or write | `movzx eax, byte [addr32]` / `mov [addr32], al` |
-| Array element (read) | Evaluate the index into `eax`. For an `int` array, `shl eax, 2`. For a global array, `add eax, imm32` (the base address). For an array passed as a parameter, `mov ecx, eax`, load the base into `eax` from `[ebp+disp32]`, then `add eax, ecx`. Then `mov eax, [eax]`, or `movzx eax, byte [eax]` for `byte`. |
+| Global `char` read or write | `movzx eax, byte [addr32]` / `mov [addr32], al` |
+| Array element (read) | Evaluate the index into `eax`. For an `int` array, `shl eax, 2`. For a global array, `add eax, imm32` (the base address). For an array passed as a parameter, `mov ecx, eax`, load the base into `eax` from `[ebp+disp32]`, then `add eax, ecx`. Then `mov eax, [eax]`, or `movzx eax, byte [eax]` for `char`. |
 | Array element (store) | Compute the address as above, `push eax`, evaluate the value into `eax`, `pop ecx`, then `mov [ecx], eax` (or `mov [ecx], al`) |
 | Binary `+ - *` | Left operand to `eax`, `push eax`, right operand to `eax`, `mov ecx, eax`, `pop eax`, then `add`, `sub`, or `imul eax, ecx` |
 | `/` and `%` | The operands as above, then `cdq` and `idiv ecx`. `%` finishes with `mov eax, edx`. |
@@ -112,11 +112,11 @@ Instructions used by the generator:
 | `&&` and `\|\|` | Evaluate the left operand, `test eax, eax`, then `je` (for `&&`) or `jne` (for `\|\|`) past the right operand. Otherwise evaluate the right operand. Finish with `test eax, eax` and `setne al`, `movzx eax, al`, so the result is 0 or 1. |
 | Unary `~` | The operand into `eax`, then `not eax` (`F7 /2`) |
 | Comparison | The operands as above, then `cmp eax, ecx`, `setcc al`, `movzx eax, al` (`setl`, `setg`, `setle`, `setge`, `sete`, `setne`) |
-| Increment or decrement | Load, `add eax, imm32` (negative for `--`), `movzx eax, al` for `byte`, then store. Post-increment `push`es the old value and `pop`s it back, so the value is the old one. |
+| Increment or decrement | Load, `add eax, imm32` (negative for `--`), `movzx eax, al` for `char`, then store. Post-increment `push`es the old value and `pop`s it back, so the value is the old one. |
 | Byte conversion | `movzx eax, al` |
 | Control flow | `test eax, eax`, then `jz` or `jnz rel32` (`0F 84` / `0F 85`). `while` and `do` use `jmp rel32` for the back edge. Forward targets are holes patched by `fix()`. |
 | Call | Each argument is evaluated and pushed, then `call rel32`, then `add esp, 4*n` to remove the arguments. The result is in `eax`. |
-| Return | Evaluate the value into `eax`, then `leave` and `ret`. `return;` in a `void` function uses the same epilogue. |
+| Return | Evaluate the value into `eax`, then `leave` and `ret`. A bare `return;` is a compile error. |
 | Built-in `syscall(n, ...)` | `push ebp`, push each argument (padded with zeros to 7), pop into `ebp`, `edi`, `esi`, `edx`, `ecx`, `ebx`, `eax`, `int 0x80`, `pop ebp`. The result is in `eax`. |
 | Program end | Entry stub as above |
 
@@ -130,9 +130,9 @@ Notable generation details:
 - Jump and call displacements are `rel32`, measured from the end of the 4-byte field. `fix()` computes them.
 - Frame layout: a parameter `i` of `n` is at `[ebp+8+4*(n-1-i)]`, because the caller pushes arguments left to right. Local `j` is at `[ebp-4*(j+1)]`.
 - Operands are 4-byte values in little-endian byte order, which is native on x86.
-- Every value is a 32-bit `int`. `byte` values are 0..255. Byte locals and parameters take a 4-byte slot. Byte globals and array elements take one byte of memory.
+- Every value is a 32-bit `int`. `char` values are 0..255. Char locals and parameters take a 4-byte slot. Char globals and array elements take one byte of memory.
 - `emit` is a library function in `lib/util.mc`. It calls `syscall(4, 1, ...)` (`write`, number 4, on fd 1), so its output goes to stdout. The VM implements `exit` (1), `read` (3), `write` (4), `open` (5), and `close` (6), using the host's calls and returning `-errno` on failure as the kernel does. `fopen`, `fclose`, `fread`, and `fwrite` in `lib/util.mc` wrap the last four.
-- An array name may be one operand of `+` or `-`, giving an integer address (`name+2` skips the 2-byte length). Two array operands, or an array on the right of `-`, are errors. Because the result is an integer, it can be passed to `syscall` but not to a parameter declared as an array. `fopen` passes `name+2` and relies on the trailing zero to end the path.
+- An array name may be one operand of `+` or `-`, giving an integer address (`name+1` is the second element). Two array operands, or an array on the right of `-`, are errors. Because the result is an integer, it can be passed to `syscall` but not to a parameter declared as an array. Strings are NUL-terminated, so library functions such as `strlen` scan for the zero.
 
 ## 5. The memory image
 
@@ -140,7 +140,7 @@ One array, `mem[MEM_BYTES]`, holds everything. Addresses are real 32-bit address
 
 | Region | Address | Contents |
 |---|---|---|
-| Globals | `LOAD_BASE + ELF_HEADER_BYTES` .. `LOAD_BASE + numGlobalBytes` | Initialized global `int` and `byte` storage, string literals, and array data. The first `ELF_HEADER_BYTES` (0x80) of the global area hold the ELF headers in a native executable and are unused in the VM. Zero-filled globals sit at the top of the global area, below `CODE_BASE`, growing down from `LOAD_BASE + MAX_GLOBAL_BYTES`. The C runtime zero-initializes this array. |
+| Globals | `LOAD_BASE + ELF_HEADER_BYTES` .. `LOAD_BASE + numGlobalBytes` | Initialized global `int` and `char` storage, string literals, and array data. The first `ELF_HEADER_BYTES` (0x80) of the global area hold the ELF headers in a native executable and are unused in the VM. Zero-filled globals sit at the top of the global area, below `CODE_BASE`, growing down from `LOAD_BASE + MAX_GLOBAL_BYTES`. The C runtime zero-initializes this array. |
 | Code | `CODE_BASE` (0x08448000) .. `here` | The entry stub and the functions. `here` is the next free byte. |
 | Stack | `CODE_TOP` .. `STACK_TOP` | Grows down from `STACK_TOP`. `esp` starts at `STACK_TOP`. |
 
@@ -218,7 +218,7 @@ Any other call stops with `-unsupported system call-`. Syscall numbers are the L
   - `MAX_NODES` is 16384 AST nodes.
   - `MAX_FUNCTIONS` is 1024 functions.
   - `MAX_GLOBAL_NAMES` is 1024 global variable names.
-  - `MAX_GLOBAL_BYTES` is 4194304 bytes, shared by `int` and `byte` globals.
+  - `MAX_GLOBAL_BYTES` is 4194304 bytes, shared by `int` and `char` globals.
   - `MAX_STRING_LENGTH` is 1024 characters.
   - `MAX_PATH_LENGTH` is 64 chars.
   - `MAX_INCLUDE_DEPTH` is a stack for 16 files.
@@ -228,4 +228,4 @@ Any other call stops with `-unsupported system call-`. Syscall numbers are the L
   - `MAX_PARAMETERS` is 32 per function.
   - `STACK_BYTES` is 65536 bytes of stack, shared by the call frames and the pushed operands.
 
-- **Local variables.** Locals are scalars, or array aliases: `byte p[] = name;` (or `int xi[] = intArray;`) makes a local name an existing array of the same element type. The alias's frame slot holds the array's address, so writes through it change the original. An alias must be initialized from an array name, with no `+` or `-`, and it cannot be a global. Local arrays with their own storage are not supported.
+- **Local variables.** Locals are scalars, or array aliases: `char p[] = name;` (or `int xi[] = intArray;`) makes a local name an existing array of the same element type. The alias's frame slot holds the array's address, so writes through it change the original. An alias must be initialized from an array name, with no `+` or `-`, and it cannot be a global. Local arrays with their own storage are not supported.

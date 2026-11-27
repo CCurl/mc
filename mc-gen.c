@@ -284,7 +284,6 @@ static void cExpr(node *x) {
         case PRE_INC: case POST_INC: cIncrement(x, 1); break;
         case FUNC_CALL:
             if (x->val == BUILTIN_SYSCALL) { cSyscall(x->o1); break; }
-            qFail(!functions[x->val].returnsValue, "-void function %s used as a value-\n", functions[x->val].name);
             cCall(x);
             break;
         default: qFail(1, "-internal: bad expression kind %d-", x->kind);
@@ -360,7 +359,6 @@ static void cStmt(node *x) {
             fix(p1, top);
             break;
         case RETURN_NODE: cExpr(x->o1); epilogue(); break;
-        case VOID_RETURN: epilogue(); break;
         default: cEffect(x); break;
     }
 }

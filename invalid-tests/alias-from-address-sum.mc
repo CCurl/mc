@@ -1,2 +1,2 @@
-byte a[4];
-int main() { byte p[] = a + 1; return 0; }
+char a[4];
+int main() { char p[] = a + 1; return 0; }

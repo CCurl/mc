@@ -34,8 +34,8 @@
 #define MEM_AT(addr)    (mem + ((addr) - LOAD_BASE))
 #define ELF_HEADER_BYTES 0x80                            // the ELF and program headers come first, then the globals
 
-/* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
-#define STRING_OVERHEAD         3
+/* Strings are char arrays: the characters, then a 0. */
+#define STRING_OVERHEAD         1
 
 // ---------------------------------------------------------------------------
 #define BTWI(n,l,h) ((l<=n)&&(n<=h))
@@ -43,7 +43,7 @@
 // ---------------------------------------------------------------------------
 // For the lexer and the parser ...
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-    BYTE_SYM, RETURN_SYM, CONST_SYM,                            //  6 ->  8
+    CHAR_SYM, RETURN_SYM, CONST_SYM,                            //  6 ->  8
     LBRA, RBRA, LPAR, RPAR, PLUS,                               //  9 -> 13
     MINUS, STAR, SLASH, MODULO,                                 // 14 -> 17
     LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 18 -> 23
@@ -53,12 +53,12 @@ enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
     LSHIFT, RSHIFT, AND_AND, OR_OR                              // 40 -> 43
 };
 
-enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
+enum { TYPE_INT, TYPE_BYTE };
 
 // ---------------------------------------------------------------------------
 // For the parser and the code generator ...
 enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, LE, GE, EQ, NE, SET, FUNC_CALL,
-    ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
+    ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, ARG_LIST,
     IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC,
     BIT_AND, BIT_OR, BIT_XOR, BIT_NOT, BIT_SHL, BIT_SHR, LOG_AND, LOG_OR
 };
@@ -83,7 +83,6 @@ struct function_s {
     int address;
     int declared;  // set by a prototype or a definition
     int defined;
-    int returnsValue;
     int returnType;
     int numParameters;
     char parameterNames[MAX_PARAMETERS][ID_NAME_LENGTH];

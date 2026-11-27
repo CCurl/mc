@@ -1,6 +1,6 @@
 #include "lib/io.mc"
 
-void main() {
+int main() {
 	print("hello world!\n");
 }
 

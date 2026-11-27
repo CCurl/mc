@@ -4,19 +4,20 @@
 // syscall 4: write to file descriptor (fd, buf, count)
 // fd 1: stdout
 
-byte emitBuf[1];
+char emitBuf[1];
 int emit(int c) {
     emitBuf[0] = c;
     syscall(4, 1, emitBuf, 1);
     return emitBuf[0];
 }
 
-void print(byte str[]) {
-	int len = str[1] * 256 + str[0];
-    syscall(4, 1, str+2, len);
+int print(char str[]) {
+    int len = 0;
+    while (str[len]) { len++; }
+    syscall(4, 1, str, len);
 }
 
-void printNum(int n, int b) {
+int printNum(int n, int b) {
     if (n < 0) { emit('-'); n = -n; }
     if (n > (b-1)) { printNum(n / b, b); }
     n = n % b;
@@ -24,4 +25,4 @@ void printNum(int n, int b) {
     emit(n+'0');
 }
 
-void cr() { emit('\n'); }
+int cr() { emit('\n'); }

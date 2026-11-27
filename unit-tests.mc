@@ -7,75 +7,70 @@
 int failures, passes;
 int gZero, gA, gB;
 int gInit = 7, gInitNeg = -3, gInitExpr = 2 * 3 + 1;
-byte gByteInit = 258, gByteNeg = -1;
-byte gByte, gBytes[] = "abc";
-byte gByteCount = 255;
+char gByteInit = 258, gByteNeg = -1;
+char gByte, gBytes[] = "abc";
+char gByteCount = 255;
 int gArr[4];
-byte gStr[] = "abc";
-byte gPad[10] = "hi";
-byte gEmpty[] = "";
-byte gEsc[] = "\n\t\\\"";
+char gStr[] = "abc";
+char gPad[10] = "hi";
+char gEmpty[] = "";
+char gEsc[] = "\n\t\\\"";
 int gCounter;
 int gInc;
-byte gEsc2[] = "\r\e\'";
-byte gEsc3[] = "a\0b";
-byte gCat[8] = "ab";
-byte gLong[] = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
+char gEsc2[] = "\r\e\'";
+char gEsc3[] = "a\0b";
+char gCat[8] = "ab";
+char gLong[] = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 int globalInt, anotherGlobal, leading2, upperCase;
 int charCode, newlineCode, escapeCode, quoteCode, backslashCode, outputCode, modResult;
 int globalArr[10], nums[5];
-byte cat[10] = "cat";
-byte emptyString[] = "";
-byte escapedString[] = "A\n\"\\\0";
-byte greeting[] = "\ncat";
+char cat[10] = "cat";
+char emptyString[] = "";
+char escapedString[] = "A\n\"\\\0";
+char greeting[] = "\ncat";
 int gBigPad[40000];
 int gAfterBig = 9;
-byte gBigBytes[40000];
-byte gAfterBytes = 3;
+char gBigBytes[40000];
+char gAfterBytes = 3;
 int gWide = 70000;
 int gBefore[2];
-byte gBetween[3];
+char gBetween[3];
 int gAfter[2];
 
-void check(byte name[], int ok) {
+int check(char name[], int ok) {
     print(name);
     if (ok) { print(": ok\n"); passes++; }
     else { print(": FAIL\n"); failures++; }
 }
 
-byte passByte(byte value) { return value; }
-int promoteByte(byte value) { return value; }
-byte narrowByte(int value) { return value; }
-byte arrayByte(byte values[], int index) { return values[index]; }
-void updateByteArray(byte values[]) { values[2] = 'Z'; }
-byte prototypedByte(int value);
-byte prototypedByte(int value) { return value; }
-byte setByteGlobal() { gByte = 9; return 3; }
+char passByte(char value) { return value; }
+int promoteByte(char value) { return value; }
+char narrowByte(int value) { return value; }
+char arrayByte(char values[], int index) { return values[index]; }
+int updateByteArray(char values[]) { values[2] = 'Z'; }
+char prototypedByte(int value);
+char prototypedByte(int value) { return value; }
+char setByteGlobal() { gByte = 9; return 3; }
 
 // Global storage and string initializers.
-void testGlobals() {
+int testGlobals() {
     check("global scalar is zero-initialized", gZero == 0);
     check("global array is zero-initialized", gArr[3] == 0);
     gA = 4;
     gB = gA + 1;
     check("multiple declarators are independent", gB == 5);
-    check("inferred string length", gStr[0] == 3);
-    check("inferred string high length byte", gStr[1] == 0);
-    check("string first character", gStr[2] == 'a');
-    check("string last character", gStr[4] == 'c');
-    check("string terminator", gStr[5] == 0);
-    check("sized string length", gPad[0] == 2);
-    check("sized string high length byte", gPad[1] == 0);
+    check("inferred string first character", gStr[0] == 'a');
+    check("string last character", gStr[2] == 'c');
+    check("string terminator", gStr[3] == 0);
+    check("sized string first character", gPad[0] == 'h');
+    check("sized string second character", gPad[1] == 'i');
     check("sized string padded with zero", gPad[9] == 0);
-    check("empty string length", gEmpty[0] == 0);
-    check("empty string high length byte", gEmpty[1] == 0);
-    check("empty string terminator", gEmpty[2] == 0);
-    check("escape string length", gEsc[0] == 4);
-    check("newline escape", gEsc[2] == '\n');
-    check("tab escape", gEsc[3] == '\t');
-    check("backslash escape", gEsc[4] == '\\');
-    check("quote escape", gEsc[5] == '"');
-    check("escape string terminator", gEsc[6] == 0);
+    check("empty string terminator", gEmpty[0] == 0);
+    check("newline escape", gEsc[0] == '\n');
+    check("tab escape", gEsc[1] == '\t');
+    check("backslash escape", gEsc[2] == '\\');
+    check("quote escape", gEsc[3] == '"');
+    check("escape string terminator", gEsc[4] == 0);
     check("int global scalar initializer", gInit == 7);
     check("negative int global initializer", gInitNeg == -3);
     check("constant expression global initializer", gInitExpr == 7);
@@ -99,7 +94,7 @@ void testGlobals() {
 }
 
 // Integer and character literals, unary minus.
-void testLiterals() {
+int testLiterals() {
     check("decimal boundary 127 to 128", 127 + 1 == 128);
     check("decimal boundary 32767 to 32768", 32767 + 1 == 32768);
     check("large decimal literal", 65536 + 1 == 65537);
@@ -117,8 +112,8 @@ void testLiterals() {
     check("unary minus on parenthesized sum", -(3 + 4) == 0 - 7);
 }
 
-void testByteTypes() {
-    byte local, another;
+int testByteTypes() {
+    char local, another;
     check("byte global is zero-initialized", gByte == 0);
     gByte = 258;
     check("byte global assignment narrows", gByte == 2);
@@ -141,13 +136,13 @@ void testByteTypes() {
     updateByteArray(gBytes);
     check("byte array parameter writes elements", gBytes[2] == 'Z');
     check("string literal passed to byte array parameter",
-          arrayByte("abc", 2) == 'a');
+          arrayByte("abc", 0) == 'a');
     check("byte prototype with int argument", prototypedByte(258) == 2);
     setByteGlobal();
     check("byte function call as statement", gByte == 9);
 }
 
-void testArithmetic() {
+int testArithmetic() {
     check("addition", 7 + 3 == 10);
     check("subtraction", 7 - 3 == 4);
     check("multiplication", 7 * 3 == 21);
@@ -167,7 +162,7 @@ void testArithmetic() {
     check("parentheses override order", 2 + (3 * 4) == 14);
 }
 
-void testComparisons() {
+int testComparisons() {
     int x, y, hits, count;
     check("less than true", 3 < 4);
     check("less than false", (4 < 3) == 0);
@@ -200,7 +195,7 @@ void testComparisons() {
     check("runtime <= and >= as values", ((x <= y) + (x >= y) + (x <= y - 1)) == 2);
 }
 
-void testAssignment() {
+int testAssignment() {
     gA = 5;
     check("assignment stores its value", gA == 5);
     gB = 9;
@@ -215,7 +210,7 @@ void testAssignment() {
     check("array index expression", gArr[1 + 1] == gArr[2]);
 }
 
-void testControlFlow() {
+int testControlFlow() {
     int i, n, r = 0, a, b;
     if (1) r = 1;
     check("if true", r == 1);
@@ -249,8 +244,8 @@ void testControlFlow() {
 int add(int a, int b) { return a + b; }
 int sub(int a, int b) { return a - b; }
 
-void maybeSet(int value) {
-    if (value) { return; }
+int maybeSet(int value) {
+    if (value) { return 0; }
     gCounter = 1;
 }
 
@@ -283,7 +278,7 @@ int forwardCallee(int x) { return x * 10; }
 // Global declared after functions.
 int gLate;
 
-void testFunctions() {
+int testFunctions() {
     int n;
     check("argument order", sub(10, 3) == 7);
     check("nested calls", sub(add(5, 5), 3) == 7);
@@ -307,7 +302,7 @@ void testFunctions() {
 }
 
 
-void fill(int arr[], int count) {
+int fill(int arr[], int count) {
     int i = 0;
     while (i < count) { arr[i] = twice(i++); }
 }
@@ -319,10 +314,10 @@ int sum(int arr[], int count) {
 }
 
 int sumForward(int arr[], int count) { return sum(arr, count); }
-int firstChar(byte s[]) { return s[2]; }
-void put(int index, int arr[], int value) { arr[index] = value; }
+int firstChar(char s[]) { return s[0]; }
+int put(int index, int arr[], int value) { arr[index] = value; }
 
-void testArrays() {
+int testArrays() {
     fill(gArr, 4);
     check("array parameter writes caller array", gArr[3] == 6);
     check("array parameter reads caller array", sum(gArr, 4) == 12);
@@ -332,28 +327,28 @@ void testArrays() {
     check("string literal as array argument", firstChar("xyz") == 'x');
     check("string literal length", strlen("hello") == 5);
     check("long string length above 255", strlen(gLong) == 260);
-    check("long string last character", gLong[261] == 'z');
+    check("long string last character", gLong[259] == 'z');
     strcatc(gCat, 'c');
     check("strcatc appends a character", strlen(gCat) == 3);
-    check("strcatc character is at index 4", gCat[4] == 'c');
-    check("strcatc keeps terminator", gCat[5] == 0);
+    check("strcatc character is at index 2", gCat[2] == 'c');
+    check("strcatc keeps terminator", gCat[3] == 0);
 }
 
 // emit() prints the newline and returns the byte written.
-void testEmit() {
+int testEmit() {
     check("emit returns written byte", emit('*') == '*');
 }
 
 // syscall() returns the system call's result. A write of zero bytes returns 0.
-void testSyscall() {
+int testSyscall() {
     check("syscall write of zero bytes returns 0", syscall(4, 1, emitBuf, 0) == 0);
 }
 
-byte ioOut[2], ioIn[8];
+char ioOut[2], ioIn[8];
 
 // fopen/fwrite/fclose/fread round-trip a file. A missing file gives a negative result.
-void testFileIO() {
-    byte nm[] = "unit-tests.dat";
+int testFileIO() {
+    char nm[] = "unit-tests.dat";
     ioOut[0] = 'm'; ioOut[1] = 'c';
     int fd = fopen(nm, 577);
     check("fopen for writing returns a descriptor", fd >= 0);
@@ -368,15 +363,15 @@ void testFileIO() {
     check("fopen of a missing file returns a negative errno", fopen(nm, 0) < 0);
 }
 
-byte aliasName[] = "chris";
+char aliasName[] = "chris";
 int aliasInts[3];
 
-void setFirstChar(byte str[]) { byte p[] = str; p[2] = 'Z'; }
+int setFirstChar(char str[]) { char p[] = str; p[2] = 'Z'; }
 int aliasGet(int arr[], int i) { int xi[] = arr; return xi[i]; }
 
 // A local array alias names an existing array, so writes through it change that array.
-void testLocalAlias() {
-    byte p[] = aliasName;
+int testLocalAlias() {
+    char p[] = aliasName;
     p[2] = 'C';
     check("byte alias writes the named array", aliasName[2] == 'C');
     check("byte alias reads the named array", p[2] == 'C');
@@ -392,8 +387,8 @@ void testLocalAlias() {
 // Scalar constants: folded by the parser, so they need no storage.
 const int kLimit = 10;
 const int kDerived = kLimit * 3 + 1;
-const byte kByte = 300;
-void testConstants() {
+const char kByte = 300;
+int testConstants() {
     check("int constant reads its value", kLimit == 10);
     check("constant folds from other constants", kDerived == 31);
     check("byte constant wraps to a byte", kByte == 44);
@@ -403,7 +398,7 @@ void testConstants() {
 }
 
 int shadowConstant() { int kLimit = 3; return kLimit; }
-void testConstantShadowing() {
+int testConstantShadowing() {
     check("local shadows a constant", shadowConstant() == 3);
     check("constant is unchanged after shadowing", kLimit == 10);
 }
@@ -468,7 +463,7 @@ int sign(int x) {
 int passTwo(int arr[]) { return sumForward(arr, 4); }
 int passThree(int arr[]) { return passTwo(arr); }
 
-void testCalls() {
+int testCalls() {
     check("call inside binary expression", 1 + twice(2) == 5);
     check("two calls in one expression", twice(3) * twice(2) - twice(1) == 22);
     check("call with pending operand below", 100 - add(1, 2) == 97);
@@ -493,11 +488,11 @@ void testCalls() {
 
 int localInits(int x) {
     int a = x, b = a + 1;
-    byte c = 300;
+    char c = 300;
     return a + b + c;
 }
 
-int byteLocalFromParam(int x) { byte b = x; return b; }
+int byteLocalFromParam(int x) { char b = x; return b; }
 
 int initInLoop(int n) {
     int total = 0, i = 0;
@@ -509,7 +504,7 @@ int initInLoop(int n) {
     return total;
 }
 
-void testLocals() {
+int testLocals() {
     check("local initializers see earlier declarators", localInits(1) == 47);
     check("byte local initializer narrows", byteLocalFromParam(300) == 44);
     check("negative byte local initializer wraps", byteLocalFromParam(-1) == 255);
@@ -524,7 +519,7 @@ void testLocals() {
     check("local shadows function", shadowFuncLocal() == 4);
 }
 
-void testRecursion() {
+int testRecursion() {
     check("factorial of 10", fact(10) == 3628800);
     check("deep recursion of 200 levels", depth(200) == 200);
     check("mutual recursion even true", isEven(10) == 1);
@@ -537,20 +532,20 @@ void testRecursion() {
     check("sign positive", sign(7) == 1);
 }
 
-void testLiterals2() {
+int testLiterals2() {
     check("negative multiply", -3 * 4 == -12);
     check("negative divide", 12 / -4 == -3);
     check("large product", 200 * 300 == 60000);
     check("large constant arithmetic", 70000 - 1 == 69999);
-    check("carriage return escape in string", gEsc2[2] == 13);
-    check("escape e in string", gEsc2[3] == 27);
-    check("escaped single quote in string", gEsc2[4] == 39);
-    check("string terminator after escapes", gEsc2[5] == 0);
-    check("NUL escape inside string", gEsc3[3] == 0);
-    check("character after NUL escape", gEsc3[4] == 'b');
+    check("carriage return escape in string", gEsc2[0] == 13);
+    check("escape e in string", gEsc2[1] == 27);
+    check("escaped single quote in string", gEsc2[2] == 39);
+    check("string terminator after escapes", gEsc2[3] == 0);
+    check("NUL escape inside string", gEsc3[1] == 0);
+    check("character after NUL escape", gEsc3[2] == 'b');
 }
 
-void testArrays2() {
+int testArrays2() {
     fill(gArr, 4);
     check("array parameter through three levels", passThree(gArr) == 12);
     gArr[0] = 1;
@@ -585,20 +580,20 @@ int longJumpIf(int x) {
     return n;
 }
 
-void testLongJumps() {
+int testLongJumps() {
     check("loop body over 127 bytes", longJumpLoop() == 60);
     check("if body over 127 bytes taken", longJumpIf(1) == 20);
     check("if body over 127 bytes skipped", longJumpIf(0) == 0);
 }
 
-void nop() {}
+int nop() {}
 
-void returnEarly(int shouldReturn) {
-    if (shouldReturn) { return; }
+int returnEarly(int shouldReturn) {
+    if (shouldReturn) { return 0; }
     globalInt = globalInt + 100;
 }
 
-void statementForms(int limit) {
+int statementForms(int limit) {
     int i = 0;
     ;
     while (i < limit) i = i + 1;
@@ -607,9 +602,9 @@ void statementForms(int limit) {
     if (i > 0) ; else globalInt = globalInt + 1;
 }
 
-void setGlobal() { globalInt = 42; }
+int setGlobal() { globalInt = 42; }
 int getGlobal() { return globalInt; }
-void writeSecond(int value, int items[]) { items[1] = value; }
+int writeSecond(int value, int items[]) { items[1] = value; }
 int identity(int x) { return x; }
 
 int mul(int left, int right) { return left * right; }
@@ -671,7 +666,7 @@ int shiftRight(int a, int b) { return a >> b; }
 int gSideEffects;
 int sideEffect(int value) { gSideEffects++; return value; }
 
-void testProgramFlow() {
+int testProgramFlow() {
     int localA;
     int localB;
     int localC;
@@ -696,7 +691,7 @@ void testProgramFlow() {
     quoteCode = '\'';
     backslashCode = '\\';
     localA = strlen(greeting);
-    localB = greeting[3];
+    localB = greeting[1];
     anotherGlobal = 7;
     globalInt = anotherGlobal;
 
@@ -788,10 +783,9 @@ void testProgramFlow() {
     check("character escape", newlineCode == 10);
     check("escape character", escapeCode == 27);
     check("string length", strlen("ABC") == 3);
-    check("string first character", greeting[3] == 'c');
-    check("string terminator", greeting[6] == 0);
-    check("empty string length", emptyString[0] == 0);
-    check("empty string terminator", emptyString[2] == 0);
+    check("string first character", greeting[1] == 'c');
+    check("string terminator", greeting[4] == 0);
+    check("empty string terminator", emptyString[0] == 0);
     check("global array reference", globalArr[1] == 8);
     check("recursive function fib(10)", fib(10) == 55);
     check("recursive function fact(5)", fact(5) == 120);
@@ -805,7 +799,7 @@ void testProgramFlow() {
 
 int mil(int n) { return n * 1000 * 1000; }
 
-void testBenchmark() {
+int testBenchmark() {
     int i, n;
     i = mil(10);
     while (i) { i--; }
@@ -818,10 +812,10 @@ void testBenchmark() {
 
 int incParam(int n) { n++; return n; }
 int incLocal() { int k = 3; k--; ++k; return k; }
-int incByte() { byte b = 255; b++; return b; }
-int decByte() { byte b = 0; --b; return b; }
+int incByte() { char b = 255; b++; return b; }
+int decByte() { char b = 0; --b; return b; }
 
-void testIncDec() {
+int testIncDec() {
     int old;
     gInc = 5;
     gInc++;
