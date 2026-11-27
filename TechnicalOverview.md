@@ -31,7 +31,7 @@ flowchart LR
 - `nextCh()` reads from `inputFp` and counts newlines in `lineNumber`.
 - `nextSym()` produces token codes such as `ID`, `INT`, `STRING_LITERAL`, `PLUS_PLUS`, and `RETURN_SYM`. `++` and `--` are single tokens, so `a--b` is a syntax error; write `a - -b`.
 - Keywords are matched against `reservedWords[]`, and each keyword's token value is its index there, so `reservedWords[]` and the `*_SYM` enum in `mc.h` must stay in the same order. Reserved words are `do`, `else`, `if`, `while`, `void`, `int`, `char`, `return`, and `const`. Using `void` is a compile error, since only `int` functions are supported. `syscall` is a built-in name, so a function cannot use it. Only `//` line comments are skipped. Character and string literals support a fixed escape set.
-- `#include "path"` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths resolve relative to the including file's directory, and each joined path is read once. `closeSource()` returns to the includer at EOF.
+- `#include "path"` is a directive handled in `nextSym()`, which calls `includeFile()` instead of returning a token. `includeFile()` splices the named file's text in place. Paths are opened as written, so they resolve relative to the working directory, not the including file. Each path string is read once. `closeSource()` returns to the includer at EOF.
 - `qFail(cond, msg)` prints `path:line:` before every compile error.
 - The input file is a required command-line argument; see the command line section of `README.md`.
 
@@ -196,7 +196,9 @@ Values in `mem[]` are read and written with `loadInt()` and `storeInt()`, which 
 `int 0x80` is the system call interface. Only these calls are supported:
 
 - `eax = 1` is `exit`, with the status in `ebx`. `run()` returns that status.
+- `eax = 3` is `read`, from the fd in `ebx` into the buffer at `ecx`, for `edx` bytes.
 - `eax = 4` is `write`. Any fd is passed to the host's `write`, so the bytes go to that descriptor.
+- `eax = 5` is `open`, `eax = 6` is `close`, and `eax = 10` is `unlink`. Each goes to the host with the same arguments.
 
 Any other call stops with `-unsupported system call-`. Syscall numbers are the Linux i386 ones. A native executable from `-o` makes the same `int 0x80` calls directly to the kernel.
 

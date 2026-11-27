@@ -1,7 +1,7 @@
 // mc.h
 
-#ifndef _TINY_C_H_
-#define _TINY_C_H_
+#ifndef _MC_H_
+#define _MC_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -175,4 +175,4 @@ int run(void);
 int saveExecutable(const char *fileName);
 void listing(void);
 
-#endif // _TINY_C_H_
+#endif // _MC_H_

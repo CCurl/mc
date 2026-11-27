@@ -1677,6 +1677,7 @@ int disassemble(int addr, char *text) {
                 return 1 + n;
             }
             if (reg == 7) {
+                sprintf(text, "idiv %s", rm);
                 return 1 + n;
             }
             break;
