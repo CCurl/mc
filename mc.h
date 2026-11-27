@@ -53,7 +53,7 @@ enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
     LSHIFT, RSHIFT, AND_AND, OR_OR                              // 40 -> 43
 };
 
-enum { TYPE_INT, TYPE_BYTE };
+enum { TYPE_INT, TYPE_BYTE, TYPE_CHARPTR };
 
 // ---------------------------------------------------------------------------
 // For the parser and the code generator ...
@@ -172,9 +172,7 @@ node *parenExpr(void);
 node *program(void);
 void c(node *x);
 int run(void);
-int saveImage(const char *fileName);
 int saveExecutable(const char *fileName);
-int loadImage(const char *fileName);
 void listing(void);
 
 #endif // _TINY_C_H_

@@ -26,6 +26,10 @@ int charCode, newlineCode, escapeCode, quoteCode, backslashCode, outputCode, mod
 int globalArr[10], nums[5];
 char cat[10] = "cat";
 char emptyString[] = "";
+char pointerBuf[8] = "xyz";
+char gPtrSource[] = "src";
+char *gStrPtr = "pointer";
+char *gPtrCopy = gPtrSource;
 char escapedString[] = "A\n\"\\\0";
 char greeting[] = "\ncat";
 int gBigPad[40000];
@@ -382,6 +386,88 @@ int testLocalAlias() {
     check("int alias writes the named array", aliasInts[1] == 42);
     check("int alias passes as an array argument", aliasGet(xi, 1) == 42);
     check("alias of an int array parameter", aliasGet(aliasInts, 1) == 42);
+}
+
+int pointerSum(char *s) {
+    int i = 0, n = 0;
+    while (s[i]) { n = n + s[i]; i++; }
+    return n;
+}
+
+int fillPointer(char *dst, char v) {
+    dst[0] = v;
+    dst[1] = 0;
+    return 0;
+}
+
+int testPointers() {
+    char *p = pointerBuf;
+    check("char * local reads an array", p[1] == 'y');
+    p[1] = 'Q';
+    check("char * local writes the array", pointerBuf[1] == 'Q');
+    int i = 2;
+    check("char * indexed by a variable", p[i] == 'z');
+    check("char * global from a string", gStrPtr[0] == 'p');
+    check("char * global from a global array", gPtrCopy[1] == 'r');
+    gPtrCopy[0] = 'S';
+    check("char * global writes the array", gPtrSource[0] == 'S');
+    char *q;
+    q = p;
+    check("char * assigned from a char *", q[1] == 'Q');
+    q = "abc";
+    check("char * assigned from a string", q[2] == 'c');
+    char *r = p + 1;
+    check("char * = char * + int", r[0] == 'Q');
+    r = r + 1;
+    check("char * = char * + int, advancing", r[0] == 'z');
+    r = r - 2;
+    check("char * = char * - int, retreating", r[0] == 'x');
+    char *t = p + 1 + 1;
+    check("char * + int + int", t[0] == 'z');
+    check("char * + int passed as a char * argument", pointerSum(p + 1) == 'Q' + 'z');
+    p = p + 1;
+    check("char * = p + 1 advances p", p[0] == 'Q');
+    p = p - 1;
+    check("char * = p - 1 restores p", p[0] == 'x');
+    char *w = p + 1;
+    w[0] = 'W';
+    check("writes through a char * + int", pointerBuf[1] == 'W');
+    w[0] = 'Q';
+    char *m, c = 'k', *n = "nn";
+    check("char after char * in a declaration is a char", c == 'k');
+    check("char * after a char in a declaration", n[1] == 'n');
+    p[0] = 300;
+    check("char * elements are bytes", p[0] == 44);
+    check("char * passed a string", pointerSum("ab") == 'a' + 'b');
+    fillPointer(p, 'Z');
+    check("char * parameter writes the caller's array", pointerBuf[0] == 'Z' && pointerBuf[1] == 0);
+    m = pointerBuf;
+    check("char * parameter receives the same address", m[0] == 'Z');
+    char *nul = 0;
+    check("char * = 0 is a null pointer", nul == 0);
+    check("char * compares unequal to 0 once set", pointerBuf != 0);
+    char *u = pointerBuf;
+    u++;
+    check("char * postfix ++ steps one byte", u == pointerBuf + 1);
+    ++u;
+    check("char * prefix ++ steps one byte", u == pointerBuf + 2);
+    u--;
+    check("char * postfix -- steps back one byte", u == pointerBuf + 1);
+    check("char * < char * orders by address", pointerBuf < u && (u < pointerBuf) == 0);
+    check("*p reads the first element", *pointerBuf == 'Z');
+    *u = 'R';
+    check("*p = e writes through a char *", pointerBuf[1] == 'R');
+    char c1 = *u++;
+    check("*p++ reads then advances", c1 == 'R' && u == pointerBuf + 2);
+    int offset = 1;
+    char *k = pointerBuf + offset;
+    check("char array + variable is a char *", k == pointerBuf + 1);
+    char *j = 1 + pointerBuf;
+    check("1 + char array is a char *", j == k);
+    check("*(p + 1) reads the next element", *(pointerBuf + 1) == 'R');
+    k = 0;
+    check("char * reassigned to 0", k == 0);
+    return 0;
 }
 
 // Scalar constants: folded by the parser, so they need no storage.
@@ -855,6 +941,7 @@ int main() {
     testSyscall();
     testFileIO();
     testLocalAlias();
+    testPointers();
     testConstants();
     testConstantShadowing();
     testProgramFlow();

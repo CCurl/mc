@@ -17,8 +17,8 @@
  *  <def> ::= <func_def> | <func_proto> | <var_def> | <const_def>
  *  <func_def> ::= ("int" | "char") <id> "(" [ <parameter> { "," <parameter> } ] ")" "{" { <statement> } "}"
  *  <func_proto> ::= ("int" | "char") <id> "(" [ <parameter> { "," <parameter> } ] ")" ";"
- *  <parameter> ::= ("int" | "char") <id> [ "[" "]" ]
- *  <local_decl> ::= ("int" | "char") <local_item> { "," <local_item> } ";"
+ *  <parameter> ::= "int" <id> [ "[" "]" ] | "char" [ "*" ] <id> [ "[" "]" ]    (a "char *" parameter takes no "[]")
+ *  <local_decl> ::= ("int" | "char") <local_item> { "," <local_item> } ";"    (each "char *" declarator needs its own "*", as in C)
  *  <local_item> ::= <id> [ "=" <expr> ] | <id> "[" "]" "=" <array_name>    (an alias must name an array of the same element type)
  *  <var_def> ::= ("int" | "char") <var_decl> { "," <var_decl> } ";"
  *  <var_decl> ::= <id> [ "[" <int> "]" ] | <id> "=" <constant_expr> | <id> "[" [ <int> ] "]" "=" <string>
@@ -43,6 +43,14 @@
  *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)
  *  <math_op> ::= "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>"   (">>" is an arithmetic shift)
  *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <incdec> | <int> | <char> | <string> | <paren_expr> | "-" <term> | "~" <term>
+ * A "char *" variable is a pointer to bytes.
+ * * Assignment: a "char *" variable may be assigned a "char *" value, a string literal, a char array name, or 0.
+ * * Arguments: a "char *" value may be passed to a "char *" parameter or a syscall argument.
+ * * Access: p[i] and *p read or write a byte, and *p = e is valid. ++p, --p, p++, and p-- move one byte per step.
+ * * Arithmetic: a "char *" value is a "char *" variable, or a char * or char array with "+" or "-" applied left to right. So p+1, 1+p, buf+n, and p+1+2 are valid.
+ * * Comparison: ==, !=, <, >, <=, and >= compare two "char *" values, a "char *" and a char array, or a "char *" and 0 (for == and != only).
+ * * Not allowed: storing a "char *" value in an int, a byte, or a byte array element; using it in int arithmetic; or returning it.
+ * * Still rejected: &x, p+q, p-q, p+1*2 (left to right means (p+1)*2), int *, char **, arrays of char *, and char * function results.
  *  <func_call> ::= (<int_func_id> | <byte_func_id>) "(" [ <expr> { "," <expr> } ] ")"
  *  <void_func_call> ::= <void_func_id> "(" [ <expr> { "," <expr> } ] ")"
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
@@ -50,7 +58,7 @@
  *  <int_func_id> and <byte_func_id> are IDs of functions returning a value;
  *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
  *
- * Reserved words: do, else, if, while, void, int, char, return. Using void is a compile error.
+ * Reserved words: do, else, if, while, void, int, char, return, const. Using void is a compile error.
  * * "syscall" is a built-in intrinsic, so it cannot name a function. syscall(n, a1, ..., a6) takes 1 to 7 arguments, loads them into eax, ebx, ecx, edx, esi, edi, ebp, and runs int 0x80. ebp is saved and restored.
  * * emit(int value) is a library function in lib/util.mc. It calls syscall to write the low byte to stdout.
  * every function returns int, so calls can be terms or statements.
