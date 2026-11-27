@@ -107,10 +107,15 @@ int testLiterals() {
     check("char carriage return", '\r' == 13);
     check("char tab", '\t' == 9);
     check("char NUL", '\0' == 0);
+    check("char alarm", '\a' == 7);
+    check("char backspace", '\b' == 8);
+    check("char vertical tab", '\v' == 11);
+    check("char form feed", '\f' == 12);
     check("char escape", '\e' == 27);
     check("char backslash", '\\' == 92);
     check("char single quote", '\'' == 39);
     check("char double quote", '"' == 34);
+    check("unlisted escape is its character", '\q' == 'q');
     check("unary minus", -5 == 0 - 5);
     check("double unary minus", - -5 == 5);
     check("unary minus on parenthesized sum", -(3 + 4) == 0 - 7);
@@ -590,6 +595,10 @@ int initInLoop(int n) {
     return total;
 }
 
+int blockLocalDoesNotLeak() { int v = 5; { int v = 1; v = v + 1; } return v; }
+int siblingBlocksReuseName() { int r = 0; { int w = 1; r = r + w; } { int w = 2; r = r + w; } return r; }
+int shadowInBlock(int p) { { int p = 9; } return p; }
+
 int testLocals() {
     check("local initializers see earlier declarators", localInits(1) == 47);
     check("byte local initializer narrows", byteLocalFromParam(300) == 44);
@@ -599,6 +608,9 @@ int testLocals() {
     check("declaration after statements", lateDecl(3) == 8);
     gA = 77;
     check("local shadows global", shadowLocal(5) == 5);
+    check("block local does not leak", blockLocalDoesNotLeak() == 5);
+    check("sibling blocks reuse a name", siblingBlocksReuseName() == 3);
+    check("block local shadows parameter", shadowInBlock(4) == 4);
     check("global unchanged by shadowing local", gA == 77);
     check("parameter shadows global", shadowParam(4) == 5);
     check("parameter shadows function", shadowFuncParam(6) == 6);

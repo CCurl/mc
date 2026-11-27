@@ -50,9 +50,13 @@ int literalCharacter() {
     int value = ch;
     if (ch == '\\') {
         switch (nextCh()) {
+            case 'a': value = '\a'; break;
+            case 'b': value = '\b'; break;
+            case 'f': value = '\f'; break;
             case 'n': value = '\n'; break;
             case 'r': value = '\r'; break;
             case 't': value = '\t'; break;
+            case 'v': value = '\v'; break;
             case '0': value = '\0'; break;
             case 'e': value =  27;  break;
             default:  value =  ch;  break;
@@ -220,6 +224,8 @@ node nodes[MAX_NODES];
 struct function_s functions[MAX_FUNCTIONS];
 int numFunctions;
 int currentFunction = -1;
+int blockDepth = 0;      // 1 is the function body, where a local may not repeat a parameter's name
+int scopeFirstLocal = 0; // the first local declared in the block being parsed
 int mainFunction = -1;
 
 int parameterIndex(const char *name) {
@@ -232,14 +238,24 @@ int parameterIndex(const char *name) {
     return -1;
 }
 
+// Searches the locals that are still in scope, innermost first, so an inner declaration shadows an outer one.
 int localIndex(const char *name) {
     if (currentFunction >= 0) {
         struct function_s *function = &functions[currentFunction];
-        for (int i = 0; i < function->numLocals; i++) {
-            if (strcmp(function->localNames[i], name) == 0) { return i; }
+        for (int i = function->numLocals - 1; i >= 0; i--) {
+            if (function->localInScope[i] && strcmp(function->localNames[i], name) == 0) { return i; }
         }
     }
     return -1;
+}
+
+// A local declared in the block being parsed, which is the only place a duplicate name is an error.
+int localInCurrentBlock(const char *name) {
+    struct function_s *function = &functions[currentFunction];
+    for (int i = scopeFirstLocal; i < function->numLocals; i++) {
+        if (function->localInScope[i] && strcmp(function->localNames[i], name) == 0) { return 1; }
+    }
+    return 0;
 }
 
 int currentParameterIsArray(int parameter) {
@@ -665,6 +681,14 @@ int mathop() {
     return 0;
 }
 
+// An int array, or an int array address built with + or -. Its elements are 4 bytes, so an int operand is scaled by 4.
+int isIntArrayAddress(node *x) {
+    if (x->kind == ARRAY_REF) { return x->type == TYPE_INT; }
+    if (x->kind != ADD && x->kind != SUB) { return 0; }
+    if (isIntArrayAddress(x->o1)) { return !isIntArrayAddress(x->o2); }
+    return x->kind == ADD && isIntArrayAddress(x->o2) && !isIntArrayAddress(x->o1);
+}
+
 /* <math> ::= <term> | <math> <math_op> <term> */
 /* <math_op> ::= "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" */
 node *sum() {
@@ -672,7 +696,13 @@ node *sum() {
   int op;
   while ((op = mathop())) {
     nextSym();
-    x = gen(op, x, term());
+    node *right = term();
+    if ((op == ADD || op == SUB) && isIntArrayAddress(x) && !isIntArrayAddress(right)) {
+        right = gen(MUL, right, constant(4));
+    } else if (op == ADD && isIntArrayAddress(right) && !isIntArrayAddress(x)) {
+        x = gen(MUL, x, constant(4));
+    }
+    x = gen(op, x, right);
   }
   return x;
 }
@@ -739,7 +769,7 @@ node *statement() {
           int localType = declaratorType(baseType);
           char name[sizeof(idName)];
           expectName(name);
-          qFail(parameterIndex(name) >= 0 || localIndex(name) >= 0, "-duplicate local variable %s-\n", name);
+          qFail((blockDepth == 1 && parameterIndex(name) >= 0) || localInCurrentBlock(name), "-duplicate local variable %s-\n", name);
           struct function_s *function = &functions[currentFunction];
           qFail(function->numLocals >= MAX_LOCALS, "-too many local variables-");
           int local = function->numLocals;
@@ -754,6 +784,7 @@ node *statement() {
           strcpy(function->localNames[local], name);
           function->localTypes[local] = localType;
           function->localIsArray[local] = isAlias;
+          function->localInScope[local] = 1;
           function->numLocals++;
           if (sym == EQUAL) {
               nextSym();
@@ -828,12 +859,22 @@ node *statement() {
 }
 
 // Parses statements up to and including the closing "}"; the opening "{" has already been consumed.
+// The locals declared in the block go out of scope at the "}", but keep their frame slots.
 node *block(node *x) {
+    int outerFirstLocal = scopeFirstLocal;
+    scopeFirstLocal = currentFunction >= 0 ? functions[currentFunction].numLocals : 0;
+    blockDepth++;
     while (sym != RBRA) {
         if (sym == EOI) { syntaxError(); }
         x = gen(SEQ, x, NULL);
         x->o2 = statement();
     }
+    if (currentFunction >= 0) {
+        struct function_s *function = &functions[currentFunction];
+        for (int i = scopeFirstLocal; i < function->numLocals; i++) { function->localInScope[i] = 0; }
+    }
+    blockDepth--;
+    scopeFirstLocal = outerFirstLocal;
     nextSym();
     return x;
 }

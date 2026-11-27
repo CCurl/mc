@@ -63,13 +63,13 @@
  * * emit(int value) is a library function in lib/util.mc. It calls syscall to write the low byte to stdout.
  * every function returns int, so calls can be terms or statements.
  * A function that reaches its end without a return returns 0.
- * A local or parameter may shadow a global or function name.
+ * A local or parameter may shadow a global or function name. A local is visible only in the block that declares it, so a name declared in a block can be reused by a later block.
  * Comments start with "//" and run to the end of the line; /* */ comments are not supported.
  * <int> ::= <a_decimal_integer> (Overflow is not detected)
  * <string> ::= '"' { <string_character_or_escape> } '"'
  * <char> ::= "'" <single_character_or_escape> "'"
  * Character literals are int-valued and represent the numeric value of one byte.
- * Supported escapes are: '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'.
+ * Supported escapes are: '\a', '\b', '\f', '\n', '\r', '\t', '\v', '\0', '\e', '\\', '\'', and '\"'. Any other escaped character stands for itself (for example, '\q' is 'q').
  *
  * The compiler does a minimal amount of error checking to help
  * highlight the structure of the compiler.
@@ -118,7 +118,7 @@ not supported. Scalar initializers are supported. Global initializers must be co
 are folded at parse time; local initializers are assignments run at the declaration. String initializers<br/>
 are global char arrays laid out as the ASCII values followed by a 0. An omitted array size is inferred, and an explicit size must fit the characters and terminator<br/>
 Non-ASCII characters are rejected outside comments and character literals.<br/>
-String escapes are '\n', '\r', '\t', '\0', '\e', '\\', '\'', and '\"'. String literals used as array arguments<br/>
+String escapes are '\a', '\b', '\f', '\n', '\r', '\t', '\v', '\0', '\e', '\\', '\'', '\"'. String literals used as array arguments<br/>
 get anonymous global storage. They must be passed to char[] parameters; other array arguments must match their<br/>
 element type. String literals are valid only as array arguments or global array initializers. Array parameters<br/>
 pass global-array base addresses by reference. Array indexes are not bounds-checked. An access outside the memory<br/>
