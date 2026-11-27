@@ -20,13 +20,10 @@ flowchart LR
 
 ## Source layout
 
-- `mc-main.c`: defines the `main()` function.
+- `mc.c`: the compiler, in one file. It holds the lexer (tokenization, the source/include stack, and error reporting), the parser (AST nodes, function and variable tables, global variable storage, and program checks), x86 code generation, call patching, the ELF executable writer (`saveExecutable()`), the code listing, and `main()`.
 - `mc.h`: shared types, structures, sizes, and defines
-- `mc-lex.c`: tokenization, the source/include stack, and error reporting.
-- `mc-parse.c`: AST nodes, function and variable tables, global variable storage, and program checks.
-- `mc-gen.c`: x86 code generation, call patching, and the ELF executable writer (`saveExecutable()`).
 - `mc-vm.c`: the x86 decoder and `run()` interpreter, with `mem[]`, `loadInt()` and `storeInt()`.
-- `mc-list.c`: the code listing. Option `-l` writes a disassembly of the generated code to `listing.txt`. `make test-listing` checks that listing against `listing-expected.txt`.
+- The code listing: option `-l` writes a disassembly of the generated code to `listing.txt` (`listing()` in `mc.c`). `make test-listing` checks that listing against `listing-expected.txt`.
 - `lib/*.mc`: min-c source libraries included by programs, not C headers. `strcatc` does not check capacity, so the array must have room for the new character and the terminating zero. 
 
 ## 1. Lexer
@@ -146,7 +143,7 @@ One array, `mem[MEM_BYTES]`, holds everything. Addresses are real 32-bit address
 
 The layout is set in [mc.h](/home/chris/code/mc/mc.h): `CODE_BASE` is `LOAD_BASE + MAX_GLOBAL_BYTES`, `CODE_TOP` is `CODE_BASE + MAX_CODE`, `STACK_TOP` is `CODE_TOP + STACK_BYTES`, and `MEM_BYTES` is `STACK_TOP - LOAD_BASE`.
 
-`-o <exe>` writes the globals and code as a Linux 32-bit ELF executable (`saveExecutable()` in [mc-gen.c](/home/chris/code/mc/mc-gen.c)). The file has two `PT_LOAD` segments:
+`-o <exe>` writes the globals and code as a Linux 32-bit ELF executable (`saveExecutable()` in [mc.c](/home/chris/code/mc/mc.c)). The file has two `PT_LOAD` segments:
 - A data segment, read and write, at file offset 0 and `LOAD_BASE`. Its file bytes are the ELF and program headers (the first `ELF_HEADER_BYTES`, 0x80), then the initialized globals, string literals, and arrays. Its memory size is `MAX_GLOBAL_BYTES`, so the rest of the global area is zero-filled at load time and not stored in the file. Uninitialized globals and arrays are placed in that zero-filled part, so they cost no file space.
 - A text segment, read and execute, at `CODE_BASE`, placed at the next page boundary after the data.
 
@@ -156,7 +153,7 @@ String literals are stored in the writable data segment, not in code, so a progr
 
 Running the executable natively uses the kernel's `esp` and stack size, so `STACK_BYTES` and the VM's runtime checks do not apply. An out-of-range access or deep recursion is a segfault, and `INT_MIN / -1` raises SIGFPE instead of `-divide overflow-`. `make test-exe` builds `unit-tests.mc` into an executable, runs it, and checks its output against the VM run.
 
-The `-l` listing gives each instruction's address, its bytes, and its mnemonic, with a label line before each function. The disassembler in [mc-list.c](/home/chris/code/mc/mc-list.c) decodes only the encodings the code generator emits. `objdump` reads the same bytes as a cross-check. The executable has no section headers, so take the code from its text segment (the `R E` load segment shown by `readelf -l`) and disassemble it at `CODE_BASE`:
+The `-l` listing gives each instruction's address, its bytes, and its mnemonic, with a label line before each function. The disassembler in [mc.c](/home/chris/code/mc/mc.c) decodes only the encodings the code generator emits. `objdump` reads the same bytes as a cross-check. The executable has no section headers, so take the code from its text segment (the `R E` load segment shown by `readelf -l`) and disassemble it at `CODE_BASE`:
 
 ```
 readelf -l out.exe                  # note the Offset and FileSiz of the R E segment
