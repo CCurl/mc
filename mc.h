@@ -124,12 +124,15 @@ enum {
     X_GRP2_RM_IMM8 = 0xC1,  // ModRM reg field /4 = shl; imm8 follows
     X_GRP2_RM_CL = 0xD3,    // ModRM reg field /4 = shl, /7 = sar; count in cl
     X_GRP3_RM = 0xF7,       // ModRM reg field /2 = not r/m, /7 = idiv edx:eax by r/m
+    X_GRP4_RM8 = 0xFE,      // ModRM reg field /0 = inc r/m8, /1 = dec r/m8
+    X_GRP5_RM = 0xFF,       // ModRM reg field /0 = inc r/m32, /1 = dec r/m32
     X_RET = 0xC3,
     X_LEAVE = 0xC9,
     X_INT = 0xCD,           // imm8 follows
     X_CALL = 0xE8,          // rel32 follows
     X_JMP = 0xE9,           // rel32 follows
     X_PUSH = 0x50,          // + register
+    X_PUSH_IMM32 = 0x68,    // imm32 follows
     X_POP = 0x58,           // + register
     X_MOV_R_IMM = 0xB8,     // + register; imm32 follows
     X_ESCAPE = 0x0F,        // the next byte is a two-byte opcode

@@ -222,6 +222,18 @@ int run() {
                 }
                 break;
             }
+            case X_GRP5_RM: {
+                struct modrm_s m = decodeModRM(&c);
+                qFail(m.reg > 1, "-unsupported x86 group 5 operation %d-", m.reg);
+                setRM(&c, &m, getRM(&c, &m) + (m.reg == 0 ? 1 : -1));  // inc, dec
+                break;
+            }
+            case X_GRP4_RM8: {
+                struct modrm_s m = decodeModRM(&c);
+                qFail(m.reg > 1, "-unsupported x86 group 4 operation %d-", m.reg);
+                setRM8(&c, &m, getRM8(&c, &m) + (m.reg == 0 ? 1 : -1));  // inc, dec
+                break;
+            }
             case X_GRP2_RM_IMM8: {
                 struct modrm_s m = decodeModRM(&c);
                 int count = fetch8(&c);
@@ -297,6 +309,7 @@ int run() {
                 break;
             }
             default:
+                if (op == X_PUSH_IMM32)                        { push(&c, fetch32(&c)); break; }
                 if (op >= X_PUSH && op < X_PUSH + 8)           { push(&c, c.reg[op - X_PUSH]); break; }
                 if (op >= X_POP && op < X_POP + 8)             { c.reg[op - X_POP] = pop(&c); break; }
                 if (op >= X_MOV_R_IMM && op < X_MOV_R_IMM + 8) { c.reg[op - X_MOV_R_IMM] = fetch32(&c); break; }
@@ -446,6 +459,20 @@ int disassemble(int addr, char *text) {
                 return 1 + n + 4;
             }
             break;
+        case X_GRP5_RM:
+            n = disassembleModRM(addr + 1, &reg, rm, 0, "dword ");
+            if (reg <= 1) {
+                sprintf(text, "%s %s", reg == 0 ? "inc" : "dec", rm);
+                return 1 + n;
+            }
+            break;
+        case X_GRP4_RM8:
+            n = disassembleModRM(addr + 1, &reg, rm, 1, "");
+            if (reg <= 1) {
+                sprintf(text, "%s %s", reg == 0 ? "inc" : "dec", rm);
+                return 1 + n;
+            }
+            break;
         case X_GRP2_RM_IMM8:
             n = disassembleModRM(addr + 1, &reg, rm, 0, "dword ");
             if (reg == 4) {
@@ -474,6 +501,9 @@ int disassemble(int addr, char *text) {
         case X_RET:
             sprintf(text, "ret");
             return 1;
+        case X_PUSH_IMM32:
+            sprintf(text, "push %d", loadInt(addr + 1));
+            return 5;
         case X_LEAVE:
             sprintf(text, "leave");
             return 1;

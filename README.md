@@ -19,13 +19,13 @@
  *  <func_proto> ::= ("int" | "char") <id> "(" [ <parameter> { "," <parameter> } ] ")" ";"
  *  <parameter> ::= "int" <id> [ "[" "]" ] | "char" [ "*" ] <id> [ "[" "]" ]    (a "char *" parameter takes no "[]")
  *  <local_decl> ::= ("int" | "char") <local_item> { "," <local_item> } ";"    (each "char *" declarator needs its own "*", as in C)
- *  <local_item> ::= <id> [ "=" <expr> ] | <id> "[" "]" "=" <array_name>    (an alias must name an array of the same element type)
+ *  <local_item> ::= [ "*" ] <id> [ "=" <expr> ]    (a "char *" or "int *" local may be initialized from an array name of the same element type, e.g. char *p = buf; local arrays are not supported)
  *  <var_def> ::= ("int" | "char") <var_decl> { "," <var_decl> } ";"
  *  <var_decl> ::= <id> [ "[" <int> "]" ] | <id> "=" <constant_expr> | <id> "[" [ <int> ] "]" "=" <string>
  *  <const_def> ::= "const" ("int" | "char") <id> "=" <constant_expr> ";"    (scalar only; a constant name is replaced by its value, and cannot be assigned, incremented, or indexed)
  *  <statement> ::= <local_decl> |
  *                  <void_func_call> ";" |
- *                  "return" [ <expr> ] ";" |
+ *                  "return" <expr> ";" |
  *                  "if" <paren_expr> <statement> |
  *                  "if" <paren_expr> <statement> "else" <statement> |
  *                  "while" <paren_expr> <statement> |
@@ -36,13 +36,13 @@
  *                  ";"
  *  <paren_expr> ::= "(" <expr> ")"
  *  <assignment> ::= <lvalue> "=" <expr>   (assignment is a statement only, not an expression)
- *  <lvalue> ::= <id> | <id> "[" <expr> "]"
+ *  <lvalue> ::= <id> | <id> "[" <expr> "]" | "*" <term>
  *  <expr> ::= <test> | <expr> ("&&" | "||") <test>   (short-circuit, result is 0 or 1)
  *  <incdec> ::= ("++" | "--") <scalar_id> | <scalar_id> ("++" | "--")   (scalar locals, parameters, and globals only; postfix yields the old value, prefix the new)
  *  <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math>
  *  <math> ::= <term> | <math> <math_op> <term>   (no precedence: applied left to right)
  *  <math_op> ::= "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>"   (">>" is an arithmetic shift)
- *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <incdec> | <int> | <char> | <string> | <paren_expr> | "-" <term> | "~" <term>
+ *  <term> ::= <id> | <func_call> | <id> "[" <expr> "]" | <array_ref> | <incdec> | <int> | <char> | <string> | <paren_expr> | "-" <term> | "~" <term> | "*" <term>   ("*" <term> reads the byte or int at a pointer or array; *e is e[0])
  * A "char *" variable is a pointer to bytes.
  * * Assignment: a "char *" variable may be assigned a "char *" value, a string literal, a char array name, or 0.
  * * Arguments: a "char *" value may be passed to a "char *" parameter or a syscall argument.
@@ -57,7 +57,7 @@
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
  *  <array_arg> ::= <array_ref> | <string>   (a string literal is valid only as an array argument or a global array initializer)
  *  <int_func_id> and <byte_func_id> are IDs of functions returning a value;
- *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 63 characters)
+ *  <id> ::= [A-Z|a-z|_][A-Z|a-z|0-9|_]*  (at most 23 characters)
  *
  * Reserved words: do, else, if, while, void, int, char, return, const. Using void is a compile error.
  * * "syscall" is a built-in intrinsic, so it cannot name a function. syscall(n, a1, ..., a6) takes 1 to 7 arguments, loads them into eax, ebx, ecx, edx, esi, edi, ebp, and runs int 0x80. ebp is saved and restored.

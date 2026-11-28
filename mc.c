@@ -1,5 +1,6 @@
 //--------------------------------------------------------------------------
 // The min-c compiler: lexer, parser, code generator, listing, and main.
+// The grammar of min-c is in README.md.
 
 #include "mc.h"
 #include <sys/stat.h>
@@ -21,6 +22,7 @@ char includedPaths[MAX_INCLUDED_FILES][MAX_PATH_LENGTH];
 int numIncludedPaths = 0;
 int stringValues[MAX_STRING_LENGTH], stringLength;
 
+// Prints the message with the current file and line, then exits, if condition is true.
 void qFail(int condition, const char *fmt, ...) {
     if (condition) {
         va_list args;
@@ -32,12 +34,15 @@ void qFail(int condition, const char *fmt, ...) {
     }
 }
 
+// Reports a syntax error at the current position and exits.
 void syntaxError() { qFail(1, "-syntax error-"); }
 
+// Alpha and numeric checks for characters
 int isAlpha(int ch) { return BTWI(ch,'A','Z') || BTWI(ch,'a','z') || (ch=='_'); }
 int isNum(int ch) { return BTWI(ch,'0','9'); }
 int isAlphaNum(int ch) { return isAlpha(ch) || isNum(ch); }
 
+// Reads the next character from the current source, or stdin, and counts newlines.
 int nextCh() {
     if (inputFp) { ch = fgetc(inputFp); }
     else { ch = getchar(); }
@@ -84,6 +89,7 @@ void readName(const char *tooLongMessage) {
     idName[i] = '\0';
 }
 
+// Opens the main source file and records it as the first included path.
 int openSource(const char *path) {
     qFail((strlen(path) >= MAX_PATH_LENGTH), "-path too long-");
     inputFp = fopen(path, "rt");
@@ -93,6 +99,7 @@ int openSource(const char *path) {
     return 1;
 }
 
+// Handles #include "file": pushes the file onto the source stack unless it was already included.
 void includeFile() {
     char path[MAX_PATH_LENGTH];
     int length = 0;
@@ -127,6 +134,7 @@ void includeFile() {
     nextCh();
 }
 
+// Closes the current included file and resumes the source that included it.
 void closeSource() {
     fclose(inputFp);
     sourceDepth--;
@@ -137,6 +145,7 @@ void closeSource() {
     ch = outer->savedCh;
 }
 
+// Reads the next symbol into sym, setting intVal or idName for literals and names, and skipping whitespace and // comments.
 void nextSym() {
   again:
     switch (ch) {
@@ -228,6 +237,7 @@ int blockDepth = 0;      // 1 is the function body, where a local may not repeat
 int scopeFirstLocal = 0; // the first local declared in the block being parsed
 int mainFunction = -1;
 
+// Returns the index of a parameter of the current function, or -1.
 int parameterIndex(const char *name) {
     if (currentFunction >= 0) {
         struct function_s *function = &functions[currentFunction];
@@ -258,6 +268,7 @@ int localInCurrentBlock(const char *name) {
     return 0;
 }
 
+// True if the current function's parameter is an array.
 int currentParameterIsArray(int parameter) {
     return currentFunction >= 0 &&
            functions[currentFunction].parameterIsArray[parameter];
@@ -275,6 +286,7 @@ int numVariables;
 int numGlobalBytes = ELF_HEADER_BYTES;
 int numZeroedBytes;
 
+// Returns the index of a global variable, or -1.
 int findVariable(const char *name) {
     for (int i = 0; i < numVariables; i++) {
         if (strcmp(variableNames[i], name) == 0) { return i; }
@@ -282,7 +294,7 @@ int findVariable(const char *name) {
     return -1;
 }
 
-// Scalar constants are substituted by the parser, so they need no storage in the program.
+// Returns the index of a constant, or -1. Constants are substituted by the parser, so they need no storage.
 int findConstant(const char *name) {
     for (int i = 0; i < numConstants; i++) {
         if (strcmp(constNames[i], name) == 0) { return i; }
@@ -290,6 +302,7 @@ int findConstant(const char *name) {
     return -1;
 }
 
+// Records a constant, after checking that its name is not already a variable or constant.
 void declareConstant(const char *name, int type, int value) {
     qFail(findVariable(name) >= 0 || findConstant(name) >= 0, "-duplicate variable %s-\n", name);
     qFail(numConstants >= MAX_GLOBAL_NAMES, "-too many constants-");
@@ -321,12 +334,14 @@ int declareVariable(const char *name, int size, int isArray, int type, int zeroe
     return numVariables++;
 }
 
+// Copies the current string literal's bytes into memory at base.
 void storeStringBytes(int base) {
     for (int i = 0; i < stringLength; i++) {
         *MEM_AT(base + i) = stringValues[i];
     }
 }
 
+// Reserves global storage for the current string literal and returns its address.
 int allocateStringLiteral() {
     int size = stringLength + STRING_OVERHEAD;
     qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes - numZeroedBytes), "-too much global storage-");
@@ -336,6 +351,7 @@ int allocateStringLiteral() {
     return base;
 }
 
+// Returns the operand for a scalar: a negative parameter slot, or a global's address.
 int variableIndex(const char *name) {
     int parameter = parameterIndex(name);
     if (parameter >= 0) {
@@ -348,6 +364,7 @@ int variableIndex(const char *name) {
     return variableBases[index];
 }
 
+// Returns the operand for an array: a negative slot for a local or parameter, or a global's address.
 int arrayIndex(const char *name) {
     int local = localIndex(name);
     if (local >= 0) {
@@ -367,6 +384,7 @@ int arrayIndex(const char *name) {
     return variableBases[index];
 }
 
+// Returns the index of a function, adding an undeclared entry for it if needed.
 int functionIndex(const char *name) {
     for (int i = 0; i < numFunctions; i++) {
         if (strcmp(functions[i].name, name) == 0) { return i; }
@@ -379,6 +397,7 @@ int functionIndex(const char *name) {
     return numFunctions++;
 }
 
+// Allocates a syntax node of kind k from the node pool.
 node *newNode(int k) {
     qFail((MAX_NODES <= numNodes), "-too many syntax nodes-");
     node *x = &nodes[numNodes++];
@@ -387,6 +406,7 @@ node *newNode(int k) {
     return x;
 }
 
+// Makes a constant node with the given value.
 node *constant(int value) {
     node *x = newNode(CST);
     x->val = value;
@@ -422,12 +442,14 @@ node *foldNode(node *x) {
     }
 }
 
+// Makes an operator node, folding it into a constant if its operands are constant.
 node *gen(int k, node *o1, node *o2) {
     node *x=newNode(k);
     x->o1=o1; x->o2=o2;
     return foldNode(x);
 }
 
+// Wraps value in a node that truncates it to a char.
 node *byteConversion(node *value) {
     node *conversion = gen(BYTE_CONVERT, value, NULL);
     conversion->type = TYPE_BYTE;
@@ -466,8 +488,10 @@ int isPointerIncrement(node *x) {
     return (x->kind == PRE_INC || x->kind == POST_INC) && isPointerVar(x->o1);
 }
 
+// True if x is a comparison operator node.
 int isComparison(node *x) { return x->kind >= LT && x->kind <= NE; }
 
+// True if x is a char array reference.
 int isByteArray(node *x) { return x->kind == ARRAY_REF && x->type == TYPE_BYTE; }
 
 int isPointerExpr(node *x);
@@ -498,8 +522,10 @@ int isArrayPointerExpr(node *x) {
 // A char * value, an array used as one (buf+n, or the array itself), or a char array.
 int isPointerish(node *x) { return isPointerExpr(x) || isArrayPointerExpr(x) || isByteArray(x); }
 
+// True if x is the constant 0.
 int isNullConstant(node *x) { return x->kind == CST && x->val == 0; }
 
+// Checks that the current symbol is exp, then reads the next symbol.
 void expectSym(int exp) {
     qFail((sym != exp), "-expected symbol[%d],not[%d]-\n", exp, sym);
     nextSym();
@@ -512,6 +538,7 @@ void expectName(char *name) {
     nextSym();
 }
 
+// Parses a call's arguments and checks them against the callee's parameters. syscall is built in.
 node *callArguments(const char *name) {
     int index = strcmp(name, "syscall") == 0 ? BUILTIN_SYSCALL : functionIndex(name);
     qFail(index != BUILTIN_SYSCALL && !functions[index].declared, "-function %s used before declaration-\n", name);
@@ -562,6 +589,7 @@ node *callArguments(const char *name) {
     return call;
 }
 
+// Returns the element type of a named array or pointer that is in scope.
 int arrayElementType(const char *name) {
     int local = localIndex(name);
     if (local >= 0) { return functions[currentFunction].localTypes[local]; }
@@ -572,12 +600,13 @@ int arrayElementType(const char *name) {
     return variableTypes[findVariable(name)];
 }
 
+// True if name is a char * or int * local, parameter, or global.
 int isPointerName(const char *name) {
     if (localIndex(name) < 0 && parameterIndex(name) < 0 && findVariable(name) < 0) { return 0; }
     return isPointerType(arrayElementType(name));
 }
 
-// The LOCAL, VAR, or ARRAY_REF node for a bare name.
+// The LOCAL, VAR, ARRAY_REF, or constant node for a bare name.
 node *nameNode(const char *name) {
     int local = localIndex(name);
     int parameter = parameterIndex(name);
@@ -618,7 +647,7 @@ node *increment(int kind, node *target, int delta) {
     return x;
 }
 
-/* <term> ::= <id> | <id> "(" [ <expr> { "," <expr> } ] ")" | <id> "[" <expr> "]" | <int> | <char> | <string> | <paren_expr> | "-" <term> | "~" <term> */
+// Parses a unary operator, primary expression, or postfix term.
 node *term() {
   node *x = NULL;
   if (sym == MINUS) {
@@ -684,6 +713,7 @@ node *term() {
   return x;
 }
 
+// Returns the arithmetic or shift operator for the current symbol, or 0.
 int mathop() {
     if (sym==PLUS) { return ADD; }
     else if (sym==MINUS) { return SUB; }
@@ -711,8 +741,7 @@ int requiresIndexScaling(node *x) {
     return x->type == TYPE_INTPTR || isIntArrayAddress(x);
 }
 
-/* <math> ::= <term> | <math> <math_op> <term> */
-/* <math_op> ::= "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" */
+// Parses a left-to-right chain of arithmetic and shift operators, scaling int pointer offsets by INT_SIZE.
 node *sum() {
   node *x = term();
   int op;
@@ -729,7 +758,7 @@ node *sum() {
   return x;
 }
 
-/* <test> ::= <math> | <math> "<" <math> | <math> ">" <math> | <math> "<=" <math> | <math> ">=" <math> | <math> "==" <math> | <math> "!=" <math> */
+// Parses a sum, optionally followed by one comparison operator.
 node *comparison() {
   node *x = sum();
   if (sym == LESS)     { nextSym(); return gen(LT, x, sum()); }
@@ -741,7 +770,7 @@ node *comparison() {
   return x;
 }
 
-/* <expr> ::= <test> { ("&&" | "||") <test> }, applied left to right */
+// Parses comparisons joined by && and ||.
 node *expr() {
   node *x = comparison();
   while (sym == AND_AND || sym == OR_OR) {
@@ -752,7 +781,7 @@ node *expr() {
   return x;
 }
 
-/* <assignment> ::= <id> "=" <expr> | <id> "[" <expr> "]" "=" <expr> */
+// Parses the value after = and builds a store to target.
 node *assignment(node *target) {
   qFail(target->kind != VAR && target->kind != LOCAL && target->kind != ARRAY_GET, "-left side of = must be a variable or array element-");
   nextSym();
@@ -770,7 +799,7 @@ node *assignment(node *target) {
   return set;
 }
 
-/* <paren_expr> ::= "(" <expr> ")" */
+// Parses a parenthesized expression.
 node *parenExpr() {
   node *x;
   expectSym(LPAR);
@@ -781,6 +810,7 @@ node *parenExpr() {
 
 node *block(node *x);
 
+// Parses one statement, including local declarations.
 node *statement() {
   node *x = NULL;
   if ((sym == INT_SYM || sym == CHAR_SYM) && currentFunction >= 0) {
@@ -838,22 +868,22 @@ node *statement() {
           x = gen(RETURN_NODE, value, NULL);
       }
       expectSym(SEMI);
-  } else if (sym == IF_SYM) { /* "if" <paren_expr> <statement> */
+  } else if (sym == IF_SYM) {
       x = newNode(IF1);
       nextSym();
       x->o1 = parenExpr();
       x->o2 = statement();
-      if (sym == ELSE_SYM) { /* ... "else" <statement> */
+      if (sym == ELSE_SYM) {
           x->kind = IF2;
           nextSym();
           x->o3 = statement();
       }
-  } else if (sym == WHILE_SYM) { /* "while" <paren_expr> <statement> */
+  } else if (sym == WHILE_SYM) {
      x=newNode(WHILE);
      nextSym();
      x->o1=parenExpr();
      x->o2=statement();
-  } else if (sym == DO_SYM) { /* "do" <statement> "while" <paren_expr> ";" */
+  } else if (sym == DO_SYM) {
       x = newNode(DO);
       nextSym();
       x->o1 = statement();
@@ -863,10 +893,10 @@ node *statement() {
   } else if (sym == SEMI) { /* ";" */
       x = newNode(EMPTY);
       nextSym();
-  } else if (sym == LBRA) { /* "{" <statement> "}" */
+  } else if (sym == LBRA) {
       nextSym();
       x = block(newNode(EMPTY));
-  } else { /* <expr> ";" | <assignment> ";" */
+  } else {
       node *value = expr();
       if (sym == EQUAL) { value = assignment(value); }
       x = gen(EXPR, value, NULL);
@@ -896,6 +926,7 @@ node *block(node *x) {
     return x;
 }
 
+// Parses a parenthesized parameter list into function.
 void parseParameters(struct function_s *function) {
     expectSym(LPAR);
     if (sym != RPAR) {
@@ -926,6 +957,7 @@ void parseParameters(struct function_s *function) {
     expectSym(RPAR);
 }
 
+// Parses the array size or initializer of a global, then declares it.
 void parseVariableDeclarator(const char *name, int type) {
     int size = 1;
     int isArray = 0;
@@ -979,6 +1011,7 @@ void parseVariableDeclarator(const char *name, int type) {
     }
 }
 
+// Parses the rest of a global declaration after its first name, including any comma-separated names.
 void variableDeclarations(const char *firstName, int type, int baseType) {
     parseVariableDeclarator(firstName, type);
     while (sym == COMMA) {
@@ -991,7 +1024,7 @@ void variableDeclarations(const char *firstName, int type, int baseType) {
     expectSym(SEMI);
 }
 
-// <const_def> ::= "const" ("int" | "char") <id> "=" <expr> ";". The initializer must fold to a constant.
+// Parses a top-level const definition. Its initializer must fold to a constant.
 void constDefinition(void) {
     nextSym();
     qFail(sym != INT_SYM && sym != CHAR_SYM, "-const must be int or char-");
@@ -1007,6 +1040,7 @@ void constDefinition(void) {
     declareConstant(name, type, value->val);
 }
 
+// True if two declarations have the same return type and parameter types.
 int sameSignature(struct function_s *declared, struct function_s *header) {
     if (declared->returnType != header->returnType || declared->numParameters != header->numParameters) { return 0; }
     for (int i = 0; i < header->numParameters; i++) {
@@ -1052,8 +1086,8 @@ void parseFunctionDefinition(const char *name, int returnType) {
     currentFunction = previousFunction;
 }
 
-// An array reference is valid only as a direct array argument, which callArguments() has already checked,
-// or as an operand of + or -, where it stands for the array's address.
+// An array reference is valid only as an array argument, as an operand of + or - (its address), as the value
+// of a pointer assignment, or as a comparison operand.
 void checkArrayRefs(node *x) {
     if (!x) { return; }
     if (x->kind == SET && x->o2->kind == ARRAY_REF && (x->val == 1 || isPointerVar(x->o1))) { return; }
@@ -1083,11 +1117,11 @@ void checkArrayRefs(node *x) {
     checkArrayRefs(x->o3);
 }
 
-// A char * or int * value may be assigned to a matching pointer variable, passed to a matching pointer argument,
-// or used as the base of an element access. pointer +/- int is also a pointer value, but its only other operand is an int.
-// Anywhere else it is an error.
+// A char * or int * value may only be assigned to a matching pointer, passed as a pointer argument, or used as an
+// element base. Pointer +/- int is also a pointer value. Anywhere else it is an error.
 void checkPointerUses(node *x);
 
+// Checks a pointer expression, including the pointer and int operands of its + and - operations.
 void checkPointerValue(node *x) {
     if (isPointerVar(x) || isPointerIncrement(x)) { return; }
     if (isPointerExpr(x->o1)) {
@@ -1099,11 +1133,13 @@ void checkPointerValue(node *x) {
     }
 }
 
+// Checks a comparison operand, which may be a pointer expression or an ordinary value.
 void checkPointerOperand(node *x) {
     if (isPointerExpr(x)) { checkPointerValue(x); }
     else { checkPointerUses(x); }
 }
 
+// Checks every use of a char * or int * value in x and reports any that is not allowed.
 void checkPointerUses(node *x) {
     if (!x) { return; }
     if (x->kind == EXPR && isPointerIncrement(x->o1)) { return; }
@@ -1149,7 +1185,7 @@ void checkPointerUses(node *x) {
     checkPointerUses(x->o3);
 }
 
-/* <defs> ::= { <var_def> | <func_def> }. Globals and functions may appear in any order; main must be defined somewhere. */
+// Parses all top-level definitions, in any order. program() checks that main is defined.
 node *defs(node *st) {
   nextSym();
   while (sym != EOI) {
@@ -1169,7 +1205,7 @@ node *defs(node *st) {
   return st;
 }
 
-/* <program> ::= <defs> */
+// Parses the whole program, then checks that it is complete and that its uses of arrays and pointers are valid.
 node *program() {
   node *prog = gen(PROG, NULL, NULL);
   defs(prog);
@@ -1200,11 +1236,27 @@ struct call_fixup_s callFixups[MAX_CALL_FIXUPS];
 int here;
 int numCallFixups;
 struct function_s *curFunction;
+int slotDisp(int slot);
+void cExpr(node *x);
+void cEffect(node *x);
 
+// Some utility functions for code generation
+// rr() emits an opcode with a ModRM byte for two registers. reg is a register or an opcode extension (/digit).
+// ri() adds an imm32 after such an operand.
+// movzxAl() Zero-extends al into eax.
 void checkSize(int sz) { qFail(here + sz > CODE_TOP, "-program too large-"); }
 void g(int b) { checkSize(1); *MEM_AT(here++) = (byte)b; }
 void g4(int v) { checkSize(4); memcpy(MEM_AT(here), &v, 4); here += 4; }
 void movImm(int reg, int v) { g(X_MOV_R_IMM + reg); g4(v); }
+// Pushes a 32-bit immediate without going through eax.
+void pushImm(int v) { g(X_PUSH_IMM32); g4(v); }
+void rr(int opcode, int reg, int rm) { g(opcode); g(0xC0 | (reg << 3) | rm); }
+void ri(int opcode, int ext, int rm, int imm) { rr(opcode, ext, rm); g4(imm); }
+void movzxAl() { g(X_ESCAPE); rr(X_MOVZX_R_RM8, EAX, EAX); }
+void int80() { g(X_INT); g(0x80); } // The Linux system call interrupt.
+void modrmFrame(int reg, int slot) { g(0x80 | (reg << 3) | EBP); g4(slotDisp(slot)); }
+void modrmAbs(int reg, int addr) { g((reg << 3) | 5); g4(addr); }  // mod=00, rm=101 means disp32
+void modrmIndirect(int reg, int base) { g((reg << 3) | base); }
 
 // Reserves a 4-byte field for a rel32 displacement. fix() or patchCalls() fills it in.
 int hole() {
@@ -1220,21 +1272,12 @@ void fix(int field, int dst) {
     memcpy(MEM_AT(field), &rel, 4);
 }
 
-// rr() emits an opcode with a ModRM byte for two registers. reg is a register or an opcode extension (/digit).
-// ri() adds an imm32 after such an operand.
-void rr(int opcode, int reg, int rm) { g(opcode); g(0xC0 | (reg << 3) | rm); }
-void ri(int opcode, int ext, int rm, int imm) { rr(opcode, ext, rm); g4(imm); }
-void movzxAl() { g(X_ESCAPE); rr(X_MOVZX_R_RM8, EAX, EAX); }
-void int80() { g(X_INT); g(0x80); }
-
 // Memory operands: a frame slot is [ebp+disp32], a fixed address is [disp32], and [base] is a register.
+// Returns the ebp displacement of a slot: parameters are above ebp, and locals are below it.
 int slotDisp(int slot) {
     int numParams = curFunction->numParameters;
     return slot < numParams ? 8 + INT_SIZE * (numParams - 1 - slot) : -INT_SIZE * (slot - numParams + 1);
 }
-void modrmFrame(int reg, int slot) { g(0x80 | (reg << 3) | EBP); g4(slotDisp(slot)); }
-void modrmAbs(int reg, int addr) { g((reg << 3) | 5); g4(addr); }  // mod=00, rm=101 means disp32
-void modrmIndirect(int reg, int base) { g((reg << 3) | base); }
 
 // Emits a call to a user function. patchCalls() fills in the target address.
 void emitCall(int index) {
@@ -1245,6 +1288,7 @@ void emitCall(int index) {
     numCallFixups++;
 }
 
+// Fills in each call's displacement once every function's address is known.
 void patchCalls() {
     for (int i = 0; i < numCallFixups; i++) {
         struct call_fixup_s *f = &callFixups[i];
@@ -1252,15 +1296,13 @@ void patchCalls() {
     }
 }
 
-
 // Writes a little-endian value of the given size in bytes.
 void putLE(FILE *fp, unsigned value, int size) {
     for (int i = 0; i < size; i++) { fputc((value >> (8*i)) & 0xff, fp); }
 }
 
-// Writes a 32-bit Linux executable with two PT_LOAD segments. The data segment starts at file offset 0 and LOAD_BASE,
-// so the ELF headers occupy the first ELF_HEADER_BYTES of it, followed by the globals. The code segment starts at the
-// next page boundary, and execution starts at CODE_BASE.
+// Writes a 32-bit Linux ELF executable with a data segment at LOAD_BASE (the headers, then the globals) and a
+// code segment on the next page boundary, starting at CODE_BASE.
 int saveExecutable(const char *fileName) {
     const int pageSize = 0x1000, headerSize = 52, programHeaderSize = 32;
     unsigned dataSize = (unsigned)numGlobalBytes;
@@ -1314,7 +1356,9 @@ int saveExecutable(const char *fileName) {
 }
     
 // A parameter or local is a frame slot. Parameters are slots 0..numParameters-1 and the locals follow them.
+// True if x refers to a frame slot.
 int isSlot(node *x) { return x->kind == LOCAL || x->val < 0; }
+// The frame slot number of a slot node.
 int slotOf(node *x) { return x->kind == LOCAL ? x->val : -x->val - 1; }
 
 // Loads variable t into eax.
@@ -1337,9 +1381,6 @@ void loadBase(node *x) {
     else { movImm(EAX, x->val); }
 }
 
-void cExpr(node *x);
-void cEffect(node *x);
-
 // Leaves the address of element x->o1 of array x in eax. A char * base (x->o3) is a runtime value, and its elements are bytes.
 void cElementAddress(node *x) {
     cExpr(x->o1);
@@ -1359,41 +1400,49 @@ void cElementAddress(node *x) {
     }
 }
 
+// Pushes an argument. A constant is pushed directly; anything else is evaluated into eax and pushed.
+void pushArg(node *x) {
+    if (x->kind == CST) { pushImm(x->val); }
+    else { cExpr(x); g(X_PUSH + EAX); }
+}
+
 // Calls a user function. The arguments are pushed in order, and the caller removes them after the call.
 void cCall(node *x) {
     int n = 0;
     for (node *a = x->o1; a; a = a->o2) {
-        cExpr(a->o1);
-        g(X_PUSH + EAX);
+        pushArg(a->o1);
         n++;
     }
     emitCall(x->val);
     if (n > 0) { ri(X_GRP1_RM_IMM32, 0, ESP, 4 * n); }
 }
 
-// The system call of syscall(n, a1, ..., a6). ebp is the frame pointer, and it carries a6, so it is saved first
-// and restored after the call. Each argument is pushed, unused ones are zero, and the values are popped into
-// eax (n), ebx, ecx, edx, esi, edi, and ebp. The result is left in eax.
+// Emits syscall(n, a1..a6). ebp carries a6, so it is saved and restored around the call. Unused arguments are zero.
 void cSyscall(node *args) {
     g(X_PUSH + EBP);
     int n = 0;
-    for (node *a = args; a; a = a->o2, n++) {
-        cExpr(a->o1);
-        g(X_PUSH + EAX);
-    }
-    for (; n < 7; n++) {
-        movImm(EAX, 0);
-        g(X_PUSH + EAX);
-    }
+    for (node *a = args; a; a = a->o2, n++) { pushArg(a->o1); }
+    for (; n < 7; n++) { pushImm(0); }
     g(X_POP + EBP); g(X_POP + EDI); g(X_POP + ESI); g(X_POP + EDX);
     g(X_POP + ECX); g(X_POP + EBX); g(X_POP + EAX);
     int80();
     g(X_POP + EBP);
 }
 
+// True if x can be loaded straight into a register: a constant or an int variable.
+int isDirect(node *x) { return x->kind == CST || ((x->kind == VAR || x->kind == LOCAL) && x->type != TYPE_BYTE); }
+
+// Loads a direct operand (see isDirect) into reg.
+void loadDirect(int reg, node *x) {
+    if (x->kind == CST) { movImm(reg, x->val); }
+    else if (isSlot(x)) { g(X_MOV_R_RM); modrmFrame(reg, slotOf(x)); }
+    else { g(X_MOV_R_RM); modrmAbs(reg, x->val); }
+}
+
 // Evaluates the operands of a binary operation: the left operand ends up in eax and the right one in ecx.
 void cOperands(node *x) {
     cExpr(x->o1);
+    if (isDirect(x->o2)) { loadDirect(ECX, x->o2); return; }
     g(X_PUSH + EAX);
     cExpr(x->o2);
     rr(X_MOV_RM_R, EAX, ECX);
@@ -1421,11 +1470,28 @@ void cLogical(node *x) {
     movzxAl();
 }
 
+// Increments (step 1) or decrements (step -1) variable t in place with a single inc or dec.
+void incVar(node *t, int step) {
+    int reg = step > 0 ? 0 : 1;  // ModRM reg field: /0 = inc, /1 = dec
+    if (isSlot(t)) { g(X_GRP5_RM); modrmFrame(reg, slotOf(t)); }
+    else if (t->type == TYPE_BYTE) { g(X_GRP4_RM8); modrmAbs(reg, t->val); }
+    else { g(X_GRP5_RM); modrmAbs(reg, t->val); }
+}
+
 // Adds x->val to the variable of x. With keep, the expression's value is left on the stack:
 // the old value for a post-increment, the new value for a pre-increment.
 void cIncrement(node *x, int keep) {
     node *t = x->o1;
     int isPost = x->kind == POST_INC;
+    if (x->val == 1 || x->val == -1) {
+        if (!(x->type == TYPE_BYTE && isSlot(t))) {  // a char slot is 32 bits, so it still needs the truncating path below
+            if (keep && isPost) { loadVar(t); g(X_PUSH + EAX); }
+            incVar(t, x->val);
+            if (keep && !isPost) { loadVar(t); }
+            if (keep && isPost) { g(X_POP + EAX); }
+            return;
+        }
+    }
     loadVar(t);
     if (keep && isPost) { g(X_PUSH + EAX); }
     ri(X_GRP1_RM_IMM32, 0, EAX, x->val);
@@ -1439,6 +1505,9 @@ void loadElement(int type) {
     if (type == TYPE_BYTE) { g(X_ESCAPE); g(X_MOVZX_R_RM8); modrmIndirect(EAX, EAX); }
     else { g(X_MOV_R_RM); modrmIndirect(EAX, EAX); }
 }
+
+// A char stored in memory writes only al, so the truncation in a BYTE_CONVERT wrapper is not needed.
+node *unconvertedByte(node *value) { return value->kind == BYTE_CONVERT ? value->o1 : value; }
 
 // Evaluates expression x into eax. Every expression leaves its value in eax.
 void cExpr(node *x) {
@@ -1483,7 +1552,7 @@ void cExpr(node *x) {
 void cElementStore(node *x) {
     cElementAddress(x);
     g(X_PUSH + EAX);
-    cExpr(x->o2);
+    cExpr(x->type == TYPE_BYTE ? unconvertedByte(x->o2) : x->o2);
     g(X_POP + ECX);
     if (x->type == TYPE_BYTE) { g(X_MOV_RM8_R8); } else { g(X_MOV_RM_R); }
     modrmIndirect(EAX, ECX);
@@ -1492,7 +1561,7 @@ void cElementStore(node *x) {
 // Evaluates x for its side effects. A value that x leaves in eax is simply overwritten by the next expression.
 void cEffect(node *x) {
     switch (x->kind) {
-        case SET: cExpr(x->o2); storeVar(x->o1); break;
+        case SET: cExpr(x->o1->type == TYPE_BYTE && !isSlot(x->o1) ? unconvertedByte(x->o2) : x->o2); storeVar(x->o1); break;
         case PRE_INC: case POST_INC: cIncrement(x, 0); break;
         case ARRAY_SET: cElementStore(x); break;
         case FUNC_CALL:
@@ -1502,8 +1571,29 @@ void cEffect(node *x) {
     }
 }
 
+// Returns the condition code for a comparison node, or -1 for any other node.
+int compareCC(int kind) {
+    switch (kind) {
+        case LT: return CC_L;
+        case GT: return CC_G;
+        case LE: return CC_LE;
+        case GE: return CC_GE;
+        case EQ: return CC_E;
+        case NE: return CC_NE;
+    }
+    return -1;
+}
+
 // Emits a jump taken when x is true (whenTrue) or false. Returns the hole for fix().
+// A comparison jumps directly on the flags; the inverse condition is the code with bit 0 flipped.
 int condJump(node *x, int whenTrue) {
+    int cc = compareCC(x->kind);
+    if (cc >= 0) {
+        cOperands(x);
+        rr(X_CMP_RM_R, ECX, EAX);
+        g(X_ESCAPE); g(X_JCC + (whenTrue ? cc : cc ^ 1));
+        return hole();
+    }
     cExpr(x);
     rr(X_TEST_RM_R, EAX, EAX);
     g(X_ESCAPE); g(X_JCC + (whenTrue ? CC_NE : CC_E));
@@ -1552,6 +1642,18 @@ void cStmt(node *x) {
     }
 }
 
+// True if control can reach the end of statement x. A return ends its path, so a body that always returns needs no fall-off return.
+int canFallThrough(node *x) {
+    if (!x) { return 1; }
+    switch (x->kind) {
+        case RETURN_NODE: return 0;
+        case SEQ: return canFallThrough(x->o1) && canFallThrough(x->o2);
+        case IF2: return canFallThrough(x->o2) || canFallThrough(x->o3);
+        case DO: return canFallThrough(x->o1);
+        default: return 1;
+    }
+}
+
 // Generates the program. The code starts with a call to main that passes its return value to the exit system
 // call, then each function. A function sets up its frame, runs its body, and returns 0 if it falls off the end.
 void c(node *prog) {
@@ -1568,11 +1670,12 @@ void c(node *prog) {
         f->address = here;
         g(X_PUSH + EBP);
         rr(X_MOV_RM_R, ESP, EBP);
-        movImm(EAX, 0);
-        for (int j = 0; j < f->numLocals; j++) { g(X_PUSH + EAX); }
+        for (int j = 0; j < f->numLocals; j++) { pushImm(0); }
         cStmt(f->body);
-        movImm(EAX, 0);
-        epilogue();
+        if (canFallThrough(f->body)) {
+            movImm(EAX, 0);
+            epilogue();
+        }
     }
     patchCalls();
 }
@@ -1581,6 +1684,7 @@ void c(node *prog) {
 // Entry point
 // -------------------------------------------------
 
+// Parses the command line, compiles the source, then lists, saves, or runs the program as requested.
 int main(int argc, char *argv[]) {
     const char *source = NULL, *exeName = NULL;
     int lSpec = 0, rSpec = 0, hSpec = 0;
