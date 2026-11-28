@@ -439,6 +439,16 @@ int keywordType(int keyword) {
     return keyword == CHAR_SYM ? TYPE_BYTE : TYPE_INT;
 }
 
+// True if the type is a pointer type.
+int isPointerType(int type) {
+    return type == TYPE_CHARPTR || type == TYPE_INTPTR;
+}
+
+// Get the element type of a pointer type: TYPE_CHARPTR -> TYPE_BYTE, TYPE_INTPTR -> TYPE_INT.
+int elementType(int ptrType) {
+    return ptrType == TYPE_CHARPTR ? TYPE_BYTE : TYPE_INT;
+}
+
 // Consumes the '*' of a declarator, if there is one. The type is char * for char or int * for int.
 int declaratorType(int baseType) {
     if (sym != STAR) { return baseType; }
@@ -448,7 +458,7 @@ int declaratorType(int baseType) {
 
 // A char * or int * variable, whose value is an address.
 int isPointerVar(node *x) {
-    return (x->kind == VAR || x->kind == LOCAL) && (x->type == TYPE_CHARPTR || x->type == TYPE_INTPTR);
+    return (x->kind == VAR || x->kind == LOCAL) && isPointerType(x->type);
 }
 
 // ++p, --p, p++ or p--: a char * variable changed by one byte. Its value is the new or the old address.
@@ -529,12 +539,11 @@ node *callArguments(const char *name) {
         for (int i = 0; i < count; i++, arg = arg->o2) {
             node *value = arg->o1;
             int isArray = value->kind == ARRAY_REF;
-            if (function->parameterTypes[i] == TYPE_CHARPTR) {
-                qFail(!isPointerExpr(value) && !isArrayPointerExpr(value) && !(isArray && value->type == TYPE_BYTE), "-argument %d to %s must be a char * or a char array-\n", i + 1, name);
-                continue;
-            }
-            if (function->parameterTypes[i] == TYPE_INTPTR) {
-                qFail(!isPointerExpr(value) && !isArrayPointerExpr(value) && !(isArray && value->type == TYPE_INT), "-argument %d to %s must be an int * or an int array-\n", i + 1, name);
+            if (isPointerType(function->parameterTypes[i])) {
+                int expectedElemType = elementType(function->parameterTypes[i]);
+                int isValidPointer = isPointerExpr(value) || isArrayPointerExpr(value);
+                int isValidArray = isArray && value->type == expectedElemType;
+                qFail(!isValidPointer && !isValidArray, "-argument %d to %s must be a pointer or matching array-\n", i + 1, name);
                 continue;
             }
             qFail(isArray != function->parameterIsArray[i], "-argument %d to %s must be %s-\n", i + 1, name,
@@ -565,8 +574,7 @@ int arrayElementType(const char *name) {
 
 int isPointerName(const char *name) {
     if (localIndex(name) < 0 && parameterIndex(name) < 0 && findVariable(name) < 0) { return 0; }
-    int type = arrayElementType(name);
-    return type == TYPE_CHARPTR || type == TYPE_INTPTR;
+    return isPointerType(arrayElementType(name));
 }
 
 // The LOCAL, VAR, or ARRAY_REF node for a bare name.
@@ -626,7 +634,7 @@ node *term() {
       expectName(name);
       x = increment(PRE_INC, nameNode(name), delta);
   } else if (sym == STAR) {
-      // *e is e[0]. The operand is a char * or int * value or the corresponding array type.
+      // *e is e[0]. The operand is a pointer or array.
       nextSym();
       node *operand = term();
       int isCharPtr = isPointerExpr(operand) || isArrayPointerExpr(operand) || isByteArray(operand);
@@ -652,8 +660,7 @@ node *term() {
           x->val = base;
           x->o3 = pointer;
           if (pointer) {
-              int ptrType = pointer->type;
-              x->type = (ptrType == TYPE_CHARPTR) ? TYPE_BYTE : TYPE_INT;
+              x->type = elementType(pointer->type);
           } else {
               x->type = arrayElementType(name);
           }
@@ -699,6 +706,11 @@ int isIntArrayAddress(node *x) {
     return x->kind == ADD && isIntArrayAddress(x->o2) && !isIntArrayAddress(x->o1);
 }
 
+// True if an expression is a pointer or int array address (requires index scaling by 4).
+int requiresIndexScaling(node *x) {
+    return x->type == TYPE_INTPTR || isIntArrayAddress(x);
+}
+
 /* <math> ::= <term> | <math> <math_op> <term> */
 /* <math_op> ::= "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" */
 node *sum() {
@@ -707,14 +719,9 @@ node *sum() {
   while ((op = mathop())) {
     nextSym();
     node *right = term();
-    if ((op == ADD || op == SUB) && isIntArrayAddress(x) && !isIntArrayAddress(right)) {
+    if ((op == ADD || op == SUB) && requiresIndexScaling(x) && !requiresIndexScaling(right)) {
         right = gen(MUL, right, constant(4));
-    } else if (op == ADD && isIntArrayAddress(right) && !isIntArrayAddress(x)) {
-        x = gen(MUL, x, constant(4));
-    }
-    if ((op == ADD || op == SUB) && x->type == TYPE_INTPTR && right->type == TYPE_INT) {
-        right = gen(MUL, right, constant(4));
-    } else if (op == ADD && x->type == TYPE_INT && right->type == TYPE_INTPTR) {
+    } else if (op == ADD && requiresIndexScaling(right) && !requiresIndexScaling(x)) {
         x = gen(MUL, x, constant(4));
     }
     x = gen(op, x, right);
@@ -789,7 +796,7 @@ node *statement() {
           qFail(function->numLocals >= MAX_LOCALS, "-too many local variables-");
           int local = function->numLocals;
           if (sym == LBRACKET) {
-              qFail(localType == TYPE_CHARPTR || localType == TYPE_INTPTR, "-arrays of pointers are not supported-");
+              qFail(isPointerType(localType), "-arrays of pointers are not supported-");
               nextSym();
               expectSym(RBRACKET);
               qFail(sym != EQUAL, "-array must be initialized with a string literal-");
@@ -907,7 +914,7 @@ void parseParameters(struct function_s *function) {
             function->parameterTypes[parameter] = parameterType;
             nextSym();
             if (sym == LBRACKET) {
-                qFail(parameterType == TYPE_CHARPTR, "-arrays of char * are not supported-");
+                qFail(isPointerType(parameterType), "-arrays of pointers are not supported-");
                 nextSym();
                 expectSym(RBRACKET);
                 function->parameterIsArray[parameter] = 1;
@@ -924,7 +931,7 @@ void parseVariableDeclarator(const char *name, int type) {
     int isArray = 0;
     int inferredSize = 0;
     if (sym == LBRACKET) {
-        qFail(type == TYPE_CHARPTR || type == TYPE_INTPTR, "-arrays of pointers are not supported-");
+        qFail(isPointerType(type), "-arrays of pointers are not supported-");
         isArray = 1;
         nextSym();
         if (sym == RBRACKET) {
@@ -941,9 +948,10 @@ void parseVariableDeclarator(const char *name, int type) {
     if (sym == EQUAL && !isArray) {
         nextSym();
         scalar = expr();
-        if (type == TYPE_CHARPTR || type == TYPE_INTPTR) {
+        if (isPointerType(type)) {
             int isNull = scalar->kind == CST && scalar->val == 0;
-            qFail(!isNull && (scalar->kind != ARRAY_REF || scalar->type != (type == TYPE_CHARPTR ? TYPE_BYTE : TYPE_INT) || scalar->val < 0), 
+            int expectedElemType = elementType(type);
+            qFail(!isNull && (scalar->kind != ARRAY_REF || scalar->type != expectedElemType || scalar->val < 0), 
                   "-pointer must be initialized by 0 or an array of matching type-");
         } else {
             if (type == TYPE_BYTE) { scalar = byteConversion(scalar); }
@@ -1102,7 +1110,7 @@ void checkPointerUses(node *x) {
     if (x->kind == SET && isPointerVar(x->o1)) {
         int ptrType = x->o1->type;
         if (isPointerExpr(x->o2)) { checkPointerValue(x->o2); return; }
-        int expectedArrayType = ptrType == TYPE_CHARPTR ? TYPE_BYTE : TYPE_INT;
+        int expectedArrayType = elementType(ptrType);
         int isCharPtr = isPointerish(x->o2) && ptrType == TYPE_CHARPTR;
         int isIntPtr = (isArrayPointerExpr(x->o2) || (x->o2->kind == ARRAY_REF && x->o2->type == TYPE_INT)) && ptrType == TYPE_INTPTR;
         int isCompatible = isNullConstant(x->o2) || (isPointerish(x->o2) && x->o2->type == ptrType) ||
@@ -1114,8 +1122,8 @@ void checkPointerUses(node *x) {
     }
     if (isComparison(x) && (isPointerish(x->o1) || isPointerish(x->o2))) {
         int equality = x->kind == EQ || x->kind == NE;
-        int leftPtr = isPointerish(x->o1) || (x->o1->type == TYPE_INTPTR) || (x->o1->type == TYPE_CHARPTR);
-        int rightPtr = isPointerish(x->o2) || (x->o2->type == TYPE_INTPTR) || (x->o2->type == TYPE_CHARPTR);
+        int leftPtr = isPointerish(x->o1) || isPointerType(x->o1->type);
+        int rightPtr = isPointerish(x->o2) || isPointerType(x->o2->type);
         int leftOk = leftPtr || (equality && isNullConstant(x->o1));
         int rightOk = rightPtr || (equality && isNullConstant(x->o2));
         qFail(!(leftOk && rightOk), "-pointers can only be compared with matching pointers or, for == and !=, 0-");
@@ -1153,7 +1161,7 @@ node *defs(node *st) {
     char name[sizeof(idName)];
     expectName(name);
     if (sym == LPAR) {
-        qFail(type == TYPE_CHARPTR, "-functions cannot return char *-");
+        qFail(isPointerType(type), "-functions cannot return pointers-");
         parseFunctionDefinition(name, type);
     }
     else { variableDeclarations(name, type, baseType); }
