@@ -913,8 +913,8 @@ int testBenchmark() {
     check("do while sums to 1000 in 45 passes", n == 45);
 }
 
-int incParam(int n) { n++; return n; }
-int incLocal() { int k = 3; k--; ++k; return k; }
+int incParam(int n) { return ++n; }
+int incLocal() { int k = 3; k++; return --k; }
 int incByte() { char b = 255; b++; return b; }
 int decByte() { char b = 0; --b; return b; }
 
@@ -937,6 +937,25 @@ int testIncDec() {
     check("byte global prefix decrement wraps", (--gByteCount) == 255);
 }
 
+char pBuf[] = "abcdef", *xBuf="123456";
+int fallsOff(int x) { if (x) { return 5; } }
+int elseIfChain(int x) { if (x == 0) return 1; else if (x == 1) return 2; else return 3; }
+int abcdefghijklmnopqrstuvw(int x) { return x + 1; }
+char bothForms1(char *a, char *b) { return *a + b[1]; }
+int  bothForms2(char *a, char *b) { return a[1] + *b; }
+
+// Forms the other tests don't reach: a 23-character name, falling off the end, else-if, a pointer on the right of +, and a 7-argument syscall.
+int testSupportedForms() {
+    char *p = pBuf;
+    check("23-character identifier", abcdefghijklmnopqrstuvw(4) == 5);
+    check("falling off the end returns 0", fallsOff(0) == 0);
+    check("else-if chain takes the middle branch", elseIfChain(1) == 2);
+    check("pointer on the right of +", *(1 + p) == 'b');
+    check("syscall accepts 7 arguments", syscall(4, 1, emitBuf, 0, 0, 0, 0) == 0);
+    check("both char pointer forms (1)", bothForms1(pBuf, xBuf) == 'a' + '2');
+    check("both char pointer forms (2)", bothForms2(pBuf, xBuf) == 'b' + '1');
+}
+
 int main() {
     testGlobals();
     testLiterals();
@@ -956,6 +975,7 @@ int main() {
     testLongJumps();
     testEmit();
     testSyscall();
+    testSupportedForms();
     testFileIO();
     testLocalAlias();
     testPointers();
