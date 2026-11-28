@@ -1,7 +1,7 @@
 // Golden test for the listing of generated code (make listing-test)
 
 int gArr[4];
-byte gStr[] = "abc";
+char gStr[] = "abc";
 
 int twice(int x) { return x + x; }
 

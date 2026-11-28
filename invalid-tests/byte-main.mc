@@ -1,1 +1,1 @@
-byte main() { return 'a'; }
+char main() { return 'a'; }

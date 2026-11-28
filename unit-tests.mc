@@ -7,75 +7,74 @@
 int failures, passes;
 int gZero, gA, gB;
 int gInit = 7, gInitNeg = -3, gInitExpr = 2 * 3 + 1;
-byte gByteInit = 258, gByteNeg = -1;
-byte gByte, gBytes[] = "abc";
-byte gByteCount = 255;
+char gByteInit = 258, gByteNeg = -1;
+char gByte, gBytes[] = "abc";
+char gByteCount = 255;
 int gArr[4];
-byte gStr[] = "abc";
-byte gPad[10] = "hi";
-byte gEmpty[] = "";
-byte gEsc[] = "\n\t\\\"";
+char gStr[] = "abc";
+char gPad[10] = "hi";
+char gEmpty[] = "";
+char gEsc[] = "\n\t\\\"";
 int gCounter;
 int gInc;
-byte gEsc2[] = "\r\e\'";
-byte gEsc3[] = "a\0b";
-byte gCat[8] = "ab";
-byte gLong[] = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
+char gEsc2[] = "\r\e\'";
+char gEsc3[] = "a\0b";
+char gCat[8] = "ab";
+char gLong[] = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
 int globalInt, anotherGlobal, leading2, upperCase;
 int charCode, newlineCode, escapeCode, quoteCode, backslashCode, outputCode, modResult;
 int globalArr[10], nums[5];
-byte cat[10] = "cat";
-byte emptyString[] = "";
-byte escapedString[] = "A\n\"\\\0";
-byte greeting[] = "\ncat";
+char cat[10] = "cat";
+char emptyString[] = "";
+char pointerBuf[8] = "xyz";
+char gPtrSource[] = "src";
+char *gStrPtr = "pointer";
+char *gPtrCopy = gPtrSource;
+char escapedString[] = "A\n\"\\\0";
+char greeting[] = "\ncat";
 int gBigPad[40000];
 int gAfterBig = 9;
-byte gBigBytes[40000];
-byte gAfterBytes = 3;
+char gBigBytes[40000];
+char gAfterBytes = 3;
 int gWide = 70000;
 int gBefore[2];
-byte gBetween[3];
+char gBetween[3];
 int gAfter[2];
 
-void check(byte name[], int ok) {
+int check(char *name, int ok) {
     print(name);
     if (ok) { print(": ok\n"); passes++; }
     else { print(": FAIL\n"); failures++; }
 }
 
-byte passByte(byte value) { return value; }
-int promoteByte(byte value) { return value; }
-byte narrowByte(int value) { return value; }
-byte arrayByte(byte values[], int index) { return values[index]; }
-void updateByteArray(byte values[]) { values[2] = 'Z'; }
-byte prototypedByte(int value);
-byte prototypedByte(int value) { return value; }
-byte setByteGlobal() { gByte = 9; return 3; }
+char passByte(char value) { return value; }
+int promoteByte(char value) { return value; }
+char narrowByte(int value) { return value; }
+char arrayByte(char *values, int index) { return values[index]; }
+int updateByteArray(char *values) { values[2] = 'Z'; }
+char prototypedByte(int value);
+char prototypedByte(int value) { return value; }
+char setByteGlobal() { gByte = 9; return 3; }
 
 // Global storage and string initializers.
-void testGlobals() {
+int testGlobals() {
     check("global scalar is zero-initialized", gZero == 0);
     check("global array is zero-initialized", gArr[3] == 0);
     gA = 4;
     gB = gA + 1;
     check("multiple declarators are independent", gB == 5);
-    check("inferred string length", gStr[0] == 3);
-    check("inferred string high length byte", gStr[1] == 0);
-    check("string first character", gStr[2] == 'a');
-    check("string last character", gStr[4] == 'c');
-    check("string terminator", gStr[5] == 0);
-    check("sized string length", gPad[0] == 2);
-    check("sized string high length byte", gPad[1] == 0);
+    check("inferred string first character", gStr[0] == 'a');
+    check("string last character", gStr[2] == 'c');
+    check("string terminator", gStr[3] == 0);
+    check("sized string first character", gPad[0] == 'h');
+    check("sized string second character", gPad[1] == 'i');
     check("sized string padded with zero", gPad[9] == 0);
-    check("empty string length", gEmpty[0] == 0);
-    check("empty string high length byte", gEmpty[1] == 0);
-    check("empty string terminator", gEmpty[2] == 0);
-    check("escape string length", gEsc[0] == 4);
-    check("newline escape", gEsc[2] == '\n');
-    check("tab escape", gEsc[3] == '\t');
-    check("backslash escape", gEsc[4] == '\\');
-    check("quote escape", gEsc[5] == '"');
-    check("escape string terminator", gEsc[6] == 0);
+    check("empty string terminator", gEmpty[0] == 0);
+    check("newline escape", gEsc[0] == '\n');
+    check("tab escape", gEsc[1] == '\t');
+    check("backslash escape", gEsc[2] == '\\');
+    check("quote escape", gEsc[3] == '"');
+    check("escape string terminator", gEsc[4] == 0);
     check("int global scalar initializer", gInit == 7);
     check("negative int global initializer", gInitNeg == -3);
     check("constant expression global initializer", gInitExpr == 7);
@@ -99,7 +98,7 @@ void testGlobals() {
 }
 
 // Integer and character literals, unary minus.
-void testLiterals() {
+int testLiterals() {
     check("decimal boundary 127 to 128", 127 + 1 == 128);
     check("decimal boundary 32767 to 32768", 32767 + 1 == 32768);
     check("large decimal literal", 65536 + 1 == 65537);
@@ -108,17 +107,22 @@ void testLiterals() {
     check("char carriage return", '\r' == 13);
     check("char tab", '\t' == 9);
     check("char NUL", '\0' == 0);
+    check("char alarm", '\a' == 7);
+    check("char backspace", '\b' == 8);
+    check("char vertical tab", '\v' == 11);
+    check("char form feed", '\f' == 12);
     check("char escape", '\e' == 27);
     check("char backslash", '\\' == 92);
     check("char single quote", '\'' == 39);
     check("char double quote", '"' == 34);
+    check("unlisted escape is its character", '\q' == 'q');
     check("unary minus", -5 == 0 - 5);
     check("double unary minus", - -5 == 5);
     check("unary minus on parenthesized sum", -(3 + 4) == 0 - 7);
 }
 
-void testByteTypes() {
-    byte local, another;
+int testByteTypes() {
+    char local, another;
     check("byte global is zero-initialized", gByte == 0);
     gByte = 258;
     check("byte global assignment narrows", gByte == 2);
@@ -141,13 +145,13 @@ void testByteTypes() {
     updateByteArray(gBytes);
     check("byte array parameter writes elements", gBytes[2] == 'Z');
     check("string literal passed to byte array parameter",
-          arrayByte("abc", 2) == 'a');
+          arrayByte("abc", 0) == 'a');
     check("byte prototype with int argument", prototypedByte(258) == 2);
     setByteGlobal();
     check("byte function call as statement", gByte == 9);
 }
 
-void testArithmetic() {
+int testArithmetic() {
     check("addition", 7 + 3 == 10);
     check("subtraction", 7 - 3 == 4);
     check("multiplication", 7 * 3 == 21);
@@ -158,10 +162,16 @@ void testArithmetic() {
     check("left-to-right subtraction", 10 - 4 - 3 == 3);
     // sum() has no precedence; operators apply left to right.
     check("operators evaluate left to right", 2 + 3 * 4 == 20);
+    check("bitwise and", (12 & 10) == 8);
+    check("bitwise or", (12 | 10) == 14);
+    check("bitwise xor", (12 ^ 10) == 6);
+    check("bitwise not", ~0 == -1);
+    check("bitwise not binds to its term", ~2 + 1 == -2);
+    check("bitwise operators evaluate left to right", (6 | 1 & 2) == 2);
     check("parentheses override order", 2 + (3 * 4) == 14);
 }
 
-void testComparisons() {
+int testComparisons() {
     int x, y, hits, count;
     check("less than true", 3 < 4);
     check("less than false", (4 < 3) == 0);
@@ -194,7 +204,7 @@ void testComparisons() {
     check("runtime <= and >= as values", ((x <= y) + (x >= y) + (x <= y - 1)) == 2);
 }
 
-void testAssignment() {
+int testAssignment() {
     gA = 5;
     check("assignment stores its value", gA == 5);
     gB = 9;
@@ -209,7 +219,7 @@ void testAssignment() {
     check("array index expression", gArr[1 + 1] == gArr[2]);
 }
 
-void testControlFlow() {
+int testControlFlow() {
     int i, n, r = 0, a, b;
     if (1) r = 1;
     check("if true", r == 1);
@@ -243,8 +253,8 @@ void testControlFlow() {
 int add(int a, int b) { return a + b; }
 int sub(int a, int b) { return a - b; }
 
-void maybeSet(int value) {
-    if (value) { return; }
+int maybeSet(int value) {
+    if (value) { return 0; }
     gCounter = 1;
 }
 
@@ -277,7 +287,7 @@ int forwardCallee(int x) { return x * 10; }
 // Global declared after functions.
 int gLate;
 
-void testFunctions() {
+int testFunctions() {
     int n;
     check("argument order", sub(10, 3) == 7);
     check("nested calls", sub(add(5, 5), 3) == 7);
@@ -301,7 +311,7 @@ void testFunctions() {
 }
 
 
-void fill(int arr[], int count) {
+int fill(int arr[], int count) {
     int i = 0;
     while (i < count) { arr[i] = twice(i++); }
 }
@@ -313,10 +323,10 @@ int sum(int arr[], int count) {
 }
 
 int sumForward(int arr[], int count) { return sum(arr, count); }
-int firstChar(byte s[]) { return s[2]; }
-void put(int index, int arr[], int value) { arr[index] = value; }
+int firstChar(char *s) { return s[0]; }
+int put(int index, int *arr, int value) { arr[index] = value; }
 
-void testArrays() {
+int testArrays() {
     fill(gArr, 4);
     check("array parameter writes caller array", gArr[3] == 6);
     check("array parameter reads caller array", sum(gArr, 4) == 12);
@@ -326,16 +336,167 @@ void testArrays() {
     check("string literal as array argument", firstChar("xyz") == 'x');
     check("string literal length", strlen("hello") == 5);
     check("long string length above 255", strlen(gLong) == 260);
-    check("long string last character", gLong[261] == 'z');
+    check("long string last character", gLong[259] == 'z');
     strcatc(gCat, 'c');
     check("strcatc appends a character", strlen(gCat) == 3);
-    check("strcatc character is at index 4", gCat[4] == 'c');
-    check("strcatc keeps terminator", gCat[5] == 0);
+    check("strcatc character is at index 2", gCat[2] == 'c');
+    check("strcatc keeps terminator", gCat[3] == 0);
 }
 
 // emit() prints the newline and returns the byte written.
-void testEmit() {
+int testEmit() {
     check("emit returns written byte", emit('*') == '*');
+}
+
+// syscall() returns the system call's result. A write of zero bytes returns 0.
+int testSyscall() {
+    check("syscall write of zero bytes returns 0", syscall(4, 1, emitBuf, 0) == 0);
+}
+
+char ioOut[2], ioIn[8];
+
+// fopen/fwrite/fclose/fread round-trip a file. A missing file gives a negative result.
+int testFileIO() {
+    char *nm = "unit-tests.dat";
+    ioOut[0] = 'm'; ioOut[1] = 'c';
+    int fd = fopen(nm, 577);
+    check("fopen for writing returns a descriptor", fd >= 0);
+    check("fwrite returns the byte count", fwrite(fd, ioOut, 2) == 2);
+    check("fclose returns 0", fclose(fd) == 0);
+    fd = fopen(nm, 0);
+    check("fopen for reading returns a descriptor", fd >= 0);
+    check("fread returns the byte count", fread(fd, ioIn, 8) == 2);
+    check("fread returns the written bytes", ioIn[0] == 'm' && ioIn[1] == 'c');
+    fclose(fd);
+    fdelete(nm);
+    check("fopen of a missing file returns a negative errno", fopen(nm, 0) < 0);
+}
+
+char aliasName[] = "chris";
+int aliasInts[3];
+
+int setFirstChar(char *str) { str[2] = 'Z'; }
+int aliasGet(int *arr, int i) { return arr[i]; }
+
+// A pointer can be assigned from an array and dereferenced to access and modify the array.
+int testLocalAlias() {
+    char *p = aliasName;
+    p[2] = 'C';
+    check("pointer to array allows writes through the pointer", aliasName[2] == 'C');
+    check("pointer reads match array contents", p[2] == 'C');
+    setFirstChar(aliasName);
+    check("pointer passed to function allows array modification", aliasName[2] == 'Z');
+    int *xi = aliasInts;
+    xi[1] = 42;
+    check("int pointer to array allows writes through the pointer", aliasInts[1] == 42);
+    check("int pointer passes to function allowing array access", aliasGet(xi, 1) == 42);
+    check("array can be passed to function expecting int pointer", aliasGet(aliasInts, 1) == 42);
+    int *xk = aliasInts;
+    xk++;
+    check("int pointer ++ steps one int", *xk == 42);
+    xk--;
+    check("int pointer -- steps back one int", xk[0] == 0 && *(xk + 1) == 42);
+}
+
+int pointerSum(char *s) {
+    int i = 0, n = 0;
+    while (s[i]) { n = n + s[i]; i++; }
+    return n;
+}
+
+int fillPointer(char *dst, char v) {
+    dst[0] = v;
+    dst[1] = 0;
+    return 0;
+}
+
+int testPointers() {
+    char *p = pointerBuf;
+    check("char * local reads an array", p[1] == 'y');
+    p[1] = 'Q';
+    check("char * local writes the array", pointerBuf[1] == 'Q');
+    int i = 2;
+    check("char * indexed by a variable", p[i] == 'z');
+    check("char * global from a string", gStrPtr[0] == 'p');
+    check("char * global from a global array", gPtrCopy[1] == 'r');
+    gPtrCopy[0] = 'S';
+    check("char * global writes the array", gPtrSource[0] == 'S');
+    char *q;
+    q = p;
+    check("char * assigned from a char *", q[1] == 'Q');
+    q = "abc";
+    check("char * assigned from a string", q[2] == 'c');
+    char *r = p + 1;
+    check("char * = char * + int", r[0] == 'Q');
+    r = r + 1;
+    check("char * = char * + int, advancing", r[0] == 'z');
+    r = r - 2;
+    check("char * = char * - int, retreating", r[0] == 'x');
+    char *t = p + 1 + 1;
+    check("char * + int + int", t[0] == 'z');
+    check("char * + int passed as a char * argument", pointerSum(p + 1) == 'Q' + 'z');
+    p = p + 1;
+    check("char * = p + 1 advances p", p[0] == 'Q');
+    p = p - 1;
+    check("char * = p - 1 restores p", p[0] == 'x');
+    char *w = p + 1;
+    w[0] = 'W';
+    check("writes through a char * + int", pointerBuf[1] == 'W');
+    w[0] = 'Q';
+    char *m, c = 'k', *n = "nn";
+    check("char after char * in a declaration is a char", c == 'k');
+    check("char * after a char in a declaration", n[1] == 'n');
+    p[0] = 300;
+    check("char * elements are bytes", p[0] == 44);
+    check("char * passed a string", pointerSum("ab") == 'a' + 'b');
+    fillPointer(p, 'Z');
+    check("char * parameter writes the caller's array", pointerBuf[0] == 'Z' && pointerBuf[1] == 0);
+    m = pointerBuf;
+    check("char * parameter receives the same address", m[0] == 'Z');
+    char *nul = 0;
+    check("char * = 0 is a null pointer", nul == 0);
+    check("char * compares unequal to 0 once set", pointerBuf != 0);
+    char *u = pointerBuf;
+    u++;
+    check("char * postfix ++ steps one byte", u == pointerBuf + 1);
+    ++u;
+    check("char * prefix ++ steps one byte", u == pointerBuf + 2);
+    u--;
+    check("char * postfix -- steps back one byte", u == pointerBuf + 1);
+    check("char * < char * orders by address", pointerBuf < u && (u < pointerBuf) == 0);
+    check("*p reads the first element", *pointerBuf == 'Z');
+    *u = 'R';
+    check("*p = e writes through a char *", pointerBuf[1] == 'R');
+    char c1 = *u++;
+    check("*p++ reads then advances", c1 == 'R' && u == pointerBuf + 2);
+    int offset = 1;
+    char *k = pointerBuf + offset;
+    check("char array + variable is a char *", k == pointerBuf + 1);
+    char *j = 1 + pointerBuf;
+    check("1 + char array is a char *", j == k);
+    check("*(p + 1) reads the next element", *(pointerBuf + 1) == 'R');
+    k = 0;
+    check("char * reassigned to 0", k == 0);
+    return 0;
+}
+
+// Scalar constants: folded by the parser, so they need no storage.
+const int kLimit = 10;
+const int kDerived = kLimit * 3 + 1;
+const char kByte = 300;
+int testConstants() {
+    check("int constant reads its value", kLimit == 10);
+    check("constant folds from other constants", kDerived == 31);
+    check("byte constant wraps to a byte", kByte == 44);
+    int x = kLimit + 1;
+    check("constant used in an expression", x == 11);
+    check("constant used as a call argument", promoteByte(kByte) == 44);
+}
+
+int shadowConstant() { int kLimit = 3; return kLimit; }
+int testConstantShadowing() {
+    check("local shadows a constant", shadowConstant() == 3);
+    check("constant is unchanged after shadowing", kLimit == 10);
 }
 
 int twice(int x) { return x * 2; }
@@ -398,7 +559,7 @@ int sign(int x) {
 int passTwo(int arr[]) { return sumForward(arr, 4); }
 int passThree(int arr[]) { return passTwo(arr); }
 
-void testCalls() {
+int testCalls() {
     check("call inside binary expression", 1 + twice(2) == 5);
     check("two calls in one expression", twice(3) * twice(2) - twice(1) == 22);
     check("call with pending operand below", 100 - add(1, 2) == 97);
@@ -423,11 +584,11 @@ void testCalls() {
 
 int localInits(int x) {
     int a = x, b = a + 1;
-    byte c = 300;
+    char c = 300;
     return a + b + c;
 }
 
-int byteLocalFromParam(int x) { byte b = x; return b; }
+int byteLocalFromParam(int x) { char b = x; return b; }
 
 int initInLoop(int n) {
     int total = 0, i = 0;
@@ -439,7 +600,11 @@ int initInLoop(int n) {
     return total;
 }
 
-void testLocals() {
+int blockLocalDoesNotLeak() { int v = 5; { int v = 1; v = v + 1; } return v; }
+int siblingBlocksReuseName() { int r = 0; { int w = 1; r = r + w; } { int w = 2; r = r + w; } return r; }
+int shadowInBlock(int p) { { int p = 9; } return p; }
+
+int testLocals() {
     check("local initializers see earlier declarators", localInits(1) == 47);
     check("byte local initializer narrows", byteLocalFromParam(300) == 44);
     check("negative byte local initializer wraps", byteLocalFromParam(-1) == 255);
@@ -448,13 +613,16 @@ void testLocals() {
     check("declaration after statements", lateDecl(3) == 8);
     gA = 77;
     check("local shadows global", shadowLocal(5) == 5);
+    check("block local does not leak", blockLocalDoesNotLeak() == 5);
+    check("sibling blocks reuse a name", siblingBlocksReuseName() == 3);
+    check("block local shadows parameter", shadowInBlock(4) == 4);
     check("global unchanged by shadowing local", gA == 77);
     check("parameter shadows global", shadowParam(4) == 5);
     check("parameter shadows function", shadowFuncParam(6) == 6);
     check("local shadows function", shadowFuncLocal() == 4);
 }
 
-void testRecursion() {
+int testRecursion() {
     check("factorial of 10", fact(10) == 3628800);
     check("deep recursion of 200 levels", depth(200) == 200);
     check("mutual recursion even true", isEven(10) == 1);
@@ -467,20 +635,20 @@ void testRecursion() {
     check("sign positive", sign(7) == 1);
 }
 
-void testLiterals2() {
+int testLiterals2() {
     check("negative multiply", -3 * 4 == -12);
     check("negative divide", 12 / -4 == -3);
     check("large product", 200 * 300 == 60000);
     check("large constant arithmetic", 70000 - 1 == 69999);
-    check("carriage return escape in string", gEsc2[2] == 13);
-    check("escape e in string", gEsc2[3] == 27);
-    check("escaped single quote in string", gEsc2[4] == 39);
-    check("string terminator after escapes", gEsc2[5] == 0);
-    check("NUL escape inside string", gEsc3[3] == 0);
-    check("character after NUL escape", gEsc3[4] == 'b');
+    check("carriage return escape in string", gEsc2[0] == 13);
+    check("escape e in string", gEsc2[1] == 27);
+    check("escaped single quote in string", gEsc2[2] == 39);
+    check("string terminator after escapes", gEsc2[3] == 0);
+    check("NUL escape inside string", gEsc3[1] == 0);
+    check("character after NUL escape", gEsc3[2] == 'b');
 }
 
-void testArrays2() {
+int testArrays2() {
     fill(gArr, 4);
     check("array parameter through three levels", passThree(gArr) == 12);
     gArr[0] = 1;
@@ -515,20 +683,20 @@ int longJumpIf(int x) {
     return n;
 }
 
-void testLongJumps() {
+int testLongJumps() {
     check("loop body over 127 bytes", longJumpLoop() == 60);
     check("if body over 127 bytes taken", longJumpIf(1) == 20);
     check("if body over 127 bytes skipped", longJumpIf(0) == 0);
 }
 
-void nop() {}
+int nop() {}
 
-void returnEarly(int shouldReturn) {
-    if (shouldReturn) { return; }
+int returnEarly(int shouldReturn) {
+    if (shouldReturn) { return 0; }
     globalInt = globalInt + 100;
 }
 
-void statementForms(int limit) {
+int statementForms(int limit) {
     int i = 0;
     ;
     while (i < limit) i = i + 1;
@@ -537,9 +705,9 @@ void statementForms(int limit) {
     if (i > 0) ; else globalInt = globalInt + 1;
 }
 
-void setGlobal() { globalInt = 42; }
+int setGlobal() { globalInt = 42; }
 int getGlobal() { return globalInt; }
-void writeSecond(int value, int items[]) { items[1] = value; }
+int writeSecond(int value, int items[]) { items[1] = value; }
 int identity(int x) { return x; }
 
 int mul(int left, int right) { return left * right; }
@@ -592,8 +760,16 @@ int parity(int x) {
 int isFalse(int value) { return value == 0; }
 
 int modTest(int a, int b, int c) { return (a % b) == c; }
+int bitAnd(int a, int b) { return a & b; }
+int bitOr(int a, int b) { return a | b; }
+int bitXor(int a, int b) { return a ^ b; }
+int bitNot(int a) { return ~a; }
+int shiftLeft(int a, int b) { return a << b; }
+int shiftRight(int a, int b) { return a >> b; }
+int gSideEffects;
+int sideEffect(int value) { gSideEffects++; return value; }
 
-void testProgramFlow() {
+int testProgramFlow() {
     int localA;
     int localB;
     int localC;
@@ -618,7 +794,7 @@ void testProgramFlow() {
     quoteCode = '\'';
     backslashCode = '\\';
     localA = strlen(greeting);
-    localB = greeting[3];
+    localB = greeting[1];
     anotherGlobal = 7;
     globalInt = anotherGlobal;
 
@@ -682,6 +858,26 @@ void testProgramFlow() {
     check("division", div(20, 5) == 4);
     check("modulo", modTest(123, 100, 23));
     check("negative modulo", -7 % 3 == -1);
+    check("runtime bitwise and", bitAnd(12, 10) == 8);
+    check("runtime bitwise or", bitOr(12, 10) == 14);
+    check("runtime bitwise xor", bitXor(12, 10) == 6);
+    check("runtime bitwise not", bitNot(5) == -6);
+    check("shift left", (3 << 4) == 48);
+    check("shift right", (48 >> 4) == 3);
+    check("arithmetic shift right keeps the sign", (-8 >> 1) == -4);
+    check("runtime shift left", shiftLeft(3, 4) == 48);
+    check("runtime arithmetic shift right", shiftRight(-8, 1) == -4);
+    check("logical and is 0 or 1", (2 && 3) == 1);
+    check("logical and with a zero is 0", (0 && 5) == 0);
+    check("logical or is 0 or 1", (0 || 7) == 1);
+    check("logical or of zeros is 0", (0 || 0) == 0);
+    check("logical operators on comparisons", 1 < 2 && 3 > 2 || 0);
+    gSideEffects = 0;
+    check("&& skips the right side when the left is false", (0 && sideEffect(1)) == 0 && gSideEffects == 0);
+    gSideEffects = 0;
+    check("|| skips the right side when the left is true", (1 || sideEffect(0)) == 1 && gSideEffects == 0);
+    gSideEffects = 0;
+    check("&& evaluates the right side when the left is true", (1 && sideEffect(0)) == 0 && gSideEffects == 1);
     check("equality", 7 == 7);
     check("equality false", isFalse(7 == 8));
     check("inequality true", 7 != 8);
@@ -690,10 +886,9 @@ void testProgramFlow() {
     check("character escape", newlineCode == 10);
     check("escape character", escapeCode == 27);
     check("string length", strlen("ABC") == 3);
-    check("string first character", greeting[3] == 'c');
-    check("string terminator", greeting[6] == 0);
-    check("empty string length", emptyString[0] == 0);
-    check("empty string terminator", emptyString[2] == 0);
+    check("string first character", greeting[1] == 'c');
+    check("string terminator", greeting[4] == 0);
+    check("empty string terminator", emptyString[0] == 0);
     check("global array reference", globalArr[1] == 8);
     check("recursive function fib(10)", fib(10) == 55);
     check("recursive function fact(5)", fact(5) == 120);
@@ -707,11 +902,11 @@ void testProgramFlow() {
 
 int mil(int n) { return n * 1000 * 1000; }
 
-void testBenchmark() {
+int testBenchmark() {
     int i, n;
-    i = mil(100);
+    i = mil(10);
     while (i) { i--; }
-    check("100 million iteration while loop completes", i == 0);
+    check("10 million iteration while loop completes", i == 0);
     i = 0;
     n = 0;
     do { i = i + (++n); } while (i < 1000);
@@ -720,10 +915,10 @@ void testBenchmark() {
 
 int incParam(int n) { n++; return n; }
 int incLocal() { int k = 3; k--; ++k; return k; }
-int incByte() { byte b = 255; b++; return b; }
-int decByte() { byte b = 0; --b; return b; }
+int incByte() { char b = 255; b++; return b; }
+int decByte() { char b = 0; --b; return b; }
 
-void testIncDec() {
+int testIncDec() {
     int old;
     gInc = 5;
     gInc++;
@@ -760,6 +955,12 @@ int main() {
     testLiterals2();
     testLongJumps();
     testEmit();
+    testSyscall();
+    testFileIO();
+    testLocalAlias();
+    testPointers();
+    testConstants();
+    testConstantShadowing();
     testProgramFlow();
     testBenchmark();
     print("\npassed: "); printNum(passes, 10);

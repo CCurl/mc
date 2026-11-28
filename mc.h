@@ -1,7 +1,7 @@
 // mc.h
 
-#ifndef _TINY_C_H_
-#define _TINY_C_H_
+#ifndef _MC_H_
+#define _MC_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +9,7 @@
 #include <stdarg.h>
 
 // ---------------------------------------------------------------------------
+#define INT_SIZE                4  // bytes in an int on the target
 #define ID_NAME_LENGTH         24
 #define MAX_CODE           131072 // 128 KB
 #define MAX_NODES           16384 
@@ -22,12 +23,20 @@
 #define MAX_CALL_FIXUPS MAX_NODES
 #define MAX_LOCALS             32
 #define MAX_PARAMETERS         32
-#define STACK_SIZE           8192 // Size of the main stack
-#define RSTACK_SIZE           256 // Size of the return stack
-#define MAX_REGISTERS         256 // register operands are 2 bytes
+#define STACK_BYTES        65536 // Size of the stack, which grows down from the top of memory
 
-/* Byte arrays hold a 2-byte little-endian length, the characters, then a 0. */
-#define STRING_OVERHEAD         3
+// One memory image holds the globals, then the code, then the stack. Addresses start at LOAD_BASE,
+// the usual base of a 32-bit Linux executable, and MEM_AT() maps an address to its byte in mem[].
+#define LOAD_BASE       0x08048000
+#define CODE_BASE       (LOAD_BASE + MAX_GLOBAL_BYTES)   // the code starts after the global data
+#define CODE_TOP        (CODE_BASE + MAX_CODE)           // the stack may not grow below this
+#define STACK_TOP       (CODE_TOP + STACK_BYTES)         // esp starts here
+#define MEM_BYTES       (STACK_TOP - LOAD_BASE)          // size of mem[]
+#define MEM_AT(addr)    (mem + ((addr) - LOAD_BASE))
+#define ELF_HEADER_BYTES 0x80                            // the ELF and program headers come first, then the globals
+
+/* Strings are char arrays: the characters, then a 0. */
+#define STRING_OVERHEAD         1
 
 // ---------------------------------------------------------------------------
 #define BTWI(n,l,h) ((l<=n)&&(n<=h))
@@ -35,25 +44,27 @@
 // ---------------------------------------------------------------------------
 // For the lexer and the parser ...
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
-    BYTE_SYM, EMIT_SYM, RETURN_SYM,                             //  6 ->  8
+    CHAR_SYM, RETURN_SYM, CONST_SYM,                            //  6 ->  8
     LBRA, RBRA, LPAR, RPAR, PLUS,                               //  9 -> 13
     MINUS, STAR, SLASH, MODULO,                                 // 14 -> 17
     LESS, GRT, SEMI, EQUAL, EQ_SYM, NE_SYM,                     // 18 -> 23
     INT, ID, EOI, LBRACKET, RBRACKET, COMMA,                    // 24 -> 29
 	CHAR_LITERAL, STRING_LITERAL, PLUS_PLUS, MINUS_MINUS,       // 30 -> 33
-    LESS_EQ, GRT_EQ                                             // 34 -> 35
+    LESS_EQ, GRT_EQ, AMP, PIPE, CARET, TILDE,                   // 34 -> 39
+    LSHIFT, RSHIFT, AND_AND, OR_OR                              // 40 -> 43
 };
 
-enum { TYPE_INT, TYPE_BYTE, TYPE_VOID };
+enum { TYPE_INT, TYPE_BYTE, TYPE_CHARPTR, TYPE_INTPTR };
 
 // ---------------------------------------------------------------------------
 // For the parser and the code generator ...
 enum { VAR, CST, ADD, SUB, MUL, DIV, MOD, LT, GT, LE, GE, EQ, NE, SET, FUNC_CALL,
-    ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, VOID_RETURN, ARG_LIST,
-    IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC
+    ARRAY_GET, ARRAY_SET, ARRAY_REF, LOCAL, RETURN_NODE, ARG_LIST,
+    IF1, IF2, WHILE, DO, EMPTY, SEQ, EXPR, PROG, BYTE_CONVERT, PRE_INC, POST_INC,
+    BIT_AND, BIT_OR, BIT_XOR, BIT_NOT, BIT_SHL, BIT_SHR, LOG_AND, LOG_OR
 };
 
-#define BUILTIN_EMIT -1
+#define BUILTIN_SYSCALL -1
 
 // ---------------------------------------------------------------------------
 // Shared types and structs ...
@@ -73,7 +84,6 @@ struct function_s {
     int address;
     int declared;  // set by a prototype or a definition
     int defined;
-    int returnsValue;
     int returnType;
     int numParameters;
     char parameterNames[MAX_PARAMETERS][ID_NAME_LENGTH];
@@ -82,69 +92,57 @@ struct function_s {
     int numLocals;
     char localNames[MAX_LOCALS][ID_NAME_LENGTH];
     int localTypes[MAX_LOCALS];
-    int frameSize;  // registers: parameters, then locals, then temporaries
+    int localIsArray[MAX_LOCALS];  // an array alias, whose frame slot holds the address of the array it names
+    int localInScope[MAX_LOCALS];  // cleared when the block that declared the local ends
 };
 
 struct call_fixup_s { int operand; int functionIndex; };
-struct return_s { byte *pc; int frameBase; };
 
 // ---------------------------------------------------------------------------
-// For the code generator and the VM. Each opcode is listed once in OPCODES, with the size of its operands.
-// Operands follow the opcode in the order shown in the comments.
-// "r" is a 2-byte register in the current frame, "a" a 4-byte address or immediate,
-// and "t" a 4-byte jump offset counted from the offset field itself.
-// Array indexes are element indexes held in registers; the VM scales int elements by 4.
-#define OPCODES(X) \
-    X(LDI,    "ra")      /* r, a: r = a */ \
-    X(MOV,    "rr")      /* r, r: r = r */ \
-    X(IGET,   "ra")      /* r, a: r = int global at a */ \
-    X(ISET,   "ra")      /* r, a: int global at a = r */ \
-    X(BGET,   "ra")      /* r, a: r = byte global at a */ \
-    X(BSET,   "ra")      /* r, a: byte global at a = r */ \
-    X(IAGET,  "rar")     /* r, a, r: r = int global at a + index*4 */ \
-    X(IASET,  "rar")     /* r, a, r: int global at a + index*4 = r */ \
-    X(BAGET,  "rar")     /* r, a, r: r = byte global at a + index */ \
-    X(BASET,  "rar")     /* r, a, r: byte global at a + index = r */ \
-    X(PIAGET, "rrr")     /* r, r, r: r = int at base + index*4 (base is a register holding an address) */ \
-    X(PIASET, "rrr")     /* r, r, r: int at base + index*4 = r */ \
-    X(PBAGET, "rrr")     /* r, r, r: r = byte at base + index */ \
-    X(PBASET, "rrr")     /* r, r, r: byte at base + index = r */ \
-    X(I2B,    "rr")      /* r, r: r = (byte) r */ \
-    X(IADDI,  "rra")     /* r, r, a: r = r + a */ \
-    X(IINC,   "raa")     /* r, a, a: int global at a += delta; r = the new value */ \
-    X(IINCP,  "raa")     /* r, a, a: as IINC, but r = the old value */ \
-    X(IINC1,  "r")       /* r: r += 1 - increment register by 1 */ \
-    X(IDEC1,  "r")       /* r: r -= 1 - decrement register by 1 */ \
-    X(BINC,   "raa")     /* r, a, a: byte global at a += delta; r = the new value */ \
-    X(BINCP,  "raa")     /* r, a, a: as BINC, but r = the old value */ \
-    X(IADD,   "rrr")     /* r, r, r: r = r op r for the operators below */ \
-    X(ISUB,   "rrr") \
-    X(IMUL,   "rrr") \
-    X(IDIV,   "rrr") \
-    X(IMOD,   "rrr") \
-    X(ILT,    "rrr") \
-    X(IGT,    "rrr") \
-    X(IEQ,    "rrr") \
-    X(INE,    "rrr") \
-    X(ILE,    "rrr") \
-    X(IGE,    "rrr") \
-    X(EMIT,   "rr")      /* r, r: r = putchar(r) */ \
-    X(JMP,    "t")       /* t: pc += t */ \
-    X(JZ,     "rt")      /* r, t: if r is zero pc += t */ \
-    X(JNZ,    "rt")      /* r, t: if r is non-zero pc += t */ \
-    X(JLT,    "rrt")     /* r, r, t: if the comparison of the two registers holds, pc += t */ \
-    X(JGT,    "rrt") \
-    X(JEQ,    "rrt") \
-    X(JNE,    "rrt") \
-    X(JGE,    "rrt") \
-    X(JLE,    "rrt") \
-    X(CALL,   "ara")     /* a, r, a: call the function at a with its frame starting at register r of the caller; the frame size is the final 4-byte operand. On return the callee's result is stored in the caller's register r. */ \
-    X(RET,    "r")       /* r: return the value of register r */ \
-    X(RET0,   "")        /* return 0 (void returns and falling off the end of a function) */ \
-    X(HALT,   "")
+// The x86 subset. The code generator emits these encodings and the VM decodes them. They are 32-bit x86 in
+// Intel encoding, so the bytes can later go into an executable unchanged. Register numbers are the x86 encodings.
+enum { EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI };
 
-#define OPCODE_ENUM(name, kinds) name,
-enum { OPCODES(OPCODE_ENUM) NUM_OPCODES };
+// Condition codes: the low nibble of Jcc (0x80+cc) and SETcc (0x90+cc).
+enum { CC_E = 4, CC_NE = 5, CC_L = 0xC, CC_GE = 0xD, CC_LE = 0xE, CC_G = 0xF };
+
+// One-byte opcodes. Those with a ModRM byte give the operands as "r/m, reg" or "reg, r/m".
+// Base opcodes that take a register in their low bits are listed with that register added.
+enum {
+    X_ADD_RM_R = 0x01,      // add r/m, reg
+    X_OR_RM_R = 0x09,       // or r/m, reg
+    X_AND_RM_R = 0x21,      // and r/m, reg
+    X_SUB_RM_R = 0x29,      // sub r/m, reg
+    X_XOR_RM_R = 0x31,      // xor r/m, reg
+    X_CMP_RM_R = 0x39,      // cmp r/m, reg
+    X_TEST_RM_R = 0x85,     // test r/m, reg
+    X_MOV_RM8_R8 = 0x88,    // mov r/m8, reg8
+    X_MOV_RM_R = 0x89,      // mov r/m, reg
+    X_MOV_R_RM = 0x8B,      // mov reg, r/m
+    X_CDQ = 0x99,           // edx = sign of eax
+    X_GRP1_RM_IMM32 = 0x81, // ModRM reg field /0 = add, /5 = sub; imm32 follows
+    X_GRP2_RM_IMM8 = 0xC1,  // ModRM reg field /4 = shl; imm8 follows
+    X_GRP2_RM_CL = 0xD3,    // ModRM reg field /4 = shl, /7 = sar; count in cl
+    X_GRP3_RM = 0xF7,       // ModRM reg field /2 = not r/m, /7 = idiv edx:eax by r/m
+    X_GRP4_RM8 = 0xFE,      // ModRM reg field /0 = inc r/m8, /1 = dec r/m8
+    X_GRP5_RM = 0xFF,       // ModRM reg field /0 = inc r/m32, /1 = dec r/m32
+    X_RET = 0xC3,
+    X_LEAVE = 0xC9,
+    X_INT = 0xCD,           // imm8 follows
+    X_CALL = 0xE8,          // rel32 follows
+    X_JMP = 0xE9,           // rel32 follows
+    X_PUSH = 0x50,          // + register
+    X_PUSH_IMM32 = 0x68,    // imm32 follows
+    X_POP = 0x58,           // + register
+    X_MOV_R_IMM = 0xB8,     // + register; imm32 follows
+    X_ESCAPE = 0x0F,        // the next byte is a two-byte opcode
+    // Two-byte opcodes, after X_ESCAPE:
+    X_JCC = 0x80,           // + condition code; rel32 follows
+    X_SETCC = 0x90,         // + condition code; sets r/m8
+    X_IMUL_R_RM = 0xAF,     // imul reg, r/m
+    X_MOVZX_R_RM8 = 0xB6    // movzx reg, r/m8
+};
+
 
 // ---------------------------------------------------------------------------
 // Declarations shared between files. Each global and function is defined in exactly one .c file.
@@ -153,10 +151,9 @@ extern char idName[ID_NAME_LENGTH];
 extern int variableTypes[MAX_GLOBAL_NAMES], variableBases[MAX_GLOBAL_NAMES], variableIsArray[MAX_GLOBAL_NAMES];
 extern int stringValues[MAX_STRING_LENGTH];
 extern int stringLength;
-extern byte globalMem[MAX_GLOBAL_BYTES];
-extern int numGlobalBytes;
+extern byte mem[MEM_BYTES];
+extern int numGlobalBytes, numZeroedBytes;
 extern int here;
-extern byte vm[MAX_CODE];
 extern struct function_s functions[MAX_FUNCTIONS];
 extern int numFunctions, mainFunction;
 
@@ -167,7 +164,7 @@ void nextSym(void);
 int loadInt(int addr);
 void storeInt(int addr, int value);
 int findVariable(const char *name);
-int declareVariable(const char *name, int size, int isArray, int type);
+int declareVariable(const char *name, int size, int isArray, int type, int zeroed);
 int variableIndex(const char *name);
 int arrayIndex(const char *name);
 int allocateStringLiteral(void);
@@ -180,15 +177,7 @@ node *parenExpr(void);
 node *program(void);
 void c(node *x);
 int run(void);
-int saveImage(const char *fileName);
-int loadImage(const char *fileName);
-extern const char *const opcodeNames[NUM_OPCODES];
-extern const char *const opcodeKinds[NUM_OPCODES];
-int opcodeLength(int op);
+int saveExecutable(const char *fileName);
 void listing(void);
 
-// ---------------------------------------------------------------------------
-// For the VM ...
-#define ACASE    goto again; case
-
-#endif // _TINY_C_H_
+#endif // _MC_H_
