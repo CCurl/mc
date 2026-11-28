@@ -53,7 +53,7 @@ enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, VOID_SYM, INT_SYM,  //  0 ->  5
     LSHIFT, RSHIFT, AND_AND, OR_OR                              // 40 -> 43
 };
 
-enum { TYPE_INT, TYPE_BYTE, TYPE_CHARPTR };
+enum { TYPE_INT, TYPE_BYTE, TYPE_CHARPTR, TYPE_INTPTR };
 
 // ---------------------------------------------------------------------------
 // For the parser and the code generator ...

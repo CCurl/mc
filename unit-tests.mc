@@ -41,7 +41,7 @@ int gBefore[2];
 char gBetween[3];
 int gAfter[2];
 
-int check(char name[], int ok) {
+int check(char *name, int ok) {
     print(name);
     if (ok) { print(": ok\n"); passes++; }
     else { print(": FAIL\n"); failures++; }
@@ -50,8 +50,8 @@ int check(char name[], int ok) {
 char passByte(char value) { return value; }
 int promoteByte(char value) { return value; }
 char narrowByte(int value) { return value; }
-char arrayByte(char values[], int index) { return values[index]; }
-int updateByteArray(char values[]) { values[2] = 'Z'; }
+char arrayByte(char *values, int index) { return values[index]; }
+int updateByteArray(char *values) { values[2] = 'Z'; }
 char prototypedByte(int value);
 char prototypedByte(int value) { return value; }
 char setByteGlobal() { gByte = 9; return 3; }
@@ -323,8 +323,8 @@ int sum(int arr[], int count) {
 }
 
 int sumForward(int arr[], int count) { return sum(arr, count); }
-int firstChar(char s[]) { return s[0]; }
-int put(int index, int arr[], int value) { arr[index] = value; }
+int firstChar(char *s) { return s[0]; }
+int put(int index, int *arr, int value) { arr[index] = value; }
 
 int testArrays() {
     fill(gArr, 4);
@@ -357,7 +357,7 @@ char ioOut[2], ioIn[8];
 
 // fopen/fwrite/fclose/fread round-trip a file. A missing file gives a negative result.
 int testFileIO() {
-    char nm[] = "unit-tests.dat";
+    char *nm = "unit-tests.dat";
     ioOut[0] = 'm'; ioOut[1] = 'c';
     int fd = fopen(nm, 577);
     check("fopen for writing returns a descriptor", fd >= 0);
@@ -375,22 +375,22 @@ int testFileIO() {
 char aliasName[] = "chris";
 int aliasInts[3];
 
-int setFirstChar(char str[]) { char p[] = str; p[2] = 'Z'; }
-int aliasGet(int arr[], int i) { int xi[] = arr; return xi[i]; }
+int setFirstChar(char *str) { str[2] = 'Z'; }
+int aliasGet(int *arr, int i) { return arr[i]; }
 
-// A local array alias names an existing array, so writes through it change that array.
+// A pointer can be assigned from an array and dereferenced to access and modify the array.
 int testLocalAlias() {
-    char p[] = aliasName;
+    char *p = aliasName;
     p[2] = 'C';
-    check("byte alias writes the named array", aliasName[2] == 'C');
-    check("byte alias reads the named array", p[2] == 'C');
+    check("pointer to array allows writes through the pointer", aliasName[2] == 'C');
+    check("pointer reads match array contents", p[2] == 'C');
     setFirstChar(aliasName);
-    check("alias of an array parameter writes the caller array", aliasName[2] == 'Z');
-    int xi[] = aliasInts;
+    check("pointer passed to function allows array modification", aliasName[2] == 'Z');
+    int *xi = aliasInts;
     xi[1] = 42;
-    check("int alias writes the named array", aliasInts[1] == 42);
-    check("int alias passes as an array argument", aliasGet(xi, 1) == 42);
-    check("alias of an int array parameter", aliasGet(aliasInts, 1) == 42);
+    check("int pointer to array allows writes through the pointer", aliasInts[1] == 42);
+    check("int pointer passes to function allowing array access", aliasGet(xi, 1) == 42);
+    check("array can be passed to function expecting int pointer", aliasGet(aliasInts, 1) == 42);
 }
 
 int pointerSum(char *s) {

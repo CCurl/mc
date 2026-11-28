@@ -11,7 +11,7 @@ int emit(int c) {
     return emitBuf[0];
 }
 
-int print(char str[]) {
+int print(char *str) {
     int len = 0;
     while (str[len]) { len++; }
     syscall(4, 1, str, len);

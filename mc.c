@@ -439,17 +439,16 @@ int keywordType(int keyword) {
     return keyword == CHAR_SYM ? TYPE_BYTE : TYPE_INT;
 }
 
-// Consumes the '*' of a declarator, if there is one. The type is char * only for char; int * is an error.
+// Consumes the '*' of a declarator, if there is one. The type is char * for char or int * for int.
 int declaratorType(int baseType) {
     if (sym != STAR) { return baseType; }
-    qFail(baseType != TYPE_BYTE, "-only char * is supported-");
     nextSym();
-    return TYPE_CHARPTR;
+    return baseType == TYPE_BYTE ? TYPE_CHARPTR : TYPE_INTPTR;
 }
 
-// A char * variable, whose value is an address. Its own address is the only thing it can be used as (see checkPointerUses).
+// A char * or int * variable, whose value is an address.
 int isPointerVar(node *x) {
-    return (x->kind == VAR || x->kind == LOCAL) && x->type == TYPE_CHARPTR;
+    return (x->kind == VAR || x->kind == LOCAL) && (x->type == TYPE_CHARPTR || x->type == TYPE_INTPTR);
 }
 
 // ++p, --p, p++ or p--: a char * variable changed by one byte. Its value is the new or the old address.
@@ -534,6 +533,10 @@ node *callArguments(const char *name) {
                 qFail(!isPointerExpr(value) && !isArrayPointerExpr(value) && !(isArray && value->type == TYPE_BYTE), "-argument %d to %s must be a char * or a char array-\n", i + 1, name);
                 continue;
             }
+            if (function->parameterTypes[i] == TYPE_INTPTR) {
+                qFail(!isPointerExpr(value) && !isArrayPointerExpr(value) && !(isArray && value->type == TYPE_INT), "-argument %d to %s must be an int * or an int array-\n", i + 1, name);
+                continue;
+            }
             qFail(isArray != function->parameterIsArray[i], "-argument %d to %s must be %s-\n", i + 1, name,
                   function->parameterIsArray[i] ? "an array reference" : "a scalar");
             qFail(isArray && value->type != function->parameterTypes[i], "-argument %d to %s must be %s array-\n", i + 1, name,
@@ -562,7 +565,8 @@ int arrayElementType(const char *name) {
 
 int isPointerName(const char *name) {
     if (localIndex(name) < 0 && parameterIndex(name) < 0 && findVariable(name) < 0) { return 0; }
-    return arrayElementType(name) == TYPE_CHARPTR;
+    int type = arrayElementType(name);
+    return type == TYPE_CHARPTR || type == TYPE_INTPTR;
 }
 
 // The LOCAL, VAR, or ARRAY_REF node for a bare name.
@@ -573,9 +577,8 @@ node *nameNode(const char *name) {
     node *x;
     if (local >= 0) {
         int slot = functions[currentFunction].numParameters + local;
-        int isAlias = functions[currentFunction].localIsArray[local];
-        x = newNode(isAlias ? ARRAY_REF : LOCAL);
-        x->val = isAlias ? -slot - 1 : slot;
+        x = newNode(LOCAL);
+        x->val = slot;
         x->type = functions[currentFunction].localTypes[local];
     } else if (parameter >= 0) {
         int isArray = functions[currentFunction].parameterIsArray[parameter];
@@ -623,12 +626,14 @@ node *term() {
       expectName(name);
       x = increment(PRE_INC, nameNode(name), delta);
   } else if (sym == STAR) {
-      // *e is e[0]. The operand is a char * value or a char array, which is the base itself.
+      // *e is e[0]. The operand is a char * or int * value or the corresponding array type.
       nextSym();
       node *operand = term();
-      qFail(!isPointerExpr(operand) && !isArrayPointerExpr(operand) && !isByteArray(operand), "-* needs a char * or a char array-");
+      int isCharPtr = isPointerExpr(operand) || isArrayPointerExpr(operand) || isByteArray(operand);
+      int isIntPtr = operand->type == TYPE_INTPTR || (operand->kind == ARRAY_REF && operand->type == TYPE_INT);
+      qFail(!isCharPtr && !isIntPtr, "-* needs a pointer or an array-");
       x = gen(ARRAY_GET, constant(0), NULL);
-      x->type = TYPE_BYTE;
+      x->type = isCharPtr ? TYPE_BYTE : TYPE_INT;
       if (operand->kind == ARRAY_REF) { x->val = operand->val; }
       else { x->val = 0; x->o3 = operand; }
   } else if (sym == ID) {
@@ -646,7 +651,12 @@ node *term() {
           x = gen(ARRAY_GET, index, NULL);
           x->val = base;
           x->o3 = pointer;
-          x->type = pointer ? TYPE_BYTE : arrayElementType(name);
+          if (pointer) {
+              int ptrType = pointer->type;
+              x->type = (ptrType == TYPE_CHARPTR) ? TYPE_BYTE : TYPE_INT;
+          } else {
+              x->type = arrayElementType(name);
+          }
       } else {
           x = nameNode(name);
           if (sym == PLUS_PLUS || sym == MINUS_MINUS) {
@@ -700,6 +710,11 @@ node *sum() {
     if ((op == ADD || op == SUB) && isIntArrayAddress(x) && !isIntArrayAddress(right)) {
         right = gen(MUL, right, constant(4));
     } else if (op == ADD && isIntArrayAddress(right) && !isIntArrayAddress(x)) {
+        x = gen(MUL, x, constant(4));
+    }
+    if ((op == ADD || op == SUB) && x->type == TYPE_INTPTR && right->type == TYPE_INT) {
+        right = gen(MUL, right, constant(4));
+    } else if (op == ADD && x->type == TYPE_INT && right->type == TYPE_INTPTR) {
         x = gen(MUL, x, constant(4));
     }
     x = gen(op, x, right);
@@ -773,17 +788,19 @@ node *statement() {
           struct function_s *function = &functions[currentFunction];
           qFail(function->numLocals >= MAX_LOCALS, "-too many local variables-");
           int local = function->numLocals;
-          int isAlias = 0;
           if (sym == LBRACKET) {
-              qFail(localType == TYPE_CHARPTR, "-arrays of char * are not supported-");
+              qFail(localType == TYPE_CHARPTR || localType == TYPE_INTPTR, "-arrays of pointers are not supported-");
               nextSym();
               expectSym(RBRACKET);
-              qFail(sym != EQUAL, "-array alias %s requires an initializer-\n", name);
-              isAlias = 1;
+              qFail(sym != EQUAL, "-array must be initialized with a string literal-");
+              qFail(localType != TYPE_BYTE, "-string initializer requires a char array-");
+              qFail(sym != STRING_LITERAL, "-string initializer required-");
+              // We don't support local string initializers, so reject them
+              qFail(1, "-local array initialization not supported-");
           }
           strcpy(function->localNames[local], name);
           function->localTypes[local] = localType;
-          function->localIsArray[local] = isAlias;
+          function->localIsArray[local] = 0;
           function->localInScope[local] = 1;
           function->numLocals++;
           if (sym == EQUAL) {
@@ -792,15 +809,8 @@ node *statement() {
               node *target = newNode(LOCAL);
               target->val = function->numParameters + local;
               target->type = localType;
-              node *set;
-              if (isAlias) {
-                  qFail(value->kind != ARRAY_REF || value->type != localType, "-array alias %s must be initialized by an array of the same element type-\n", name);
-                  set = gen(SET, target, value);
-                  set->val = 1;  // marks an alias initializer, the only place checkArrayRefs allows an array reference to be stored
-              } else {
-                  if (localType == TYPE_BYTE) { value = byteConversion(value); }
-                  set = gen(SET, target, value);
-              }
+              if (localType == TYPE_BYTE) { value = byteConversion(value); }
+              node *set = gen(SET, target, value);
               set->type = localType;
               x = gen(SEQ, x, 0);
               x->o2 = gen(EXPR, set, NULL);
@@ -914,7 +924,7 @@ void parseVariableDeclarator(const char *name, int type) {
     int isArray = 0;
     int inferredSize = 0;
     if (sym == LBRACKET) {
-        qFail(type == TYPE_CHARPTR, "-arrays of char * are not supported-");
+        qFail(type == TYPE_CHARPTR || type == TYPE_INTPTR, "-arrays of pointers are not supported-");
         isArray = 1;
         nextSym();
         if (sym == RBRACKET) {
@@ -931,10 +941,10 @@ void parseVariableDeclarator(const char *name, int type) {
     if (sym == EQUAL && !isArray) {
         nextSym();
         scalar = expr();
-        if (type == TYPE_CHARPTR) {
-            // A global char * holds a fixed address, so it can only be set to the address of string or global array.
+        if (type == TYPE_CHARPTR || type == TYPE_INTPTR) {
             int isNull = scalar->kind == CST && scalar->val == 0;
-            qFail(!isNull && (scalar->kind != ARRAY_REF || scalar->type != TYPE_BYTE || scalar->val < 0), "-global char * must be initialized by 0, a string, or a global char array-");
+            qFail(!isNull && (scalar->kind != ARRAY_REF || scalar->type != (type == TYPE_CHARPTR ? TYPE_BYTE : TYPE_INT) || scalar->val < 0), 
+                  "-pointer must be initialized by 0 or an array of matching type-");
         } else {
             if (type == TYPE_BYTE) { scalar = byteConversion(scalar); }
             qFail(scalar->kind != CST, "-global initializer must be constant-");
@@ -1065,9 +1075,9 @@ void checkArrayRefs(node *x) {
     checkArrayRefs(x->o3);
 }
 
-// A char * value may be assigned to a char * variable (or an array), passed to a char * or syscall argument
-// (callArguments() has checked it), or used as the base of an element access. pointer +/- int is also a char *
-// value, but its only other operand is an int. Anywhere else it is an error.
+// A char * or int * value may be assigned to a matching pointer variable, passed to a matching pointer argument,
+// or used as the base of an element access. pointer +/- int is also a pointer value, but its only other operand is an int.
+// Anywhere else it is an error.
 void checkPointerUses(node *x);
 
 void checkPointerValue(node *x) {
@@ -1088,19 +1098,27 @@ void checkPointerOperand(node *x) {
 
 void checkPointerUses(node *x) {
     if (!x) { return; }
-    if (x->kind == EXPR && isPointerIncrement(x->o1)) { return; }  // a statement such as p++;
+    if (x->kind == EXPR && isPointerIncrement(x->o1)) { return; }
     if (x->kind == SET && isPointerVar(x->o1)) {
+        int ptrType = x->o1->type;
         if (isPointerExpr(x->o2)) { checkPointerValue(x->o2); return; }
-        qFail(!(isPointerish(x->o2) || isNullConstant(x->o2)),
-              "-char * must be assigned a char * or a char array-");
+        int expectedArrayType = ptrType == TYPE_CHARPTR ? TYPE_BYTE : TYPE_INT;
+        int isCharPtr = isPointerish(x->o2) && ptrType == TYPE_CHARPTR;
+        int isIntPtr = (isArrayPointerExpr(x->o2) || (x->o2->kind == ARRAY_REF && x->o2->type == TYPE_INT)) && ptrType == TYPE_INTPTR;
+        int isCompatible = isNullConstant(x->o2) || (isPointerish(x->o2) && x->o2->type == ptrType) ||
+                           (x->o2->type == ptrType) || (x->o2->kind == ARRAY_REF && x->o2->type == expectedArrayType) ||
+                           isCharPtr || isIntPtr;
+        qFail(!isCompatible, "-pointer must be assigned a matching pointer, array, or null-");
         checkPointerUses(x->o2);
         return;
     }
     if (isComparison(x) && (isPointerish(x->o1) || isPointerish(x->o2))) {
         int equality = x->kind == EQ || x->kind == NE;
-        int left = isPointerish(x->o1) || (equality && isNullConstant(x->o1));
-        int right = isPointerish(x->o2) || (equality && isNullConstant(x->o2));
-        qFail(!(left && right), "-char * can only be compared with a char * or, for == and !=, 0-");
+        int leftPtr = isPointerish(x->o1) || (x->o1->type == TYPE_INTPTR) || (x->o1->type == TYPE_CHARPTR);
+        int rightPtr = isPointerish(x->o2) || (x->o2->type == TYPE_INTPTR) || (x->o2->type == TYPE_CHARPTR);
+        int leftOk = leftPtr || (equality && isNullConstant(x->o1));
+        int rightOk = rightPtr || (equality && isNullConstant(x->o2));
+        qFail(!(leftOk && rightOk), "-pointers can only be compared with matching pointers or, for == and !=, 0-");
         checkPointerOperand(x->o1);
         checkPointerOperand(x->o2);
         return;
@@ -1317,6 +1335,7 @@ void cEffect(node *x);
 // Leaves the address of element x->o1 of array x in eax. A char * base (x->o3) is a runtime value, and its elements are bytes.
 void cElementAddress(node *x) {
     cExpr(x->o1);
+    if (x->type != TYPE_BYTE) { rr(X_GRP2_RM_IMM8, 4, EAX); g(2); }
     if (x->o3) {
         g(X_PUSH + EAX);
         cExpr(x->o3);
@@ -1324,7 +1343,6 @@ void cElementAddress(node *x) {
         rr(X_ADD_RM_R, ECX, EAX);
         return;
     }
-    if (x->type != TYPE_BYTE) { rr(X_GRP2_RM_IMM8, 4, EAX); g(2); }
     if (x->val >= 0) { ri(X_GRP1_RM_IMM32, 0, EAX, x->val); }
     else {
         rr(X_MOV_RM_R, EAX, ECX);
