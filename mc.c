@@ -305,7 +305,7 @@ int declareVariable(const char *name, int size, int isArray, int type, int zeroe
     int index = findVariable(name);
     qFail(index >= 0 || findConstant(name) >= 0, "-duplicate variable %s-\n", name);
     qFail((size <= 0), "-array size must be positive-");
-    int elementSize = type == TYPE_BYTE ? 1 : 4;
+    int elementSize = type == TYPE_BYTE ? 1 : INT_SIZE;
     qFail(numVariables >= MAX_GLOBAL_NAMES, "-too many variables-");
     qFail(size > (MAX_GLOBAL_BYTES - numGlobalBytes - numZeroedBytes) / elementSize, "-too many variables-");
     strcpy(variableNames[numVariables], name);
@@ -608,12 +608,12 @@ node *nameNode(const char *name) {
     return x;
 }
 
-// A prefix or postfix ++ or -- applied to a scalar variable. On a char * the step is one byte.
+// A prefix or postfix ++ or -- applied to a scalar variable. On a char * the step is one byte, on an int * four.
 node *increment(int kind, node *target, int delta) {
     qFail(target->kind != VAR && target->kind != LOCAL, "-++ and -- need a scalar variable-");
     node *x = newNode(kind);
     x->o1 = target;
-    x->val = delta;
+    x->val = target->type == TYPE_INTPTR ? INT_SIZE * delta : delta;
     x->type = target->type;
     return x;
 }
@@ -698,7 +698,7 @@ int mathop() {
     return 0;
 }
 
-// An int array, or an int array address built with + or -. Its elements are 4 bytes, so an int operand is scaled by 4.
+// An int array, or an int array address built with + or -. Its elements are INT_SIZE bytes, so an int operand is scaled by INT_SIZE.
 int isIntArrayAddress(node *x) {
     if (x->kind == ARRAY_REF) { return x->type == TYPE_INT; }
     if (x->kind != ADD && x->kind != SUB) { return 0; }
@@ -706,7 +706,7 @@ int isIntArrayAddress(node *x) {
     return x->kind == ADD && isIntArrayAddress(x->o2) && !isIntArrayAddress(x->o1);
 }
 
-// True if an expression is a pointer or int array address (requires index scaling by 4).
+// True if an expression is a pointer or int array address (requires index scaling by INT_SIZE).
 int requiresIndexScaling(node *x) {
     return x->type == TYPE_INTPTR || isIntArrayAddress(x);
 }
@@ -720,9 +720,9 @@ node *sum() {
     nextSym();
     node *right = term();
     if ((op == ADD || op == SUB) && requiresIndexScaling(x) && !requiresIndexScaling(right)) {
-        right = gen(MUL, right, constant(4));
+        right = gen(MUL, right, constant(INT_SIZE));
     } else if (op == ADD && requiresIndexScaling(right) && !requiresIndexScaling(x)) {
-        x = gen(MUL, x, constant(4));
+        x = gen(MUL, x, constant(INT_SIZE));
     }
     x = gen(op, x, right);
   }
@@ -1193,7 +1193,7 @@ node *program() {
 //
 // Calling convention: arguments are evaluated left to right and pushed, then the call pushes the return address.
 // The callee pushes ebp, sets ebp to esp, and pushes a zero for each local. Parameter i of n is at
-// [ebp + 8 + 4*(n-1-i)] and local j is at [ebp - 4*(j+1)]. The caller removes the arguments after the call.
+// [ebp + 8 + INT_SIZE*(n-1-i)] and local j is at [ebp - INT_SIZE*(j+1)]. The caller removes the arguments after the call.
 // The result is returned in eax.
 
 struct call_fixup_s callFixups[MAX_CALL_FIXUPS];
@@ -1230,7 +1230,7 @@ void int80() { g(X_INT); g(0x80); }
 // Memory operands: a frame slot is [ebp+disp32], a fixed address is [disp32], and [base] is a register.
 int slotDisp(int slot) {
     int numParams = curFunction->numParameters;
-    return slot < numParams ? 8 + 4 * (numParams - 1 - slot) : -4 * (slot - numParams + 1);
+    return slot < numParams ? 8 + INT_SIZE * (numParams - 1 - slot) : -INT_SIZE * (slot - numParams + 1);
 }
 void modrmFrame(int reg, int slot) { g(0x80 | (reg << 3) | EBP); g4(slotDisp(slot)); }
 void modrmAbs(int reg, int addr) { g((reg << 3) | 5); g4(addr); }  // mod=00, rm=101 means disp32

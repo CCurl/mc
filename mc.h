@@ -9,6 +9,7 @@
 #include <stdarg.h>
 
 // ---------------------------------------------------------------------------
+#define INT_SIZE                4  // bytes in an int on the target
 #define ID_NAME_LENGTH         24
 #define MAX_CODE           131072 // 128 KB
 #define MAX_NODES           16384 

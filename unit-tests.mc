@@ -391,6 +391,11 @@ int testLocalAlias() {
     check("int pointer to array allows writes through the pointer", aliasInts[1] == 42);
     check("int pointer passes to function allowing array access", aliasGet(xi, 1) == 42);
     check("array can be passed to function expecting int pointer", aliasGet(aliasInts, 1) == 42);
+    int *xk = aliasInts;
+    xk++;
+    check("int pointer ++ steps one int", *xk == 42);
+    xk--;
+    check("int pointer -- steps back one int", xk[0] == 0 && *(xk + 1) == 42);
 }
 
 int pointerSum(char *s) {

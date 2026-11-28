@@ -50,7 +50,8 @@
  * * Arithmetic: a "char *" value is a "char *" variable, or a char * or char array with "+" or "-" applied left to right. So p+1, 1+p, buf+n, and p+1+2 are valid.
  * * Comparison: ==, !=, <, >, <=, and >= compare two "char *" values, a "char *" and a char array, or a "char *" and 0 (for == and != only).
  * * Not allowed: storing a "char *" value in an int, a byte, or a byte array element; using it in int arithmetic; or returning it.
- * * Still rejected: &x, p+q, p-q, p+1*2 (left to right means (p+1)*2), int *, char **, arrays of char *, and char * function results.
+ * An "int *" variable is a pointer to 32-bit ints. It follows the same rules as "char *", except that p[i], *p, ++p, --p, p++, p--, and p+n step 4 bytes per element and *p reads or writes a whole int. An int array name may be assigned to an "int *" variable, passed to an "int *" parameter, or used as a pointer in arithmetic.
+ * * Still rejected: &x, p+q, p-q, p+1*2 (left to right means (p+1)*2), char **, arrays of char *, and char * function results.
  *  <func_call> ::= (<int_func_id> | <byte_func_id>) "(" [ <expr> { "," <expr> } ] ")"
  *  <void_func_call> ::= <void_func_id> "(" [ <expr> { "," <expr> } ] ")"
  *  <array_ref> ::= <global_array_id> | <array_parameter_id>
